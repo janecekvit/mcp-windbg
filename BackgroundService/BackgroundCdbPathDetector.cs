@@ -88,7 +88,7 @@ public static class CdbPathDetector
             
             foreach (var dir in winDbgDirs)
             {
-                // Zkus amd64 verzi
+                // Try amd64 version
                 var amd64Path = Path.Combine(dir, "amd64", "windbg.exe");
                 if (File.Exists(amd64Path))
                 {
