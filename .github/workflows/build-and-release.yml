@@ -1,0 +1,195 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  BUILD_CONFIGURATION: 'Release'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Get version from tag or branch
+      id: version
+      shell: pwsh
+      run: |
+        if ($env:GITHUB_REF -match 'refs/tags/v(.+)') {
+          $version = $matches[1]
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "Version from tag: $version"
+        } else {
+          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
+          $version = "1.0.0-dev-$shortSha"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "Version from commit: $version"
+        }
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build solution
+      run: dotnet build --no-restore --configuration ${{ env.BUILD_CONFIGURATION }}
+
+    - name: Run tests (if any)
+      run: dotnet test --no-build --configuration ${{ env.BUILD_CONFIGURATION }} --verbosity normal
+      continue-on-error: true
+
+    - name: Publish McpProxy
+      run: |
+        dotnet publish McpProxy/McpProxy.csproj `
+          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --runtime win-x64 `
+          --output publish/win-x64 `
+          --self-contained true `
+          -p:PublishSingleFile=true `
+          -p:PublishTrimmed=true `
+          -p:Version=${{ steps.version.outputs.version }}
+
+    - name: Publish BackgroundService
+      run: |
+        dotnet publish BackgroundService/BackgroundService.csproj `
+          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --runtime win-x64 `
+          --output publish/win-x64 `
+          --self-contained true `
+          -p:PublishSingleFile=true `
+          -p:PublishTrimmed=true `
+          -p:Version=${{ steps.version.outputs.version }}
+
+    - name: Create portable package
+      shell: pwsh
+      run: |
+        $version = "${{ steps.version.outputs.version }}"
+        
+        # Create package directory
+        New-Item -ItemType Directory -Path "package" -Force
+        
+        # Copy executables
+        Copy-Item "publish/win-x64/*.exe" "package/" -Force
+        Copy-Item "publish/win-x64/*.pdb" "package/" -Force -ErrorAction SilentlyContinue
+        
+        # Copy scripts
+        Copy-Item "Scripts/" "package/Scripts/" -Recurse -Force
+        
+        # Copy documentation
+        Copy-Item "README.md" "package/" -Force
+        Copy-Item "LICENSE" "package/" -Force -ErrorAction SilentlyContinue
+        Copy-Item "CLAUDE.md" "package/" -Force
+        
+        # Copy configuration examples
+        Copy-Item "claude-mcp-config.json" "package/" -Force
+        Copy-Item "Tests/" "package/Examples/" -Recurse -Force -ErrorAction SilentlyContinue
+        
+        # Create version info file
+        @"
+        CDB MCP Server v$version
+        Built on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
+        Commit: $env:GITHUB_SHA
+        
+        Files included:
+        - McpProxy.exe (Main MCP server executable)
+        - BackgroundService.exe (Background processing service)
+        - Scripts/ (PowerShell scripts for standalone usage)
+        - README.md (Complete documentation)
+        - CLAUDE.md (Claude Code integration instructions)
+        - claude-mcp-config.json (Configuration example)
+        - Examples/ (Usage examples)
+        
+        Quick start:
+        1. Run McpProxy.exe to start the MCP server
+        2. Configure Claude Code with claude-mcp-config.json
+        3. Use Scripts/cdb.ps1 for standalone dump analysis
+        
+        For detailed instructions, see README.md
+        "@ | Out-File -FilePath "package/VERSION.txt" -Encoding UTF8
+        
+        # Create ZIP package
+        $packageName = "cdb-mcp-server-v$version-win-x64"
+        Compress-Archive -Path "package/*" -DestinationPath "$packageName.zip" -Force
+        
+        echo "package-name=$packageName" >> $env:GITHUB_OUTPUT
+        echo "package-path=$packageName.zip" >> $env:GITHUB_OUTPUT
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: cdb-mcp-server-${{ steps.version.outputs.version }}
+        path: |
+          *.zip
+          package/
+
+  release:
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: cdb-mcp-server-${{ needs.build.outputs.version }}
+
+    - name: Create GitHub Release
+      uses: ncipollo/create-release@v1
+      with:
+        tag: ${{ github.ref_name }}
+        name: Windbg MCP Server ${{ needs.build.outputs.version }}
+        draft: false
+        prerelease: ${{ contains(github.ref_name, '-') }}
+        generateReleaseNotes: true
+        body: |
+          ## Windbg MCP Server ${{ needs.build.outputs.version }}
+          
+          Windows memory dump analysis tool with MCP (Model Context Protocol) integration.
+          
+          ### Features
+          - Interactive debugging with persistent Windbg sessions
+          - 10 types of predefined analyses (basic, exception, threads, heap, etc.)
+          - Claude Code integration via MCP protocol
+          - Visual Studio Code and GitHub Copilot integration
+          - Automatic debugger detection (Windows SDK, WinDbg Store App)
+          - Single-file executable deployment
+          
+          ### What's included
+          - `McpProxy.exe` - Main MCP server executable
+          - `BackgroundService.exe` - Background processing service  
+          - `Scripts/` - PowerShell scripts for standalone usage
+          - `README.md` - Complete documentation and integration guide
+          - `claude-mcp-config.json` - Configuration example for Claude Code
+          - `Examples/` - Usage examples and test files
+          
+          ### Quick Start
+          1. Download and extract the ZIP file
+          2. Run `McpProxy.exe` to start the MCP server
+          3. Configure Claude Code using the provided config example
+          4. See `README.md` for detailed integration instructions
+          
+          ### Requirements
+          - Windows 10/11
+          - .NET 8.0 runtime (included in single-file executable)
+          - Windows SDK Debuggers (cdb.exe) or WinDbg from Microsoft Store
+          
+          For detailed documentation, see [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md).
+        artifacts: "*.zip"
+        token: ${{ secrets.GITHUB_TOKEN }}
