@@ -1,0 +1,14 @@
+{
+  "mcp": {
+    "servers": {
+      "cdb-debugging": {
+        "command": "D:\\MCP2\\publish\\CdbMcpServer.exe",
+        "args": [],
+        "env": {
+          "CDB_PATH": "C:\\Program Files\\WindowsApps\\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\\amd64\\cdb.exe",
+          "SYMBOL_CACHE": "D:\\Symbols"
+        }
+      }
+    }
+  }
+}

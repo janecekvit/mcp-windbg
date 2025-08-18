@@ -1,0 +1,1 @@
+{"method": "tools/call", "params": {"name": "predefined_analysis", "arguments": {"session_id": "REPLACE_WITH_SESSION_ID", "analysis_type": "heap"}}, "id": 3}
