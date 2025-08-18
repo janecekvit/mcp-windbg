@@ -96,7 +96,7 @@ public static class CdbPathDetector
                     return amd64Path;
                 }
 
-                // Zkus x86 verzi
+                // Try x86 version
                 var x86Path = Path.Combine(dir, "x86", "windbg.exe");
                 if (File.Exists(x86Path))
                 {
