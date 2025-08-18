@@ -1,17 +1,18 @@
-# Integrace CDB MCP Server s Claude Code
+# CDB MCP Server Integration with Claude Code
 
-## 1. Příprava executable
+## 1. Prepare Executable
 
-Server je již zkompilován jako single-file executable:
+Build the server as a single-file executable:
+```powershell
+# Run from Scripts directory
+.\Publish.ps1
 ```
-D:\MCP2\publish\CdbMcpServer.exe
-```
 
-## 2. Konfigurace Claude Code
+## 2. Claude Code Configuration
 
-### Metoda A: Globální konfigurace
+### Method A: Global Configuration
 
-Přidejte do vašeho globálního Claude Code config souboru:
+Add to your global Claude Code config file:
 
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
@@ -20,7 +21,7 @@ Přidejte do vašeho globálního Claude Code config souboru:
   "mcp": {
     "servers": {
       "cdb-debugging": {
-        "command": "D:\\MCP2\\publish\\CdbMcpServer.exe",
+        "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
         "args": [],
         "env": {
           "CDB_PATH": "C:\\Program Files\\WindowsApps\\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\\amd64\\cdb.exe",
@@ -32,16 +33,16 @@ Přidejte do vašeho globálního Claude Code config souboru:
 }
 ```
 
-### Metoda B: Projekt-specifická konfigurace
+### Method B: Project-specific Configuration
 
-Vytvořte `.claude/mcp_config.json` v kořenu vašeho projektu:
+Create `.claude/mcp_config.json` in your project root:
 
 ```json
 {
   "mcp": {
     "servers": {
       "cdb-debugging": {
-        "command": "D:\\MCP2\\publish\\CdbMcpServer.exe",
+        "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
         "args": []
       }
     }
@@ -49,61 +50,61 @@ Vytvořte `.claude/mcp_config.json` v kořenu vašeho projektu:
 }
 ```
 
-## 3. Dostupné MCP Tools
+## 3. Available MCP Tools
 
-Po konfiguraci budete mít v Claude Code k dispozici:
+After configuration, you'll have access to these tools in Claude Code:
 
 ### `detect_debuggers`
-- **Popis**: Detekuje dostupné CDB/WinDbg instalace
-- **Použití**: Diagnostika a ověření konfigurace
+- **Description**: Detects available CDB/WinDbg installations
+- **Usage**: Diagnostics and configuration verification
 
 ### `load_dump` 
-- **Popis**: Načte memory dump a vytvoří debugging session
-- **Parametry**: `dump_file_path` - cesta k .dmp souboru
-- **Výstup**: Vrací session ID pro další operace
+- **Description**: Loads memory dump and creates debugging session
+- **Parameters**: `dump_file_path` - path to .dmp file
+- **Output**: Returns session ID for further operations
 
 ### `execute_command`
-- **Popis**: Vykoná custom CDB/WinDbg příkaz
-- **Parametry**: `session_id`, `command`
-- **Příklady**: `"kb"`, `"!analyze -v"`, `"dt ntdll!_PEB"`
+- **Description**: Executes custom CDB/WinDbg command
+- **Parameters**: `session_id`, `command`
+- **Examples**: `"kb"`, `"!analyze -v"`, `"dt ntdll!_PEB"`
 
 ### `basic_analysis`
-- **Popis**: Kompletní základní analýza (ekvivalent PowerShell skriptu)
-- **Parametry**: `session_id`
-- **Výstup**: Detailní crash analýza
+- **Description**: Complete basic analysis (equivalent to PowerShell script)
+- **Parameters**: `session_id`
+- **Output**: Detailed crash analysis
 
 ### `predefined_analysis`
-- **Popis**: Specializovaná analýza podle typu
-- **Parametry**: `session_id`, `analysis_type`
-- **Typy**: `basic`, `exception`, `threads`, `heap`, `modules`, `handles`, `locks`, `memory`, `drivers`, `processes`
+- **Description**: Specialized analysis by type
+- **Parameters**: `session_id`, `analysis_type`
+- **Types**: `basic`, `exception`, `threads`, `heap`, `modules`, `handles`, `locks`, `memory`, `drivers`, `processes`
 
 ### `list_sessions`
-- **Popis**: Zobrazí všechny aktivní debugging sessions
+- **Description**: Shows all active debugging sessions
 
 ### `list_analyses`
-- **Popis**: Zobrazí dostupné typy analýz s popisem
+- **Description**: Shows available analysis types with descriptions
 
 ### `close_session`
-- **Popis**: Ukončí debugging session
-- **Parametry**: `session_id`
+- **Description**: Closes debugging session
+- **Parameters**: `session_id`
 
-## 4. Příklady použití v Claude Code
+## 4. Usage Examples in Claude Code
 
-### Základní workflow:
-1. `detect_debuggers` - ověření konfigurace
-2. `load_dump` s cestou k dump souboru → získáte session_id  
-3. `basic_analysis` pro rychlý přehled
-4. `execute_command` pro specializované příkazy
-5. `close_session` po dokončení
+### Basic Workflow:
+1. `detect_debuggers` - verify configuration
+2. `load_dump` with path to dump file → get session_id  
+3. `basic_analysis` for quick overview
+4. `execute_command` for specialized commands
+5. `close_session` when finished
 
-### Pokročilé použití:
-- `predefined_analysis` s `analysis_type: "heap"` pro heap analýzu
-- `execute_command` s `"!clrstack"` pro .NET stack traces
-- `execute_command` s `"lm"` pro list modulů
+### Advanced Usage:
+- `predefined_analysis` with `analysis_type: "heap"` for heap analysis
+- `execute_command` with `"!clrstack"` for .NET stack traces
+- `execute_command` with `"lm"` for module listing
 
-## 5. Environment Variables (volitelné)
+## 5. Environment Variables (Optional)
 
-Pokud auto-detekce nefunguje, nastavte:
+If auto-detection doesn't work, configure:
 
 ```json
 "env": {
@@ -115,11 +116,11 @@ Pokud auto-detekce nefunguje, nastavte:
 
 ## 6. Restart Claude Code
 
-Po přidání konfigurace restartujte Claude Code pro načtení MCP serveru.
+After adding configuration, restart Claude Code to load the MCP server.
 
-## 7. Ověření funkčnosti
+## 7. Verify Functionality
 
-V Claude Code zadejte:
-> "Použij detect_debuggers tool k ověření konfigurace"
+In Claude Code, enter:
+> "Use detect_debuggers tool to verify configuration"
 
-Měli byste vidět informace o nalezených debuggerech a konfiguraci.
+You should see information about found debuggers and configuration.

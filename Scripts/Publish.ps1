@@ -1,4 +1,4 @@
-# Build script pro single-file publishing
+# Build script for single-file publishing
 param(
     [Parameter(Mandatory=$false)]
     [string]$Configuration = "Release",

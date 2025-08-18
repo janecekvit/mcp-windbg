@@ -1,30 +1,30 @@
 # CDB MCP Server
 
-MCP (Model Context Protocol) server pro interaktivní debugging Windows memory dump souborů pomocí Microsoft Command Line Debugger (cdb.exe).
+MCP (Model Context Protocol) server for interactive debugging of Windows memory dump files using Microsoft Command Line Debugger (cdb.exe).
 
-## Funkce
+## Features
 
-- **Interaktivní debugging**: Persistentní CDB sessions pro každý dump soubor
-- **Předpřipravené analýzy**: 10 typů specializovaných analýz (basic, exception, threads, heap, atd.)
-- **Custom příkazy**: Možnost vkládat vlastní WinDbg/CDB příkazy
-- **Správa sessions**: Současná práce s více dump soubory
-- **MCP kompatibilita**: Standardní MCP protokol pro integraci
+- **Interactive debugging**: Persistent CDB sessions for each dump file
+- **Predefined analyses**: 10 types of specialized analyses (basic, exception, threads, heap, etc.)
+- **Custom commands**: Ability to execute custom WinDbg/CDB commands
+- **Session management**: Concurrent work with multiple dump files
+- **MCP compatibility**: Standard MCP protocol for integration
 
-## Požadavky
+## Requirements
 
 - .NET 8.0+
 - Windows SDK Debuggers (cdb.exe)
-- Přístup k Microsoft symbol serveru (pro downloading symbolů)
+- Access to Microsoft symbol server (for downloading symbols)
 
-## Instalace
+## Installation
 
-### Rychlá instalace (Single-file executable)
+### Quick Installation (Single-file executable)
 ```powershell
 # Build single-file executable
-.\publish.ps1
+.\Scripts\Publish.ps1
 
-# Spustit
-.\publish\CdbMcpServer.exe
+# Run
+.\publish\McpProxy.exe
 ```
 
 ### Development build
@@ -33,100 +33,100 @@ dotnet build
 dotnet run
 ```
 
-## Automatická detekce debuggeru
+## Automatic Debugger Detection
 
-Server automaticky detekuje dostupné CDB/WinDbg instalace:
+Server automatically detects available CDB/WinDbg installations:
 
-- **Windows SDK** (preferováno): `C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe`
+- **Windows SDK** (preferred): `C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe`
 - **WinDbg Store App**: `C:\Program Files\WindowsApps\Microsoft.WinDbg_*\amd64\windbg.exe`
-- **Různé architektury**: x64, x86, amd64
+- **Various architectures**: x64, x86, amd64
 
-Použijte tool `detect_debuggers` pro zjištění dostupných instalací.
+Use the `detect_debuggers` tool to discover available installations.
 
-## Konfigurace
+## Configuration
 
-Server se konfiguruje pomocí environment variables (volitelné):
+Server is configured using environment variables (optional):
 
-- `CDB_PATH`: Vlastní cesta k cdb.exe/windbg.exe (přepíše auto-detekci)
-- `SYMBOL_CACHE`: Lokální cache pro symboly (default: `%LOCALAPPDATA%\CdbMcpServer\symbols`)
-- `SYMBOL_PATH_EXTRA`: Dodatečné symbol paths
+- `CDB_PATH`: Custom path to cdb.exe/windbg.exe (overrides auto-detection)
+- `SYMBOL_CACHE`: Local cache for symbols (default: `%LOCALAPPDATA%\CdbMcpServer\symbols`)
+- `SYMBOL_PATH_EXTRA`: Additional symbol paths
 
 ## MCP Tools
 
 ### load_dump
-Načte memory dump a vytvoří novou debugging session.
+Loads a memory dump and creates a new debugging session.
 
-**Parametry:**
-- `dump_file_path`: Cesta k .dmp souboru
+**Parameters:**
+- `dump_file_path`: Path to .dmp file
 
 ### execute_command
-Vykoná WinDbg/CDB příkaz v existující session.
+Executes a WinDbg/CDB command in an existing session.
 
-**Parametry:**
-- `session_id`: ID debugging session
-- `command`: Příkaz k vykonání (např. "kb", "!analyze -v")
+**Parameters:**
+- `session_id`: Debugging session ID
+- `command`: Command to execute (e.g., "kb", "!analyze -v")
 
 ### predefined_analysis
-Spustí předpřipravenou analýzu.
+Runs a predefined analysis.
 
-**Parametry:**
-- `session_id`: ID debugging session
-- `analysis_type`: Typ analýzy (basic, exception, threads, heap, modules, handles, locks, memory, drivers, processes)
+**Parameters:**
+- `session_id`: Debugging session ID
+- `analysis_type`: Analysis type (basic, exception, threads, heap, modules, handles, locks, memory, drivers, processes)
 
 ### basic_analysis
-Spustí základní analýzu (ekvivalent PowerShell skriptu).
+Runs basic analysis (equivalent to PowerShell script).
 
-**Parametry:**
-- `session_id`: ID debugging session
+**Parameters:**
+- `session_id`: Debugging session ID
 
 ### list_sessions
-Vypíše všechny aktivní debugging sessions.
+Lists all active debugging sessions.
 
 ### list_analyses
-Vypíše všechny dostupné předpřipravené analýzy s popisem.
+Lists all available predefined analyses with descriptions.
 
 ### detect_debuggers
-Detekuje dostupné CDB/WinDbg instalace na systému.
+Detects available CDB/WinDbg installations on the system.
 
 ### close_session
-Ukončí debugging session a uvolní prostředky.
+Closes a debugging session and releases resources.
 
-**Parametry:**
-- `session_id`: ID debugging session k ukončení
+**Parameters:**
+- `session_id`: ID of debugging session to close
 
-## Předpřipravené analýzy
+## Predefined Analyses
 
-1. **basic** - Kompletní základní analýza (exception context, analyze -v, thread stacks)
-2. **exception** - Detailní analýza exception s exception a context records
-3. **threads** - Kompletní analýza threadů včetně informací a stacků
-4. **heap** - Analýza heap včetně statistik a validace
-5. **modules** - Analýza modulů (loaded, detailed, unloaded)
-6. **handles** - Analýza handles včetně process handles
-7. **locks** - Analýza critical sections a deadlock detekce
-8. **memory** - Analýza virtuální paměti a address space
-9. **drivers** - Analýza ovladačů a device objects
-10. **processes** - Analýza procesů a process tree
+1. **basic** - Complete basic analysis (exception context, analyze -v, thread stacks)
+2. **exception** - Detailed exception analysis with exception and context records
+3. **threads** - Complete thread analysis including information and stacks
+4. **heap** - Heap analysis including statistics and validation
+5. **modules** - Module analysis (loaded, detailed, unloaded)
+6. **handles** - Handle analysis including process handles
+7. **locks** - Critical sections analysis and deadlock detection
+8. **memory** - Virtual memory and address space analysis
+9. **drivers** - Driver and device objects analysis
+10. **processes** - Process analysis and process tree
 
-## Integrace s Claude Code
+## Claude Code Integration
 
-### 1. Sestavení a instalace
+### 1. Build and Installation
 ```powershell
-# Sestavit single-file executable
-.\publish.ps1
-# nebo
-dotnet publish CdbMcpServer.csproj -c Release -r win-x64 -o publish --self-contained true -p:PublishSingleFile=true
+# Build single-file executable
+.\Scripts\Publish.ps1
+# or
+dotnet publish McpProxy\McpProxy.csproj -c Release -r win-x64 -o publish --self-contained true -p:PublishSingleFile=true
 ```
 
-### 2. Konfigurace Claude Code
+### 2. Claude Code Configuration
 
-Přidejte do `%APPDATA%\Claude\claude_desktop_config.json`:
+Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 
 ```json
 {
   "mcp": {
     "servers": {
       "cdb-debugging": {
-        "command": "D:\\MCP2\\publish\\CdbMcpServer.exe",
+        "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
         "args": []
       }
     }
@@ -134,34 +134,34 @@ Přidejte do `%APPDATA%\Claude\claude_desktop_config.json`:
 }
 ```
 
-### 3. Použití v Claude Code
+### 3. Usage in Claude Code
 
-Po restartu Claude Code můžete používat:
+After restarting Claude Code, you can use:
 
-- `detect_debuggers` - ověření konfigurace debuggerů
-- `load_dump` - načtení dump souboru a vytvoření session
-- `basic_analysis` - kompletní crash analýza
-- `execute_command` - vlastní CDB příkazy
-- `predefined_analysis` - specializované analýzy (heap, threads, modules, atd.)
+- `detect_debuggers` - verify debugger configuration
+- `load_dump` - load dump file and create session
+- `basic_analysis` - complete crash analysis
+- `execute_command` - custom CDB commands
+- `predefined_analysis` - specialized analyses (heap, threads, modules, etc.)
 
-**Příklad workflow:**
-1. "Použij detect_debuggers k ověření konfigurace"
-2. "Načti dump soubor D:\\crash.dmp pomocí load_dump"
-3. "Proveď basic_analysis na session"
-4. "Spusť predefined_analysis typu heap"
+**Example workflow:**
+1. "Use detect_debuggers to verify configuration"
+2. "Load dump file D:\\crash.dmp using load_dump"
+3. "Perform basic_analysis on session"
+4. "Run predefined_analysis of type heap"
 
-## Přímé MCP použití
+## Direct MCP Usage
 
 ```json
-// Načíst dump
+// Load dump
 {"method": "tools/call", "params": {"name": "load_dump", "arguments": {"dump_file_path": "C:\\dumps\\crash.dmp"}}}
 
-// Spustit základní analýzu
+// Run basic analysis
 {"method": "tools/call", "params": {"name": "basic_analysis", "arguments": {"session_id": "abc12345"}}}
 
-// Vlastní příkaz
+// Custom command
 {"method": "tools/call", "params": {"name": "execute_command", "arguments": {"session_id": "abc12345", "command": "!heap -s"}}}
 
-// Specializovaná analýza
+// Specialized analysis
 {"method": "tools/call", "params": {"name": "predefined_analysis", "arguments": {"session_id": "abc12345", "analysis_type": "heap"}}}
 ```

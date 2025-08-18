@@ -17,7 +17,7 @@ public class CdbSessionManager : IDisposable
         _logger = logger;
         _loggerFactory = loggerFactory;
         
-        // Auto-detekce CDB cesty nebo použití environment variable
+        // Auto-detect CDB path or use environment variable
         var envCdbPath = Environment.GetEnvironmentVariable("CDB_PATH");
         if (!string.IsNullOrEmpty(envCdbPath) && CdbPathDetector.ValidateDebuggerPath(envCdbPath, logger))
         {

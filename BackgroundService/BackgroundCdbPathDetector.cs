@@ -18,7 +18,7 @@ public static class CdbPathDetector
         @"C:\Program Files\Windows Kits\11\Debuggers\x64\cdb.exe",
         @"C:\Program Files\Windows Kits\11\Debuggers\x86\cdb.exe",
         
-        // WinDbg Store App - použije windbg.exe jako fallback
+        // WinDbg Store App - use windbg.exe as fallback
         @"C:\Program Files\WindowsApps\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\amd64\windbg.exe",
         @"C:\Program Files\WindowsApps\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\x86\windbg.exe",
     };
@@ -29,7 +29,7 @@ public static class CdbPathDetector
         string? cdbPath = null;
         string? winDbgPath = null;
 
-        // Zkus najít všechny dostupné cesty
+        // Try to find all available paths
         foreach (var path in PotentialPaths)
         {
             if (File.Exists(path))
@@ -37,7 +37,7 @@ public static class CdbPathDetector
                 foundPaths.Add(path);
                 logger?.LogInformation("Found debugger at: {Path}", path);
 
-                // Preferuj CDB pokud ještě nebyl nalezen
+                // Prefer CDB if not found yet
                 if (cdbPath == null && path.EndsWith("cdb.exe", StringComparison.OrdinalIgnoreCase))
                 {
                     cdbPath = path;
@@ -50,7 +50,7 @@ public static class CdbPathDetector
             }
         }
 
-        // Zkus také najít WinDbg v WindowsApps pomocí wildcard search
+        // Also try to find WinDbg in WindowsApps using wildcard search
         var winDbgFromStore = FindWinDbgFromStore(logger);
         if (!string.IsNullOrEmpty(winDbgFromStore))
         {
@@ -61,11 +61,11 @@ public static class CdbPathDetector
             }
         }
 
-        // Zkus najít Windows SDK přes registry nebo běžné lokace
+        // Try to find Windows SDK via registry or common locations
         var sdkPaths = FindWindowsSdkPaths(logger);
         foundPaths.AddRange(sdkPaths);
 
-        // Pokud není CDB, ale je WinDbg, použij WinDbg
+        // If no CDB but WinDbg available, use WinDbg
         if (cdbPath == null && winDbgPath != null)
         {
             logger?.LogWarning("CDB not found, using WinDbg as fallback: {WinDbgPath}", winDbgPath);
@@ -83,7 +83,7 @@ public static class CdbPathDetector
             if (!Directory.Exists(windowsAppsPath))
                 return null;
 
-            // Hledej Microsoft.WinDbg* složky
+            // Look for Microsoft.WinDbg* folders
             var winDbgDirs = Directory.GetDirectories(windowsAppsPath, "Microsoft.WinDbg*", SearchOption.TopDirectoryOnly);
             
             foreach (var dir in winDbgDirs)
@@ -104,7 +104,7 @@ public static class CdbPathDetector
                     return x86Path;
                 }
 
-                // Zkus cdb.exe v store app (některé verze ho mají)
+                // Try cdb.exe in store app (some versions have it)
                 var cdbAmd64Path = Path.Combine(dir, "amd64", "cdb.exe");
                 if (File.Exists(cdbAmd64Path))
                 {
@@ -127,7 +127,7 @@ public static class CdbPathDetector
         
         try
         {
-            // Zkus najít Windows SDK přes standardní cesty
+            // Try to find Windows SDK via standard paths
             var potentialSdkRoots = new[]
             {
                 @"C:\Program Files (x86)\Windows Kits",
@@ -139,7 +139,7 @@ public static class CdbPathDetector
                 if (!Directory.Exists(sdkRoot))
                     continue;
 
-                // Hledej různé verze SDK (10, 11)
+                // Look for various SDK versions (10, 11)
                 var versionDirs = Directory.GetDirectories(sdkRoot).Where(d => 
                     Path.GetFileName(d) is "10" or "11");
 
@@ -189,9 +189,9 @@ public static class CdbPathDetector
         }
 
         throw new FileNotFoundException(
-            "CDB nebo WinDbg nenalezen. Nainstalujte Windows SDK nebo WinDbg z Microsoft Store.\n" +
-            "Hledané cesty:\n" + string.Join("\n", PotentialPaths) +
-            (foundPaths.Any() ? "\n\nNalezené alternativy:\n" + string.Join("\n", foundPaths) : ""));
+            "CDB or WinDbg not found. Install Windows SDK or WinDbg from Microsoft Store.\n" +
+            "Searched paths:\n" + string.Join("\n", PotentialPaths) +
+            (foundPaths.Any() ? "\n\nFound alternatives:\n" + string.Join("\n", foundPaths) : ""));
     }
 
     public static bool ValidateDebuggerPath(string path, ILogger? logger = null)

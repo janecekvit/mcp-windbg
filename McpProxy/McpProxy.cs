@@ -25,7 +25,7 @@ public class McpProxy
     {
         _logger.LogInformation("Starting CDB MCP Server Proxy...");
 
-        // Číst ze stdin, odpovídat na stdout
+        // Read from stdin, respond to stdout
         var stdinStream = Console.OpenStandardInput();
         var stdoutStream = Console.OpenStandardOutput();
 
