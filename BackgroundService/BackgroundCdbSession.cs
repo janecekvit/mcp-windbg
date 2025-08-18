@@ -59,7 +59,7 @@ public class CdbSession : IDisposable
             // Prepare symbol cache
             Directory.CreateDirectory(_symbolCache);
             
-            // Sestavit symbol path
+            // Build symbol path
             var msSrv = $"srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols";
             var symbolPath = string.IsNullOrWhiteSpace(_symbolPathExtra) ? msSrv : $"{_symbolPathExtra};{msSrv}";
 
