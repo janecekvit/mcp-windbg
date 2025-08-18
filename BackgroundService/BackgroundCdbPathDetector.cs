@@ -42,7 +42,7 @@ public static class CdbPathDetector
                 {
                     cdbPath = path;
                 }
-                // Zapamatuj si WinDbg jako fallback
+                // Remember WinDbg as fallback
                 else if (winDbgPath == null && path.EndsWith("windbg.exe", StringComparison.OrdinalIgnoreCase))
                 {
                     winDbgPath = path;
