@@ -63,7 +63,7 @@ public class CdbSession : IDisposable
             var msSrv = $"srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols";
             var symbolPath = string.IsNullOrWhiteSpace(_symbolPathExtra) ? msSrv : $"{_symbolPathExtra};{msSrv}";
 
-            // Spustit CDB proces
+            // Start CDB process
             var startInfo = new ProcessStartInfo
             {
                 FileName = _cdbPath,
