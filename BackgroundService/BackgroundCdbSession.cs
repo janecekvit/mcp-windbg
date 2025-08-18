@@ -169,7 +169,7 @@ public class CdbSession : IDisposable
                     var chunk = new string(buffer, 0, bytesRead);
                     result.Append(chunk);
                     
-                    // Kontrola na marker
+                    // Check for marker
                     if (result.ToString().Contains(marker))
                     {
                         var output = result.ToString();
