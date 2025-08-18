@@ -25,10 +25,10 @@ This repository contains both a legacy PowerShell script and a modern C# MCP (Mo
 ### Building and Running the MCP Server
 ```powershell
 # Build single-file executable (recommended)
-.\publish.ps1
+.\Scripts\Publish.ps1
 
 # Run the MCP server
-.\publish\CdbMcpServer.exe
+.\publish\McpProxy.exe
 
 # Development build
 dotnet build
@@ -71,7 +71,7 @@ The script executes a standardized sequence of WinDbg commands:
 ### Output Management
 - Main analysis report written to specified output file
 - Separate error log file created if cdb.exe encounters issues
-- UTF-8 encoding for proper Czech character support
+- UTF-8 encoding for proper character support
 
 ## Dependencies
 
@@ -85,6 +85,6 @@ The script executes a standardized sequence of WinDbg commands:
 When modifying this tool:
 - Maintain backward compatibility with existing dump file formats
 - Test symbol resolution with both public and private symbol scenarios
-- Validate output encoding to preserve Czech text in reports
+- Validate output encoding to preserve text in reports
 - Consider timeout mechanisms for long-running analyses
 - Ensure proper error handling for corrupted dump files

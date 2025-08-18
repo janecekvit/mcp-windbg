@@ -175,10 +175,10 @@ public class McpProxy
 
         _isInitialized = true;
 
-        // Po inicializaci pošleme notification
+        // Send notification after initialization
         await SendInitializedNotification(writer);
 
-        // Vracíme response normálně
+        // Return response normally
         return initializeResponse;
     }
 

@@ -47,7 +47,7 @@ public class CdbSession : IDisposable
 
         lock (_lock)
         {
-            // Ukončit existující session pokud běží
+            // Close existing session if running
             if (_cdbProcess != null && !_cdbProcess.HasExited)
             {
                 _cdbProcess.Kill();
@@ -56,7 +56,7 @@ public class CdbSession : IDisposable
 
             CurrentDumpFile = dumpFilePath;
             
-            // Připravit symbol cache
+            // Prepare symbol cache
             Directory.CreateDirectory(_symbolCache);
             
             // Sestavit symbol path
@@ -89,7 +89,7 @@ public class CdbSession : IDisposable
             _isInitialized = false;
         }
 
-        // Počkej na inicializaci a nastav symboly
+        // Wait for initialization and set symbols
         await InitializeSessionAsync();
         
         _logger.LogInformation("CDB session {SessionId} loaded dump: {DumpFile}", SessionId, dumpFilePath);
@@ -111,7 +111,7 @@ public class CdbSession : IDisposable
         foreach (var command in initCommands)
         {
             await ExecuteCommandInternalAsync(command);
-            await Task.Delay(500); // Krátká pauza mezi příkazy
+            await Task.Delay(500); // Short pause between commands
         }
 
         _isInitialized = true;
@@ -144,7 +144,7 @@ public class CdbSession : IDisposable
             var outputBuilder = new StringBuilder();
             var errorBuilder = new StringBuilder();
             
-            // Použij unique marker pro identifikaci konce výstupu
+            // Use unique marker to identify end of output
             var marker = $"__END_COMMAND_{Guid.NewGuid():N}__";
             var fullCommand = $"{command}; .echo {marker}";
 
@@ -154,7 +154,7 @@ public class CdbSession : IDisposable
                 _stdin.Flush();
             }
 
-            // Čtení výstupu dokud nenajdeme marker
+            // Read output until we find the marker
             var outputTask = Task.Run(async () =>
             {
                 var reader = _cdbProcess.StandardOutput;
@@ -181,7 +181,7 @@ public class CdbSession : IDisposable
                 return result.ToString();
             });
 
-            // Timeout pro příkaz
+            // Command timeout
             var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30));
             var completedTask = await Task.WhenAny(outputTask, timeoutTask);
             
