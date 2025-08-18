@@ -63,7 +63,8 @@ jobs:
           --output publish/win-x64 `
           --self-contained true `
           -p:PublishSingleFile=true `
-          -p:PublishTrimmed=true `
+          -p:PublishTrimmed=false `
+          -p:PublishReadyToRun=false `
           -p:Version=${{ steps.version.outputs.version }}
 
     - name: Publish BackgroundService
@@ -74,7 +75,8 @@ jobs:
           --output publish/win-x64 `
           --self-contained true `
           -p:PublishSingleFile=true `
-          -p:PublishTrimmed=true `
+          -p:PublishTrimmed=false `
+          -p:PublishReadyToRun=false `
           -p:Version=${{ steps.version.outputs.version }}
 
     - name: Create portable package
