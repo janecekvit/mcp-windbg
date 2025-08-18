@@ -186,46 +186,55 @@ jobs:
       with:
         name: windbg-mcp-server-${{ needs.build.outputs.version }}
 
+    - name: Create Release Body
+      id: release_body
+      shell: pwsh
+      run: |
+        $body = @"
+        ## WinDbg MCP Server ${{ needs.build.outputs.version }}
+        
+        Windows memory dump analysis tool with MCP (Model Context Protocol) integration.
+        
+        ### Features
+        - Interactive debugging with persistent WinDbg/CDB sessions
+        - 10 types of predefined analyses (basic, exception, threads, heap, etc.)
+        - Claude Code integration via MCP protocol
+        - Visual Studio Code and GitHub Copilot integration
+        - Automatic debugger detection (Windows SDK, WinDbg Store App)
+        - Single-file executable deployment
+        
+        ### What's included
+        - ``McpProxy.exe`` - Main MCP server executable
+        - ``BackgroundService.exe`` - Background processing service  
+        - ``Scripts/`` - PowerShell scripts for standalone usage
+        - ``README.md`` - Complete documentation and integration guide
+        - ``claude-mcp-config.json`` - Configuration example for Claude Code
+        - ``Examples/`` - Usage examples and test files
+        
+        ### Quick Start
+        1. Download and extract the ZIP file
+        2. Run ``McpProxy.exe`` to start the MCP server
+        3. Configure Claude Code using the provided config example
+        4. See ``README.md`` for detailed integration instructions
+        
+        ### Requirements
+        - Windows 10/11
+        - .NET 8.0 runtime (included in single-file executable)
+        - Windows SDK Debuggers (cdb.exe) or WinDbg from Microsoft Store
+        
+        For detailed documentation, see [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md).
+        "@
+        echo "body<<EOF" >> $env:GITHUB_OUTPUT
+        echo $body >> $env:GITHUB_OUTPUT
+        echo "EOF" >> $env:GITHUB_OUTPUT
+
     - name: Create GitHub Release
-      uses: ncipollo/create-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        tag: ${{ github.ref_name }}
         name: WinDbg MCP Server ${{ needs.build.outputs.version }}
+        tag_name: ${{ github.ref_name }}
+        body: ${{ steps.release_body.outputs.body }}
         draft: false
         prerelease: ${{ contains(github.ref_name, '-') }}
-        generateReleaseNotes: true
-        body: |
-          ## WinDbg MCP Server ${{ needs.build.outputs.version }}
-          
-          Windows memory dump analysis tool with MCP (Model Context Protocol) integration.
-          
-          ### Features
-          - Interactive debugging with persistent WinDbg/CDB sessions
-          - 10 types of predefined analyses (basic, exception, threads, heap, etc.)
-          - Claude Code integration via MCP protocol
-          - Visual Studio Code and GitHub Copilot integration
-          - Automatic debugger detection (Windows SDK, WinDbg Store App)
-          - Single-file executable deployment
-          
-          ### What's included
-          - `McpProxy.exe` - Main MCP server executable
-          - `BackgroundService.exe` - Background processing service  
-          - `Scripts/` - PowerShell scripts for standalone usage
-          - `README.md` - Complete documentation and integration guide
-          - `claude-mcp-config.json` - Configuration example for Claude Code
-          - `Examples/` - Usage examples and test files
-          
-          ### Quick Start
-          1. Download and extract the ZIP file
-          2. Run `McpProxy.exe` to start the MCP server
-          3. Configure Claude Code using the provided config example
-          4. See `README.md` for detailed integration instructions
-          
-          ### Requirements
-          - Windows 10/11
-          - .NET 8.0 runtime (included in single-file executable)
-          - Windows SDK Debuggers (cdb.exe) or WinDbg from Microsoft Store
-          
-          For detailed documentation, see [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md).
-        artifacts: "*.zip"
+        files: "*.zip"
         token: ${{ secrets.GITHUB_TOKEN }}
