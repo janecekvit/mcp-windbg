@@ -46,13 +46,13 @@ jobs:
         }
 
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore DumpAnalyzer.sln
 
-    - name: Build solution
-      run: dotnet build --no-restore --configuration ${{ env.BUILD_CONFIGURATION }}
+    - name: Build solution  
+      run: dotnet build DumpAnalyzer.sln --no-restore --configuration ${{ env.BUILD_CONFIGURATION }}
 
     - name: Run tests (if any)
-      run: dotnet test --no-build --configuration ${{ env.BUILD_CONFIGURATION }} --verbosity normal
+      run: dotnet test DumpAnalyzer.sln --no-build --configuration ${{ env.BUILD_CONFIGURATION }} --verbosity normal
       continue-on-error: true
 
     - name: Publish McpProxy
@@ -82,28 +82,42 @@ jobs:
       run: |
         $version = "${{ steps.version.outputs.version }}"
         
+        Write-Host "📦 Creating WinDbg MCP Server package v$version"
+        
         # Create package directory
         New-Item -ItemType Directory -Path "package" -Force
         
-        # Copy executables
-        Copy-Item "publish/win-x64/*.exe" "package/" -Force
+        # Copy executables (with validation)
+        if (Test-Path "publish/win-x64/*.exe") {
+          Copy-Item "publish/win-x64/*.exe" "package/" -Force
+          Write-Host "✅ Copied executables"
+        } else {
+          Write-Error "❌ No executables found in publish/win-x64/"
+          exit 1
+        }
         Copy-Item "publish/win-x64/*.pdb" "package/" -Force -ErrorAction SilentlyContinue
         
         # Copy scripts
-        Copy-Item "Scripts/" "package/Scripts/" -Recurse -Force
+        if (Test-Path "Scripts/") {
+          Copy-Item "Scripts/" "package/Scripts/" -Recurse -Force
+          Write-Host "✅ Copied Scripts folder"
+        }
         
         # Copy documentation
-        Copy-Item "README.md" "package/" -Force
+        Copy-Item "README.md" "package/" -Force -ErrorAction Stop
         Copy-Item "LICENSE" "package/" -Force -ErrorAction SilentlyContinue
-        Copy-Item "CLAUDE.md" "package/" -Force
+        Copy-Item "CLAUDE.md" "package/" -Force -ErrorAction Stop
         
-        # Copy configuration examples
-        Copy-Item "claude-mcp-config.json" "package/" -Force
-        Copy-Item "Tests/" "package/Examples/" -Recurse -Force -ErrorAction SilentlyContinue
+        # Copy configuration examples  
+        Copy-Item "claude-mcp-config.json" "package/" -Force -ErrorAction Stop
+        if (Test-Path "Tests/") {
+          Copy-Item "Tests/" "package/Examples/" -Recurse -Force
+          Write-Host "✅ Copied Tests as Examples"
+        }
         
         # Create version info file
-        @"
-        CDB MCP Server v$version
+        $versionContent = @"
+        WinDbg MCP Server v$version
         Built on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
         Commit: $env:GITHUB_SHA
         
@@ -122,19 +136,39 @@ jobs:
         3. Use Scripts/cdb.ps1 for standalone dump analysis
         
         For detailed instructions, see README.md
-        "@ | Out-File -FilePath "package/VERSION.txt" -Encoding UTF8
+        "@
+        $versionContent | Out-File -FilePath "package/VERSION.txt" -Encoding UTF8
         
         # Create ZIP package
-        $packageName = "cdb-mcp-server-v$version-win-x64"
+        $packageName = "windbg-mcp-server-v$version-win-x64"
         Compress-Archive -Path "package/*" -DestinationPath "$packageName.zip" -Force
         
+        Write-Host "✅ Created package: $packageName.zip"
         echo "package-name=$packageName" >> $env:GITHUB_OUTPUT
         echo "package-path=$packageName.zip" >> $env:GITHUB_OUTPUT
+        
+        # List package contents for verification
+        Write-Host "📦 Package contents:"
+        Get-ChildItem "package/" -Recurse | ForEach-Object { 
+          $relativePath = $_.FullName.Replace((Resolve-Path "package/").Path, "")
+          Write-Host "  $relativePath"
+        }
+        
+        # Validate required files exist
+        $requiredFiles = @("McpProxy.exe", "BackgroundService.exe", "README.md", "CLAUDE.md")
+        foreach ($file in $requiredFiles) {
+          if (Test-Path "package/$file") {
+            Write-Host "✅ Found required file: $file"
+          } else {
+            Write-Error "❌ Missing required file: $file"
+            exit 1
+          }
+        }
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: cdb-mcp-server-${{ steps.version.outputs.version }}
+        name: windbg-mcp-server-${{ steps.version.outputs.version }}
         path: |
           *.zip
           package/
@@ -148,23 +182,23 @@ jobs:
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
-        name: cdb-mcp-server-${{ needs.build.outputs.version }}
+        name: windbg-mcp-server-${{ needs.build.outputs.version }}
 
     - name: Create GitHub Release
       uses: ncipollo/create-release@v1
       with:
         tag: ${{ github.ref_name }}
-        name: Windbg MCP Server ${{ needs.build.outputs.version }}
+        name: WinDbg MCP Server ${{ needs.build.outputs.version }}
         draft: false
         prerelease: ${{ contains(github.ref_name, '-') }}
         generateReleaseNotes: true
         body: |
-          ## Windbg MCP Server ${{ needs.build.outputs.version }}
+          ## WinDbg MCP Server ${{ needs.build.outputs.version }}
           
           Windows memory dump analysis tool with MCP (Model Context Protocol) integration.
           
           ### Features
-          - Interactive debugging with persistent Windbg sessions
+          - Interactive debugging with persistent WinDbg/CDB sessions
           - 10 types of predefined analyses (basic, exception, threads, heap, etc.)
           - Claude Code integration via MCP protocol
           - Visual Studio Code and GitHub Copilot integration
