@@ -59,11 +59,11 @@ public class CdbSession : IDisposable
             // Prepare symbol cache
             Directory.CreateDirectory(_symbolCache);
             
-            // Sestavit symbol path
+            // Build symbol path
             var msSrv = $"srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols";
             var symbolPath = string.IsNullOrWhiteSpace(_symbolPathExtra) ? msSrv : $"{_symbolPathExtra};{msSrv}";
 
-            // Spustit CDB proces
+            // Start CDB process
             var startInfo = new ProcessStartInfo
             {
                 FileName = _cdbPath,
@@ -169,7 +169,7 @@ public class CdbSession : IDisposable
                     var chunk = new string(buffer, 0, bytesRead);
                     result.Append(chunk);
                     
-                    // Kontrola na marker
+                    // Check for marker
                     if (result.ToString().Contains(marker))
                     {
                         var output = result.ToString();

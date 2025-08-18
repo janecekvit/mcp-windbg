@@ -42,7 +42,7 @@ public static class CdbPathDetector
                 {
                     cdbPath = path;
                 }
-                // Zapamatuj si WinDbg jako fallback
+                // Remember WinDbg as fallback
                 else if (winDbgPath == null && path.EndsWith("windbg.exe", StringComparison.OrdinalIgnoreCase))
                 {
                     winDbgPath = path;
@@ -88,7 +88,7 @@ public static class CdbPathDetector
             
             foreach (var dir in winDbgDirs)
             {
-                // Zkus amd64 verzi
+                // Try amd64 version
                 var amd64Path = Path.Combine(dir, "amd64", "windbg.exe");
                 if (File.Exists(amd64Path))
                 {
@@ -96,7 +96,7 @@ public static class CdbPathDetector
                     return amd64Path;
                 }
 
-                // Zkus x86 verzi
+                // Try x86 version
                 var x86Path = Path.Combine(dir, "x86", "windbg.exe");
                 if (File.Exists(x86Path))
                 {
@@ -149,7 +149,7 @@ public static class CdbPathDetector
                     if (!Directory.Exists(debuggerDir))
                         continue;
 
-                    // Zkus x64 a x86 verze
+                    // Try x64 and x86 versions
                     foreach (var arch in new[] { "x64", "x86" })
                     {
                         var cdbPath = Path.Combine(debuggerDir, arch, "cdb.exe");
