@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "dump-analyzer": {
+            "command": "D:\\MCP2\\Publish\\McpProxy.exe",
+            "args": [],
+            "env": {
+                "SYMBOL_CACHE": "D:\\Symbols",
+                "BACKGROUND_SERVICE_URL": "http://localhost:8080"
+            }
+        }
+    }
+}
