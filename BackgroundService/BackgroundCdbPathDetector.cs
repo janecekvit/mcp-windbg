@@ -149,7 +149,7 @@ public static class CdbPathDetector
                     if (!Directory.Exists(debuggerDir))
                         continue;
 
-                    // Zkus x64 a x86 verze
+                    // Try x64 and x86 versions
                     foreach (var arch in new[] { "x64", "x86" })
                     {
                         var cdbPath = Path.Combine(debuggerDir, arch, "cdb.exe");
