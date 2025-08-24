@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using CdbMcpServer.Models;
 
 namespace CdbMcpServer;
 
@@ -349,7 +349,7 @@ public class McpProxy
 
         var toolName = nameElement.GetString() ?? "";
         var args = argsElement;
-        
+
         // Extract progress token if available
         string? progressToken = null;
         if (request.Params.Value.TryGetProperty("_meta", out var metaElement) &&
@@ -902,74 +902,4 @@ public class McpProxy
             };
         }
     }
-}
-
-// MCP Protocol DTOs
-public class McpRequest
-{
-    [JsonPropertyName("jsonrpc")]
-    public string JsonRpc { get; set; } = "2.0";
-
-    [JsonPropertyName("id")]
-    public int Id { get; set; }
-
-    [JsonPropertyName("method")]
-    public string Method { get; set; } = "";
-
-    [JsonPropertyName("params")]
-    public JsonElement? Params { get; set; }
-}
-
-public class McpResponse
-{
-    [JsonPropertyName("jsonrpc")]
-    public string JsonRpc { get; set; } = "2.0";
-
-    [JsonPropertyName("id")]
-    public int Id { get; set; }
-
-    [JsonPropertyName("result")]
-    public object? Result { get; set; }
-
-    [JsonPropertyName("error")]
-    public McpError? Error { get; set; }
-}
-
-public class McpError
-{
-    [JsonPropertyName("code")]
-    public int Code { get; set; }
-
-    [JsonPropertyName("message")]
-    public string Message { get; set; } = "";
-}
-
-public class McpTool
-{
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = "";
-
-    [JsonPropertyName("description")]
-    public string Description { get; set; } = "";
-
-    [JsonPropertyName("inputSchema")]
-    public object InputSchema { get; set; } = new();
-}
-
-public class McpToolResult
-{
-    [JsonPropertyName("content")]
-    public McpContent[] Content { get; set; } = Array.Empty<McpContent>();
-    
-    [JsonPropertyName("isError")]
-    public bool IsError { get; set; }
-}
-
-public class McpContent
-{
-    [JsonPropertyName("type")]
-    public string Type { get; set; } = "text";
-    
-    [JsonPropertyName("text")]
-    public string Text { get; set; } = "";
 }
