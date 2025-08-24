@@ -4,11 +4,11 @@ using Microsoft.Extensions.Logging;
 
 namespace McpProxy.Services;
 
-public class McpToolsService : IMcpToolsService
+public class ToolsService : IToolsService
 {
-    private readonly ILogger<McpToolsService> _logger;
+    private readonly ILogger<ToolsService> _logger;
 
-    public McpToolsService(ILogger<McpToolsService> logger)
+    public ToolsService(ILogger<ToolsService> logger)
     {
         _logger = logger;
     }

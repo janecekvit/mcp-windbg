@@ -3,7 +3,7 @@ using CdbMcpServer.Models;
 
 namespace McpProxy.Services;
 
-public interface IMcpToolsService
+public interface IToolsService
 {
     McpResponse CreateListToolsResponse(int requestId);
     Task<McpResponse> HandleToolCallAsync(int requestId, JsonElement args, Func<string, string?, JsonElement, Task<McpToolResult>> toolHandler);

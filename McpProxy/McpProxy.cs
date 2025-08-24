@@ -9,18 +9,18 @@ public class McpProxy
 {
     private readonly ILogger<McpProxy> _logger;
     private readonly IDebuggerApiService _debuggerApiService;
-    private readonly IMcpCommunicationService _mcpCommunicationService;
+    private readonly ICommunicationService _communicationService;
 
-    public McpProxy(ILogger<McpProxy> logger, IDebuggerApiService debuggerApiService, IMcpCommunicationService mcpCommunicationService)
+    public McpProxy(ILogger<McpProxy> logger, IDebuggerApiService debuggerApiService, ICommunicationService communicationService)
     {
         _logger = logger;
         _debuggerApiService = debuggerApiService;
-        _mcpCommunicationService = mcpCommunicationService;
+        _communicationService = communicationService;
     }
 
     public async Task RunAsync()
     {
-        await _mcpCommunicationService.RunAsync(HandleToolCallAsync, _debuggerApiService.CheckHealthAsync);
+        await _communicationService.RunAsync(HandleToolCallAsync, _debuggerApiService.CheckHealthAsync);
     }
 
     private async Task<McpToolResult> HandleToolCallAsync(string toolName, string? progressToken, JsonElement args)

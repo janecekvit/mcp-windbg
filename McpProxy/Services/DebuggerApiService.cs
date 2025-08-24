@@ -9,14 +9,14 @@ public class DebuggerApiService : IDebuggerApiService
 {
     private readonly ILogger<DebuggerApiService> _logger;
     private readonly HttpClient _httpClient;
-    private readonly IMcpCommunicationService _mcpCommunicationService;
+    private readonly INotificationService _notificationService;
     private readonly string _backgroundServiceUrl;
 
-    public DebuggerApiService(ILogger<DebuggerApiService> logger, HttpClient httpClient, IMcpCommunicationService mcpCommunicationService)
+    public DebuggerApiService(ILogger<DebuggerApiService> logger, HttpClient httpClient, INotificationService notificationService)
     {
         _logger = logger;
         _httpClient = httpClient;
-        _mcpCommunicationService = mcpCommunicationService;
+        _notificationService = notificationService;
         _backgroundServiceUrl = Environment.GetEnvironmentVariable("BACKGROUND_SERVICE_URL") ?? "http://localhost:8080";
 
         _logger.LogInformation("Configured to use background service at: {Url}", _backgroundServiceUrl);
@@ -41,7 +41,7 @@ public class DebuggerApiService : IDebuggerApiService
         try
         {
             if (!string.IsNullOrEmpty(progressToken))
-                await _mcpCommunicationService.SendProgressNotificationAsync(progressToken, 0.1, "Validating dump file path...");
+                await _notificationService.SendProgressNotificationAsync(progressToken, 0.1, "Validating dump file path...");
 
             if (!args.TryGetProperty("dump_file_path", out var dumpFileElement))
             {
@@ -63,7 +63,7 @@ public class DebuggerApiService : IDebuggerApiService
             }
 
             if (!string.IsNullOrEmpty(progressToken))
-                await _mcpCommunicationService.SendProgressNotificationAsync(progressToken, 0.3, "Loading dump file...");
+                await _notificationService.SendProgressNotificationAsync(progressToken, 0.3, "Loading dump file...");
 
             var requestBody = JsonSerializer.Serialize(new { dumpFilePath });
             var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
@@ -73,7 +73,7 @@ public class DebuggerApiService : IDebuggerApiService
             if (response.IsSuccessStatusCode)
             {
                 if (!string.IsNullOrEmpty(progressToken))
-                    await _mcpCommunicationService.SendProgressNotificationAsync(progressToken, 0.8, "Creating debugging session...");
+                    await _notificationService.SendProgressNotificationAsync(progressToken, 0.8, "Creating debugging session...");
 
                 var responseText = await response.Content.ReadAsStringAsync();
                 var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
@@ -82,7 +82,7 @@ public class DebuggerApiService : IDebuggerApiService
                 var message = responseData.GetProperty("message").GetString();
 
                 if (!string.IsNullOrEmpty(progressToken))
-                    await _mcpCommunicationService.SendProgressNotificationAsync(progressToken, 1.0, "Dump loaded successfully!");
+                    await _notificationService.SendProgressNotificationAsync(progressToken, 1.0, "Dump loaded successfully!");
 
                 return new McpToolResult
                 {
@@ -185,7 +185,7 @@ public class DebuggerApiService : IDebuggerApiService
         try
         {
             if (!string.IsNullOrEmpty(progressToken))
-                await _mcpCommunicationService.SendProgressNotificationAsync(progressToken, 0.1, "Preparing basic analysis...");
+                await _notificationService.SendProgressNotificationAsync(progressToken, 0.1, "Preparing basic analysis...");
 
             if (!args.TryGetProperty("session_id", out var sessionIdElement))
             {
@@ -207,7 +207,7 @@ public class DebuggerApiService : IDebuggerApiService
             }
 
             if (!string.IsNullOrEmpty(progressToken))
-                await _mcpCommunicationService.SendProgressNotificationAsync(progressToken, 0.3, "Running comprehensive analysis...");
+                await _notificationService.SendProgressNotificationAsync(progressToken, 0.3, "Running comprehensive analysis...");
 
             var requestBody = JsonSerializer.Serialize(new { sessionId });
             var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
@@ -217,14 +217,14 @@ public class DebuggerApiService : IDebuggerApiService
             if (response.IsSuccessStatusCode)
             {
                 if (!string.IsNullOrEmpty(progressToken))
-                    await _mcpCommunicationService.SendProgressNotificationAsync(progressToken, 0.9, "Processing analysis results...");
+                    await _notificationService.SendProgressNotificationAsync(progressToken, 0.9, "Processing analysis results...");
 
                 var responseText = await response.Content.ReadAsStringAsync();
                 var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
                 var result = responseData.GetProperty("result").GetString();
 
                 if (!string.IsNullOrEmpty(progressToken))
-                    await _mcpCommunicationService.SendProgressNotificationAsync(progressToken, 1.0, "Analysis completed!");
+                    await _notificationService.SendProgressNotificationAsync(progressToken, 1.0, "Analysis completed!");
 
                 return new McpToolResult
                 {

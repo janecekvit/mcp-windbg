@@ -4,21 +4,22 @@ using Microsoft.Extensions.Logging;
 
 namespace McpProxy.Services;
 
-public class McpCommunicationService : IMcpCommunicationService
+public class CommunicationService : ICommunicationService
 {
-    private readonly ILogger<McpCommunicationService> _logger;
-    private readonly IMcpInitializationService _initializationService;
-    private readonly IMcpToolsService _toolsService;
+    private readonly ILogger<CommunicationService> _logger;
+    private readonly IToolsService _toolsService;
+    private readonly INotificationService _notificationService;
     private StreamWriter? _writer;
+    private bool _isInitialized = false;
 
-    public McpCommunicationService(
-        ILogger<McpCommunicationService> logger,
-        IMcpInitializationService initializationService,
-        IMcpToolsService toolsService)
+    public CommunicationService(
+        ILogger<CommunicationService> logger,
+        IToolsService toolsService,
+        INotificationService notificationService)
     {
         _logger = logger;
-        _initializationService = initializationService;
         _toolsService = toolsService;
+        _notificationService = notificationService;
     }
 
     public async Task RunAsync(Func<string, string?, JsonElement, Task<McpToolResult>> handleToolCall, Func<Task<bool>>? healthCheck = null)
@@ -32,6 +33,7 @@ public class McpCommunicationService : IMcpCommunicationService
         using var reader = new StreamReader(stdinStream);
         using var writer = new StreamWriter(stdoutStream) { AutoFlush = true };
         _writer = writer;
+        _notificationService.SetWriter(writer);
 
         _logger.LogInformation("MCP Server Proxy ready to accept requests");
 
@@ -52,12 +54,6 @@ public class McpCommunicationService : IMcpCommunicationService
                     if (response != null)
                     {
                         await SendResponseAsync(response);
-                        
-                        // Send initialized notification after successful initialize
-                        if (request.Method == "initialize" && response.Error == null)
-                        {
-                            await SendInitializedNotificationAsync();
-                        }
                     }
                 }
             }
@@ -82,9 +78,9 @@ public class McpCommunicationService : IMcpCommunicationService
         {
             return request.Method switch
             {
-                "initialize" => await _initializationService.HandleInitializeAsync(request.Id, healthCheck),
-                "tools/list" => _initializationService.IsInitialized ? _toolsService.CreateListToolsResponse(request.Id) : CreateNotInitializedError(request.Id),
-                "tools/call" => _initializationService.IsInitialized ? await HandleToolCallAsync(request, handleToolCall) : CreateNotInitializedError(request.Id),
+                "initialize" => await HandleInitializeAsync(request.Id, healthCheck),
+                "tools/list" => _isInitialized ? _toolsService.CreateListToolsResponse(request.Id) : CreateNotInitializedError(request.Id),
+                "tools/call" => _isInitialized ? await HandleToolCallAsync(request, handleToolCall) : CreateNotInitializedError(request.Id),
                 _ => CreateMethodNotFoundError(request.Id, request.Method)
             };
         }
@@ -99,6 +95,60 @@ public class McpCommunicationService : IMcpCommunicationService
         }
     }
 
+    private async Task<McpResponse> HandleInitializeAsync(int requestId, Func<Task<bool>>? healthCheck)
+    {
+        _logger.LogInformation("Received initialize request");
+        
+        // Check if background service is available
+        bool isHealthy = true;
+        if (healthCheck != null)
+        {
+            isHealthy = await healthCheck();
+            if (isHealthy)
+            {
+                _logger.LogInformation("Background service is healthy");
+            }
+            else
+            {
+                _logger.LogWarning("Background service health check failed");
+            }
+        }
+        
+        _isInitialized = true;
+        var response = CreateInitializeResponse(requestId, isHealthy);
+        
+        if (response.Error == null)
+        {
+            await _notificationService.SendInitializedNotificationAsync();
+        }
+        
+        return response;
+    }
+
+    private McpResponse CreateInitializeResponse(int requestId, bool isHealthy)
+    {
+        return new McpResponse
+        {
+            Id = requestId,
+            Result = new
+            {
+                protocolVersion = "2024-11-05",
+                capabilities = new
+                {
+                    tools = new
+                    {
+                        listChanged = false
+                    }
+                },
+                serverInfo = new
+                {
+                    name = "cdb-mcp-server-proxy",
+                    version = "2.0.0"
+                }
+            }
+        };
+    }
+
     private async Task<McpResponse> HandleToolCallAsync(McpRequest request, Func<string, string?, JsonElement, Task<McpToolResult>> handleToolCall)
     {
         if (request.Params == null)
@@ -109,40 +159,6 @@ public class McpCommunicationService : IMcpCommunicationService
         return await _toolsService.HandleToolCallAsync(request.Id, request.Params.Value, handleToolCall);
     }
 
-    public async Task SendInitializedNotificationAsync()
-    {
-        if (_writer == null) return;
-
-        var notification = new
-        {
-            jsonrpc = "2.0",
-            method = "notifications/initialized"
-        };
-
-        var json = JsonSerializer.Serialize(notification);
-        await _writer.WriteLineAsync(json);
-    }
-
-    public async Task SendProgressNotificationAsync(string progressToken, double progress, string? message = null)
-    {
-        if (_writer == null) return;
-
-        var notification = new
-        {
-            jsonrpc = "2.0",
-            method = "notifications/progress",
-            @params = new
-            {
-                progressToken,
-                progress,
-                total = 1.0,
-                message
-            }
-        };
-
-        var json = JsonSerializer.Serialize(notification);
-        await _writer.WriteLineAsync(json);
-    }
 
     public async Task SendResponseAsync(McpResponse response)
     {
