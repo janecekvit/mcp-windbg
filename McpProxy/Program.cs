@@ -1,8 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using McpProxy.Services;
 
-namespace CdbMcpServer;
+namespace McpProxy;
 
 class Program
 {
@@ -13,6 +14,8 @@ class Program
             var host = Host.CreateDefaultBuilder(args)
                 .ConfigureServices((context, services) =>
                 {
+                    services.AddHttpClient();
+                    services.AddScoped<IDebuggerApiService, DebuggerApiService>();
                     services.AddSingleton<McpProxy>();
                 })
                 .ConfigureLogging(logging =>

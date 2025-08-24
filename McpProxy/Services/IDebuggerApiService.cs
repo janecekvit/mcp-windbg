@@ -1,0 +1,17 @@
+using System.Text.Json;
+using CdbMcpServer.Models;
+
+namespace McpProxy.Services;
+
+public interface IDebuggerApiService
+{
+    Task<bool> CheckHealthAsync();
+    Task<McpToolResult> LoadDumpAsync(JsonElement args, string? progressToken = null, StreamWriter? writer = null);
+    Task<McpToolResult> ExecuteCommandAsync(JsonElement args, string? progressToken = null, StreamWriter? writer = null);
+    Task<McpToolResult> BasicAnalysisAsync(JsonElement args, string? progressToken = null, StreamWriter? writer = null);
+    Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null, StreamWriter? writer = null);
+    Task<McpToolResult> ListSessionsAsync();
+    Task<McpToolResult> CloseSessionAsync(JsonElement args);
+    Task<McpToolResult> DetectDebuggersAsync();
+    Task<McpToolResult> ListAnalysesAsync();
+}
