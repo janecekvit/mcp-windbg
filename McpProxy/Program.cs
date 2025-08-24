@@ -16,6 +16,8 @@ class Program
                 {
                     services.AddHttpClient();
                     services.AddScoped<IDebuggerApiService, DebuggerApiService>();
+                    services.AddScoped<IMcpInitializationService, McpInitializationService>();
+                    services.AddScoped<IMcpToolsService, McpToolsService>();
                     services.AddScoped<IMcpCommunicationService, McpCommunicationService>();
                     services.AddSingleton<McpProxy>();
                 })
