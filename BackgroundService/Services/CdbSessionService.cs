@@ -33,18 +33,18 @@ public sealed class CdbSessionService : ICdbSessionService
         _symbolPathExtra = symbolPathExtra;
     }
 
-    public async Task<bool> LoadDumpAsync(string dumpFilePath)
+    public async Task LoadDumpAsync(string dumpFilePath)
     {
         if (!File.Exists(dumpFilePath))
         {
             _logger.LogError("Dump file not found: {DumpFile}", dumpFilePath);
-            return false;
+            throw new FileNotFoundException($"Dump file not found: {dumpFilePath}", dumpFilePath);
         }
 
         if (!File.Exists(_cdbPath))
         {
             _logger.LogError("CDB not found at: {CdbPath}", _cdbPath);
-            return false;
+            throw new FileNotFoundException($"CDB not found at: {_cdbPath}", _cdbPath);
         }
 
         lock (_lock)
@@ -84,7 +84,7 @@ public sealed class CdbSessionService : ICdbSessionService
             if (_cdbProcess == null)
             {
                 _logger.LogError("Failed to start CDB process");
-                return false;
+                throw new InvalidOperationException("Failed to start CDB process");
             }
 
             _stdin = _cdbProcess.StandardInput;
@@ -95,7 +95,6 @@ public sealed class CdbSessionService : ICdbSessionService
         await InitializeSessionAsync();
 
         _logger.LogInformation("CDB session {SessionId} loaded dump: {DumpFile}", SessionId, dumpFilePath);
-        return true;
     }
 
     private async Task InitializeSessionAsync()
@@ -122,10 +121,18 @@ public sealed class CdbSessionService : ICdbSessionService
     public async Task<string> ExecuteCommandAsync(string command)
     {
         if (_cdbProcess?.HasExited != false)
-            return "Error: CDB process is not running. Load a dump file first.";
+        {
+            var error = "CDB process is not running. Load a dump file first.";
+            _logger.LogError(error);
+            throw new InvalidOperationException(error);
+        }
 
         if (!_isInitialized)
-            return "Error: Session not initialized. Load a dump file first.";
+        {
+            var error = "Session not initialized. Load a dump file first.";
+            _logger.LogError(error);
+            throw new InvalidOperationException(error);
+        }
 
         return await ExecuteCommandInternalAsync(command);
     }
@@ -133,7 +140,11 @@ public sealed class CdbSessionService : ICdbSessionService
     private async Task<string> ExecuteCommandInternalAsync(string command)
     {
         if (_stdin == null || _cdbProcess?.HasExited != false)
-            return "Error: CDB process is not available";
+        {
+            var error = "CDB process is not available";
+            _logger.LogError(error);
+            throw new InvalidOperationException(error);
+        }
 
         try
         {
@@ -182,14 +193,18 @@ public sealed class CdbSessionService : ICdbSessionService
             var completedTask = await Task.WhenAny(outputTask, timeoutTask);
 
             if (completedTask == timeoutTask)
-                return "Error: Command execution timeout";
+            {
+                var error = "Command execution timeout";
+                _logger.LogError("Command execution timeout for: {Command}", command);
+                throw new TimeoutException(error);
+            }
 
             return await outputTask;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!(ex is TimeoutException || ex is InvalidOperationException))
         {
             _logger.LogError(ex, "Error executing command: {Command}", command);
-            return $"Error executing command: {ex.Message}";
+            throw new InvalidOperationException($"Error executing command: {ex.Message}", ex);
         }
     }
 
@@ -202,7 +217,11 @@ public sealed class CdbSessionService : ICdbSessionService
     {
         var commands = _analysisService.GetAnalysisCommands(analysisName);
         if (commands.Length == 0)
-            return $"Unknown analysis type: {analysisName}. Available analyses: {string.Join(", ", _analysisService.GetAvailableAnalyses())}";
+        {
+            var error = $"Unknown analysis type: {analysisName}. Available analyses: {string.Join(", ", _analysisService.GetAvailableAnalyses())}";
+            _logger.LogError(error);
+            throw new ArgumentException(error, nameof(analysisName));
+        }
 
         var results = new StringBuilder();
         results.AppendLine($"Executing {analysisName} analysis:");

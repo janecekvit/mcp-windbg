@@ -6,7 +6,7 @@ public interface ICdbSessionService : IDisposable
     string? CurrentDumpFile { get; }
     bool IsActive { get; }
 
-    Task<bool> LoadDumpAsync(string dumpFilePath);
+    Task LoadDumpAsync(string dumpFilePath);
     Task<string> ExecuteCommandAsync(string command);
     Task<string> ExecuteBasicAnalysisAsync();
     Task<string> ExecutePredefinedAnalysisAsync(string analysisName);

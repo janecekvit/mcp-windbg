@@ -53,88 +53,109 @@ public sealed class SessionManagerService : ISessionManagerService
                               _cdbPath, _symbolCache, _symbolPathExtra);
     }
 
-    public async Task<(bool Success, string SessionId, string Message)> CreateSessionWithDumpAsync(string dumpFilePath)
+    public async Task<string> CreateSessionWithDumpAsync(string dumpFilePath)
     {
         if (!File.Exists(dumpFilePath))
-            return (false, "", $"Dump file not found: {dumpFilePath}");
+        {
+            _logger.LogError("Dump file not found: {DumpFile}", dumpFilePath);
+            throw new FileNotFoundException($"Dump file not found: {dumpFilePath}", dumpFilePath);
+        }
 
         var sessionId = Guid.NewGuid().ToString("N")[..8];
         var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
         var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra);
 
-        var success = await session.LoadDumpAsync(dumpFilePath);
-        if (!success)
+        try
+        {
+            await session.LoadDumpAsync(dumpFilePath);
+            _sessions[sessionId] = session;
+            _logger.LogInformation("Created new CDB session {SessionId} for dump: {DumpFile}", sessionId, dumpFilePath);
+            return sessionId;
+        }
+        catch (Exception)
         {
             session.Dispose();
-            return (false, "", "Failed to load dump file into CDB session");
+            throw;
         }
-
-        _sessions[sessionId] = session;
-        _logger.LogInformation("Created new CDB session {SessionId} for dump: {DumpFile}", sessionId, dumpFilePath);
-
-        return (true, sessionId, $"Session {sessionId} created successfully");
     }
 
-    public async Task<(bool Success, string Message)> ExecuteCommandAsync(string sessionId, string command)
+    public async Task<string> ExecuteCommandAsync(string sessionId, string command)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
-            return (false, $"Session {sessionId} not found");
+        {
+            var error = $"Session {sessionId} not found";
+            _logger.LogError(error);
+            throw new ArgumentException(error, nameof(sessionId));
+        }
 
         if (!session.IsActive)
-            return (false, $"Session {sessionId} is not active");
+        {
+            var error = $"Session {sessionId} is not active";
+            _logger.LogError(error);
+            throw new InvalidOperationException(error);
+        }
 
         try
         {
-            var result = await session.ExecuteCommandAsync(command);
-            return (true, result);
+            return await session.ExecuteCommandAsync(command);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error executing command in session {SessionId}: {Command}", sessionId, command);
-            return (false, $"Error executing command: {ex.Message}");
+            throw;
         }
     }
 
-    public async Task<(bool Success, string Message)> ExecuteBasicAnalysisAsync(string sessionId)
+    public async Task<string> ExecuteBasicAnalysisAsync(string sessionId)
     {
         return await ExecutePredefinedAnalysisAsync(sessionId, "basic");
     }
 
-    public async Task<(bool Success, string Message)> ExecutePredefinedAnalysisAsync(string sessionId, string analysisName)
+    public async Task<string> ExecutePredefinedAnalysisAsync(string sessionId, string analysisName)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
-            return (false, $"Session {sessionId} not found");
+        {
+            var error = $"Session {sessionId} not found";
+            _logger.LogError(error);
+            throw new ArgumentException(error, nameof(sessionId));
+        }
 
         if (!session.IsActive)
-            return (false, $"Session {sessionId} is not active");
+        {
+            var error = $"Session {sessionId} is not active";
+            _logger.LogError(error);
+            throw new InvalidOperationException(error);
+        }
 
         try
         {
-            var result = await session.ExecutePredefinedAnalysisAsync(analysisName);
-            return (true, result);
+            return await session.ExecutePredefinedAnalysisAsync(analysisName);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error executing {AnalysisName} analysis in session {SessionId}", analysisName, sessionId);
-            return (false, $"Error executing {analysisName} analysis: {ex.Message}");
+            throw;
         }
     }
 
-    public (bool Success, string Message) CloseSession(string sessionId)
+    public void CloseSession(string sessionId)
     {
         if (!_sessions.TryRemove(sessionId, out var session))
-            return (false, $"Session {sessionId} not found");
+        {
+            var error = $"Session {sessionId} not found";
+            _logger.LogError(error);
+            throw new ArgumentException(error, nameof(sessionId));
+        }
 
         try
         {
             session.Dispose();
             _logger.LogInformation("Closed CDB session {SessionId}", sessionId);
-            return (true, $"Session {sessionId} closed successfully");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error closing session {SessionId}", sessionId);
-            return (false, $"Error closing session: {ex.Message}");
+            throw new InvalidOperationException($"Error closing session: {ex.Message}", ex);
         }
     }
 

@@ -63,11 +63,14 @@ internal class Program
             try
             {
                 logger.LogInformation("Loading dump: {DumpFile}", request.DumpFilePath);
-                var (success, sessionId, message) = await sessionManager.CreateSessionWithDumpAsync(request.DumpFilePath);
+                var sessionId = await sessionManager.CreateSessionWithDumpAsync(request.DumpFilePath);
 
-                return success
-                    ? Results.Ok(new { sessionId, message, dumpFile = request.DumpFilePath })
-                    : Results.BadRequest(new { error = message });
+                return Results.Ok(new { sessionId, message = $"Session {sessionId} created successfully", dumpFile = request.DumpFilePath });
+            }
+            catch (FileNotFoundException ex)
+            {
+                logger.LogError(ex, "Dump file not found: {DumpFile}", request.DumpFilePath);
+                return Results.BadRequest(new { error = ex.Message });
             }
             catch (Exception ex)
             {
@@ -82,11 +85,19 @@ internal class Program
             try
             {
                 logger.LogInformation("Executing command in session {SessionId}: {Command}", request.SessionId, request.Command);
-                var (success, result) = await sessionManager.ExecuteCommandAsync(request.SessionId, request.Command);
+                var result = await sessionManager.ExecuteCommandAsync(request.SessionId, request.Command);
 
-                return success
-                    ? Results.Ok(new { result })
-                    : Results.BadRequest(new { error = result });
+                return Results.Ok(new { result });
+            }
+            catch (ArgumentException ex)
+            {
+                logger.LogError(ex, "Invalid session: {SessionId}", request.SessionId);
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogError(ex, "Session operation error: {SessionId}", request.SessionId);
+                return Results.BadRequest(new { error = ex.Message });
             }
             catch (Exception ex)
             {
@@ -101,11 +112,19 @@ internal class Program
             try
             {
                 logger.LogInformation("Running basic analysis for session {SessionId}", request.SessionId);
-                var (success, result) = await sessionManager.ExecuteBasicAnalysisAsync(request.SessionId);
+                var result = await sessionManager.ExecuteBasicAnalysisAsync(request.SessionId);
 
-                return success
-                    ? Results.Ok(new { result })
-                    : Results.BadRequest(new { error = result });
+                return Results.Ok(new { result });
+            }
+            catch (ArgumentException ex)
+            {
+                logger.LogError(ex, "Invalid session: {SessionId}", request.SessionId);
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogError(ex, "Session operation error: {SessionId}", request.SessionId);
+                return Results.BadRequest(new { error = ex.Message });
             }
             catch (Exception ex)
             {
@@ -120,11 +139,19 @@ internal class Program
             try
             {
                 logger.LogInformation("Running {AnalysisType} analysis for session {SessionId}", request.AnalysisType, request.SessionId);
-                var (success, result) = await sessionManager.ExecutePredefinedAnalysisAsync(request.SessionId, request.AnalysisType);
+                var result = await sessionManager.ExecutePredefinedAnalysisAsync(request.SessionId, request.AnalysisType);
 
-                return success
-                    ? Results.Ok(new { result })
-                    : Results.BadRequest(new { error = result });
+                return Results.Ok(new { result });
+            }
+            catch (ArgumentException ex)
+            {
+                logger.LogError(ex, "Invalid request: {SessionId}, {AnalysisType}", request.SessionId, request.AnalysisType);
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogError(ex, "Session operation error: {SessionId}", request.SessionId);
+                return Results.BadRequest(new { error = ex.Message });
             }
             catch (Exception ex)
             {
@@ -154,15 +181,23 @@ internal class Program
             try
             {
                 logger.LogInformation("Closing session {SessionId}", sessionId);
-                var (success, message) = sessionManager.CloseSession(sessionId);
+                sessionManager.CloseSession(sessionId);
 
-                return success
-                    ? Results.Ok(new { message })
-                    : Results.BadRequest(new { error = message });
+                return Results.Ok(new { message = $"Session {sessionId} closed successfully" });
+            }
+            catch (ArgumentException ex)
+            {
+                logger.LogError(ex, "Invalid session: {SessionId}", sessionId);
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogError(ex, "Error closing session {SessionId}", sessionId);
+                return Results.BadRequest(new { error = ex.Message });
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error closing session {SessionId}", sessionId);
+                logger.LogError(ex, "Unexpected error closing session {SessionId}", sessionId);
                 return Results.StatusCode(500);
             }
         });
