@@ -1,46 +1,45 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using System.Text.Json;
-using System.Text;
+using CdbBackgroundService.Models;
+using CdbBackgroundService.Services;
 
 namespace CdbBackgroundService;
 
-class Program
+internal class Program
 {
-    static async Task<int> Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         try
         {
             var builder = WebApplication.CreateBuilder(args);
-            
+
             // Configure services
-            builder.Services.AddSingleton<CdbSessionManager>();
-            
+            builder.Services.AddScoped<IPathDetectionService, PathDetectionService>();
+            builder.Services.AddScoped<IAnalysisService, AnalysisService>();
+            builder.Services.AddScoped<ISessionManagerService, SessionManagerService>();
+
             // Configure logging
             builder.Logging.ClearProviders();
             builder.Logging.AddConsole();
             builder.Logging.SetMinimumLevel(LogLevel.Information);
-            
+
             // Build the app
             var app = builder.Build();
-            
+
             var logger = app.Services.GetRequiredService<ILogger<Program>>();
-            var sessionManager = app.Services.GetRequiredService<CdbSessionManager>();
-            
+            var sessionManager = app.Services.GetRequiredService<ISessionManagerService>();
+            var pathDetectionService = app.Services.GetRequiredService<IPathDetectionService>();
+            var analysisService = app.Services.GetRequiredService<IAnalysisService>();
+
             logger.LogInformation("Starting CDB Background Service...");
-            
+
             // Configure HTTP endpoints
-            ConfigureEndpoints(app, sessionManager, logger);
-            
+            ConfigureEndpoints(app, sessionManager, pathDetectionService, analysisService, logger);
+
             // Start the service
             var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : 8080;
             app.Urls.Add($"http://localhost:{port}");
-            
+
             logger.LogInformation("CDB Background Service listening on port {Port}", port);
-            
+
             await app.RunAsync();
             return 0;
         }
@@ -50,12 +49,14 @@ class Program
             return 1;
         }
     }
-    
-    private static void ConfigureEndpoints(WebApplication app, CdbSessionManager sessionManager, ILogger logger)
+
+    private static void ConfigureEndpoints(WebApplication app, ISessionManagerService sessionManager,
+                                         IPathDetectionService pathDetectionService, IAnalysisService analysisService,
+                                         ILogger logger)
     {
         // Health check
         app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
-        
+
         // Load dump and create session
         app.MapPost("/api/load-dump", async (LoadDumpRequest request) =>
         {
@@ -63,8 +64,8 @@ class Program
             {
                 logger.LogInformation("Loading dump: {DumpFile}", request.DumpFilePath);
                 var (success, sessionId, message) = await sessionManager.CreateSessionWithDumpAsync(request.DumpFilePath);
-                
-                return success 
+
+                return success
                     ? Results.Ok(new { sessionId, message, dumpFile = request.DumpFilePath })
                     : Results.BadRequest(new { error = message });
             }
@@ -74,7 +75,7 @@ class Program
                 return Results.StatusCode(500);
             }
         });
-        
+
         // Execute command
         app.MapPost("/api/execute-command", async (ExecuteCommandRequest request) =>
         {
@@ -82,8 +83,8 @@ class Program
             {
                 logger.LogInformation("Executing command in session {SessionId}: {Command}", request.SessionId, request.Command);
                 var (success, result) = await sessionManager.ExecuteCommandAsync(request.SessionId, request.Command);
-                
-                return success 
+
+                return success
                     ? Results.Ok(new { result })
                     : Results.BadRequest(new { error = result });
             }
@@ -93,7 +94,7 @@ class Program
                 return Results.StatusCode(500);
             }
         });
-        
+
         // Basic analysis
         app.MapPost("/api/basic-analysis", async (BasicAnalysisRequest request) =>
         {
@@ -101,8 +102,8 @@ class Program
             {
                 logger.LogInformation("Running basic analysis for session {SessionId}", request.SessionId);
                 var (success, result) = await sessionManager.ExecuteBasicAnalysisAsync(request.SessionId);
-                
-                return success 
+
+                return success
                     ? Results.Ok(new { result })
                     : Results.BadRequest(new { error = result });
             }
@@ -112,7 +113,7 @@ class Program
                 return Results.StatusCode(500);
             }
         });
-        
+
         // Predefined analysis
         app.MapPost("/api/predefined-analysis", async (PredefinedAnalysisRequest request) =>
         {
@@ -120,8 +121,8 @@ class Program
             {
                 logger.LogInformation("Running {AnalysisType} analysis for session {SessionId}", request.AnalysisType, request.SessionId);
                 var (success, result) = await sessionManager.ExecutePredefinedAnalysisAsync(request.SessionId, request.AnalysisType);
-                
-                return success 
+
+                return success
                     ? Results.Ok(new { result })
                     : Results.BadRequest(new { error = result });
             }
@@ -131,7 +132,7 @@ class Program
                 return Results.StatusCode(500);
             }
         });
-        
+
         // List sessions
         app.MapGet("/api/sessions", () =>
         {
@@ -146,7 +147,7 @@ class Program
                 return Results.StatusCode(500);
             }
         });
-        
+
         // Close session
         app.MapDelete("/api/sessions/{sessionId}", (string sessionId) =>
         {
@@ -154,8 +155,8 @@ class Program
             {
                 logger.LogInformation("Closing session {SessionId}", sessionId);
                 var (success, message) = sessionManager.CloseSession(sessionId);
-                
-                return success 
+
+                return success
                     ? Results.Ok(new { message })
                     : Results.BadRequest(new { error = message });
             }
@@ -165,18 +166,18 @@ class Program
                 return Results.StatusCode(500);
             }
         });
-        
+
         // Detect debuggers
         app.MapGet("/api/detect-debuggers", () =>
         {
             try
             {
-                var (cdbPath, winDbgPath, foundPaths) = CdbPathDetector.DetectDebuggerPaths(logger);
-                
-                return Results.Ok(new 
-                { 
-                    cdbPath, 
-                    winDbgPath, 
+                var (cdbPath, winDbgPath, foundPaths) = pathDetectionService.DetectDebuggerPaths();
+
+                return Results.Ok(new
+                {
+                    cdbPath,
+                    winDbgPath,
                     foundPaths,
                     environmentVariables = new
                     {
@@ -192,16 +193,16 @@ class Program
                 return Results.StatusCode(500);
             }
         });
-        
+
         // List available analyses
         app.MapGet("/api/analyses", () =>
         {
             try
             {
-                var analyses = PredefinedAnalyses.GetAvailableAnalyses()
-                    .Select(a => new { name = a, description = PredefinedAnalyses.GetAnalysisDescription(a) })
+                var analyses = analysisService.GetAvailableAnalyses()
+                    .Select(a => new { name = a, description = analysisService.GetAnalysisDescription(a) })
                     .ToArray();
-                    
+
                 return Results.Ok(new { analyses });
             }
             catch (Exception ex)
@@ -212,9 +213,3 @@ class Program
         });
     }
 }
-
-// Request DTOs
-public record LoadDumpRequest(string DumpFilePath);
-public record ExecuteCommandRequest(string SessionId, string Command);
-public record BasicAnalysisRequest(string SessionId);
-public record PredefinedAnalysisRequest(string SessionId, string AnalysisType);

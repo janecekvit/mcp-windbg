@@ -1,25 +1,33 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using CdbBackgroundService.Models;
 
-namespace CdbBackgroundService;
+namespace CdbBackgroundService.Services;
 
-public class CdbSessionManager : IDisposable
+public sealed class SessionManagerService : ISessionManagerService
 {
-    private readonly ILogger<CdbSessionManager> _logger;
+    private readonly ILogger<SessionManagerService> _logger;
     private readonly ILoggerFactory _loggerFactory;
-    private readonly ConcurrentDictionary<string, CdbSession> _sessions = new();
+    private readonly IPathDetectionService _pathDetectionService;
+    private readonly IAnalysisService _analysisService;
+    private readonly ConcurrentDictionary<string, ICdbSessionService> _sessions = new();
     private readonly string _cdbPath;
     private readonly string _symbolCache;
     private readonly string _symbolPathExtra;
 
-    public CdbSessionManager(ILogger<CdbSessionManager> logger, ILoggerFactory loggerFactory)
+    public SessionManagerService(ILogger<SessionManagerService> logger, 
+                               ILoggerFactory loggerFactory,
+                               IPathDetectionService pathDetectionService,
+                               IAnalysisService analysisService)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;
+        _pathDetectionService = pathDetectionService;
+        _analysisService = analysisService;
         
         // Auto-detect CDB path or use environment variable
         var envCdbPath = Environment.GetEnvironmentVariable("CDB_PATH");
-        if (!string.IsNullOrEmpty(envCdbPath) && CdbPathDetector.ValidateDebuggerPath(envCdbPath, logger))
+        if (!string.IsNullOrEmpty(envCdbPath) && _pathDetectionService.ValidateDebuggerPath(envCdbPath))
         {
             _cdbPath = envCdbPath;
             _logger.LogInformation("Using CDB path from environment variable: {Path}", _cdbPath);
@@ -28,13 +36,13 @@ public class CdbSessionManager : IDisposable
         {
             try
             {
-                _cdbPath = CdbPathDetector.GetBestDebuggerPath(logger);
+                _cdbPath = _pathDetectionService.GetBestDebuggerPath();
                 _logger.LogInformation("Auto-detected debugger path: {Path}", _cdbPath);
             }
             catch (FileNotFoundException ex)
             {
                 _logger.LogError("Failed to detect debugger path: {Error}", ex.Message);
-                throw new InvalidOperationException("Cannot initialize CdbSessionManager without valid debugger path", ex);
+                throw new InvalidOperationException("Cannot initialize SessionManagerService without valid debugger path", ex);
             }
         }
         
@@ -54,8 +62,8 @@ public class CdbSessionManager : IDisposable
         }
 
         var sessionId = Guid.NewGuid().ToString("N")[..8];
-        var sessionLogger = _loggerFactory.CreateLogger<CdbSession>();
-        var session = new CdbSession(sessionId, sessionLogger, _cdbPath, _symbolCache, _symbolPathExtra);
+        var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
+        var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra);
 
         var success = await session.LoadDumpAsync(dumpFilePath);
         if (!success)
@@ -167,12 +175,6 @@ public class CdbSessionManager : IDisposable
             }
         }
         _sessions.Clear();
+        GC.SuppressFinalize(this);
     }
-}
-
-public class SessionInfo
-{
-    public required string SessionId { get; init; }
-    public required string DumpFile { get; init; }
-    public required bool IsActive { get; init; }
 }

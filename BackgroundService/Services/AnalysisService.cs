@@ -1,8 +1,8 @@
-namespace CdbBackgroundService;
+namespace CdbBackgroundService.Services;
 
-public static class PredefinedAnalyses
+public class AnalysisService : IAnalysisService
 {
-    public static readonly Dictionary<string, string[]> Analyses = new()
+    private static readonly Dictionary<string, string[]> Analyses = new()
     {
         ["basic"] = new[]
         {
@@ -112,19 +112,19 @@ public static class PredefinedAnalyses
         }
     };
 
-    public static string[] GetAnalysisCommands(string analysisName)
+    public string[] GetAnalysisCommands(string analysisName)
     {
         return Analyses.TryGetValue(analysisName.ToLowerInvariant(), out var commands) 
             ? commands 
             : Array.Empty<string>();
     }
 
-    public static IEnumerable<string> GetAvailableAnalyses()
+    public IEnumerable<string> GetAvailableAnalyses()
     {
         return Analyses.Keys;
     }
 
-    public static string GetAnalysisDescription(string analysisName)
+    public string GetAnalysisDescription(string analysisName)
     {
         return analysisName.ToLowerInvariant() switch
         {

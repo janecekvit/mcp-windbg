@@ -2,11 +2,12 @@ using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
-namespace CdbBackgroundService;
+namespace CdbBackgroundService.Services;
 
-public class CdbSession : IDisposable
+public sealed class CdbSessionService : ICdbSessionService
 {
-    private readonly ILogger<CdbSession> _logger;
+    private readonly ILogger<CdbSessionService> _logger;
+    private readonly IAnalysisService _analysisService;
     private readonly string _cdbPath;
     private readonly string _symbolCache;
     private readonly string _symbolPathExtra;
@@ -19,13 +20,15 @@ public class CdbSession : IDisposable
     public string? CurrentDumpFile { get; private set; }
     public bool IsActive => _cdbProcess?.HasExited == false;
 
-    public CdbSession(string sessionId, ILogger<CdbSession> logger, 
-                     string cdbPath = @"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe",
-                     string symbolCache = @"C:\symbols",
-                     string symbolPathExtra = "")
+    public CdbSessionService(string sessionId, ILogger<CdbSessionService> logger, 
+                            IAnalysisService analysisService,
+                            string cdbPath = @"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe",
+                            string symbolCache = @"C:\symbols",
+                            string symbolPathExtra = "")
     {
         SessionId = sessionId;
         _logger = logger;
+        _analysisService = analysisService;
         _cdbPath = cdbPath;
         _symbolCache = symbolCache;
         _symbolPathExtra = symbolPathExtra;
@@ -206,15 +209,15 @@ public class CdbSession : IDisposable
 
     public async Task<string> ExecutePredefinedAnalysisAsync(string analysisName)
     {
-        var commands = PredefinedAnalyses.GetAnalysisCommands(analysisName);
+        var commands = _analysisService.GetAnalysisCommands(analysisName);
         if (commands.Length == 0)
         {
-            return $"Unknown analysis type: {analysisName}. Available analyses: {string.Join(", ", PredefinedAnalyses.GetAvailableAnalyses())}";
+            return $"Unknown analysis type: {analysisName}. Available analyses: {string.Join(", ", _analysisService.GetAvailableAnalyses())}";
         }
 
         var results = new StringBuilder();
         results.AppendLine($"Executing {analysisName} analysis:");
-        results.AppendLine($"Description: {PredefinedAnalyses.GetAnalysisDescription(analysisName)}");
+        results.AppendLine($"Description: {_analysisService.GetAnalysisDescription(analysisName)}");
         results.AppendLine();
 
         foreach (var command in commands)
@@ -254,5 +257,6 @@ public class CdbSession : IDisposable
                 _cdbProcess?.Dispose();
             }
         }
+        GC.SuppressFinalize(this);
     }
 }
