@@ -1,5 +1,5 @@
 using System.Text.Json;
-using CdbMcpServer.Models;
+using McpProxy.Models;
 using Microsoft.Extensions.Logging;
 
 namespace McpProxy.Services;
@@ -98,9 +98,9 @@ public class CommunicationService : ICommunicationService
     private async Task<McpResponse> HandleInitializeAsync(int requestId, Func<Task<bool>>? healthCheck)
     {
         _logger.LogInformation("Received initialize request");
-        
+
         // Check if background service is available
-        bool isHealthy = true;
+        var isHealthy = true;
         if (healthCheck != null)
         {
             isHealthy = await healthCheck();
@@ -113,19 +113,19 @@ public class CommunicationService : ICommunicationService
                 _logger.LogWarning("Background service health check failed");
             }
         }
-        
+
         _isInitialized = true;
         var response = CreateInitializeResponse(requestId, isHealthy);
-        
+
         if (response.Error == null)
         {
             await _notificationService.SendInitializedNotificationAsync();
         }
-        
+
         return response;
     }
 
-    private McpResponse CreateInitializeResponse(int requestId, bool isHealthy)
+    private static McpResponse CreateInitializeResponse(int requestId, bool isHealthy)
     {
         return new McpResponse
         {
@@ -159,7 +159,6 @@ public class CommunicationService : ICommunicationService
         return await _toolsService.HandleToolCallAsync(request.Id, request.Params.Value, handleToolCall);
     }
 
-
     public async Task SendResponseAsync(McpResponse response)
     {
         if (_writer == null) return;
@@ -179,7 +178,7 @@ public class CommunicationService : ICommunicationService
         await SendResponseAsync(errorResponse);
     }
 
-    private McpResponse CreateNotInitializedError(int requestId)
+    private static McpResponse CreateNotInitializedError(int requestId)
     {
         return new McpResponse
         {
@@ -188,7 +187,7 @@ public class CommunicationService : ICommunicationService
         };
     }
 
-    private McpResponse CreateMethodNotFoundError(int requestId, string method)
+    private static McpResponse CreateMethodNotFoundError(int requestId, string method)
     {
         return new McpResponse
         {
@@ -197,7 +196,7 @@ public class CommunicationService : ICommunicationService
         };
     }
 
-    private McpResponse CreateInvalidParamsError(int requestId)
+    private static McpResponse CreateInvalidParamsError(int requestId)
     {
         return new McpResponse
         {

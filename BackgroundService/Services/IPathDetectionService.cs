@@ -1,4 +1,4 @@
-namespace CdbBackgroundService.Services;
+namespace BackgroundService.Services;
 
 public interface IPathDetectionService
 {

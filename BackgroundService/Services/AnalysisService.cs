@@ -1,4 +1,4 @@
-namespace CdbBackgroundService.Services;
+namespace BackgroundService.Services;
 
 public class AnalysisService : IAnalysisService
 {
@@ -10,7 +10,7 @@ public class AnalysisService : IAnalysisService
             "version",
             "!peb",
             "~",
-            ".echo ---------- EXCEPTION CONTEXT ----------", 
+            ".echo ---------- EXCEPTION CONTEXT ----------",
             ".ecxr",
             ".echo ---------- ANALYZE ----------",
             "!analyze -v",
@@ -25,7 +25,7 @@ public class AnalysisService : IAnalysisService
             "!analyze -v",
             ".echo ---------- EXCEPTION RECORD ----------",
             "!exr -1",
-            ".echo ---------- CONTEXT RECORD ----------", 
+            ".echo ---------- CONTEXT RECORD ----------",
             "!cxr -1",
             ".echo ---------- CURRENT THREAD STACK ----------",
             "kb"
@@ -114,8 +114,8 @@ public class AnalysisService : IAnalysisService
 
     public string[] GetAnalysisCommands(string analysisName)
     {
-        return Analyses.TryGetValue(analysisName.ToLowerInvariant(), out var commands) 
-            ? commands 
+        return Analyses.TryGetValue(analysisName.ToLowerInvariant(), out var commands)
+            ? commands
             : Array.Empty<string>();
     }
 

@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
-using CdbMcpServer.Models;
 using Microsoft.Extensions.Logging;
+using McpProxy.Models;
 
 namespace McpProxy.Services;
 

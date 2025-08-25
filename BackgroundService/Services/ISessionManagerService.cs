@@ -1,6 +1,6 @@
-using CdbBackgroundService.Models;
+using BackgroundService.Models;
 
-namespace CdbBackgroundService.Services;
+namespace BackgroundService.Services;
 
 public interface ISessionManagerService : IDisposable
 {

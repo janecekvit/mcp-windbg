@@ -1,7 +1,7 @@
-using CdbBackgroundService.Models;
-using CdbBackgroundService.Services;
+using BackgroundService.Models;
+using BackgroundService.Services;
 
-namespace CdbBackgroundService;
+namespace BackgroundService;
 
 internal class Program
 {

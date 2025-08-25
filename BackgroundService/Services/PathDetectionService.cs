@@ -1,11 +1,9 @@
-using Microsoft.Extensions.Logging;
-
-namespace CdbBackgroundService.Services;
+namespace BackgroundService.Services;
 
 public class PathDetectionService : IPathDetectionService
 {
     private readonly ILogger<PathDetectionService> _logger;
-    
+
     private static readonly string[] PotentialPaths = new[]
     {
         // Windows SDK (classic install)
@@ -62,10 +60,7 @@ public class PathDetectionService : IPathDetectionService
         if (!string.IsNullOrEmpty(winDbgFromStore))
         {
             foundPaths.Add(winDbgFromStore);
-            if (winDbgPath == null)
-            {
-                winDbgPath = winDbgFromStore;
-            }
+            winDbgPath ??= winDbgFromStore;
         }
 
         // Try to find Windows SDK via registry or common locations
@@ -92,7 +87,7 @@ public class PathDetectionService : IPathDetectionService
 
             // Look for Microsoft.WinDbg* folders
             var winDbgDirs = Directory.GetDirectories(windowsAppsPath, "Microsoft.WinDbg*", SearchOption.TopDirectoryOnly);
-            
+
             foreach (var dir in winDbgDirs)
             {
                 // Try amd64 version
@@ -131,7 +126,7 @@ public class PathDetectionService : IPathDetectionService
     private List<string> FindWindowsSdkPaths()
     {
         var paths = new List<string>();
-        
+
         try
         {
             // Try to find Windows SDK via standard paths
@@ -147,7 +142,7 @@ public class PathDetectionService : IPathDetectionService
                     continue;
 
                 // Look for various SDK versions (10, 11)
-                var versionDirs = Directory.GetDirectories(sdkRoot).Where(d => 
+                var versionDirs = Directory.GetDirectories(sdkRoot).Where(d =>
                     Path.GetFileName(d) is "10" or "11");
 
                 foreach (var versionDir in versionDirs)
@@ -189,11 +184,9 @@ public class PathDetectionService : IPathDetectionService
 
         _logger.LogError("No debugger found. Install Windows SDK or WinDbg from Microsoft Store.");
         _logger.LogInformation("Searched paths: {Paths}", string.Join(", ", PotentialPaths));
-        
+
         if (foundPaths.Any())
-        {
             _logger.LogInformation("Found alternative debuggers: {FoundPaths}", string.Join(", ", foundPaths));
-        }
 
         throw new FileNotFoundException(
             "CDB or WinDbg not found. Install Windows SDK or WinDbg from Microsoft Store.\n" +
@@ -212,7 +205,7 @@ public class PathDetectionService : IPathDetectionService
             return false;
         }
 
-        if (!path.EndsWith("cdb.exe", StringComparison.OrdinalIgnoreCase) && 
+        if (!path.EndsWith("cdb.exe", StringComparison.OrdinalIgnoreCase) &&
             !path.EndsWith("windbg.exe", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogWarning("Path doesn't appear to be a valid debugger: {Path}", path);

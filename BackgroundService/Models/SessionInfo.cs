@@ -1,4 +1,4 @@
-namespace CdbBackgroundService.Models;
+namespace BackgroundService.Models;
 
 public class SessionInfo
 {

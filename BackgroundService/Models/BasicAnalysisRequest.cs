@@ -1,3 +1,3 @@
-namespace CdbBackgroundService.Models;
+namespace BackgroundService.Models;
 
 public record BasicAnalysisRequest(string SessionId);

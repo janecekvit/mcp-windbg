@@ -1,8 +1,7 @@
 using System.Collections.Concurrent;
-using Microsoft.Extensions.Logging;
-using CdbBackgroundService.Models;
+using BackgroundService.Models;
 
-namespace CdbBackgroundService.Services;
+namespace BackgroundService.Services;
 
 public sealed class SessionManagerService : ISessionManagerService
 {
@@ -15,7 +14,7 @@ public sealed class SessionManagerService : ISessionManagerService
     private readonly string _symbolCache;
     private readonly string _symbolPathExtra;
 
-    public SessionManagerService(ILogger<SessionManagerService> logger, 
+    public SessionManagerService(ILogger<SessionManagerService> logger,
                                ILoggerFactory loggerFactory,
                                IPathDetectionService pathDetectionService,
                                IAnalysisService analysisService)
@@ -24,7 +23,7 @@ public sealed class SessionManagerService : ISessionManagerService
         _loggerFactory = loggerFactory;
         _pathDetectionService = pathDetectionService;
         _analysisService = analysisService;
-        
+
         // Auto-detect CDB path or use environment variable
         var envCdbPath = Environment.GetEnvironmentVariable("CDB_PATH");
         if (!string.IsNullOrEmpty(envCdbPath) && _pathDetectionService.ValidateDebuggerPath(envCdbPath))
@@ -45,21 +44,19 @@ public sealed class SessionManagerService : ISessionManagerService
                 throw new InvalidOperationException("Cannot initialize SessionManagerService without valid debugger path", ex);
             }
         }
-        
-        _symbolCache = Environment.GetEnvironmentVariable("SYMBOL_CACHE") 
+
+        _symbolCache = Environment.GetEnvironmentVariable("SYMBOL_CACHE")
                        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CdbMcpServer", "symbols");
         _symbolPathExtra = Environment.GetEnvironmentVariable("SYMBOL_PATH_EXTRA") ?? "";
-        
-        _logger.LogInformation("CDB Configuration - Path: {CdbPath}, SymbolCache: {SymbolCache}, Extra: {Extra}", 
+
+        _logger.LogInformation("CDB Configuration - Path: {CdbPath}, SymbolCache: {SymbolCache}, Extra: {Extra}",
                               _cdbPath, _symbolCache, _symbolPathExtra);
     }
 
     public async Task<(bool Success, string SessionId, string Message)> CreateSessionWithDumpAsync(string dumpFilePath)
     {
         if (!File.Exists(dumpFilePath))
-        {
             return (false, "", $"Dump file not found: {dumpFilePath}");
-        }
 
         var sessionId = Guid.NewGuid().ToString("N")[..8];
         var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
@@ -74,21 +71,17 @@ public sealed class SessionManagerService : ISessionManagerService
 
         _sessions[sessionId] = session;
         _logger.LogInformation("Created new CDB session {SessionId} for dump: {DumpFile}", sessionId, dumpFilePath);
-        
+
         return (true, sessionId, $"Session {sessionId} created successfully");
     }
 
     public async Task<(bool Success, string Message)> ExecuteCommandAsync(string sessionId, string command)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
-        {
             return (false, $"Session {sessionId} not found");
-        }
 
         if (!session.IsActive)
-        {
             return (false, $"Session {sessionId} is not active");
-        }
 
         try
         {
@@ -110,14 +103,10 @@ public sealed class SessionManagerService : ISessionManagerService
     public async Task<(bool Success, string Message)> ExecutePredefinedAnalysisAsync(string sessionId, string analysisName)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
-        {
             return (false, $"Session {sessionId} not found");
-        }
 
         if (!session.IsActive)
-        {
             return (false, $"Session {sessionId} is not active");
-        }
 
         try
         {
@@ -134,9 +123,7 @@ public sealed class SessionManagerService : ISessionManagerService
     public (bool Success, string Message) CloseSession(string sessionId)
     {
         if (!_sessions.TryRemove(sessionId, out var session))
-        {
             return (false, $"Session {sessionId} not found");
-        }
 
         try
         {

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace CdbMcpServer.Models;
+namespace McpProxy.Models;
 
 public class McpRequest
 {

@@ -1,5 +1,5 @@
 using System.Text.Json;
-using CdbMcpServer.Models;
+using McpProxy.Models;
 
 namespace McpProxy.Services;
 

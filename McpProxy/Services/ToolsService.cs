@@ -1,5 +1,5 @@
 using System.Text.Json;
-using CdbMcpServer.Models;
+using McpProxy.Models;
 using Microsoft.Extensions.Logging;
 
 namespace McpProxy.Services;
@@ -170,7 +170,7 @@ public class ToolsService : IToolsService
         }
 
         var toolName = nameElement.GetString() ?? "";
-        
+
         // Extract progress token if available
         string? progressToken = null;
         if (args.TryGetProperty("_meta", out var metaElement) &&

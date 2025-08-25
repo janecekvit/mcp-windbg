@@ -1,8 +1,7 @@
 using System.Diagnostics;
 using System.Text;
-using Microsoft.Extensions.Logging;
 
-namespace CdbBackgroundService.Services;
+namespace BackgroundService.Services;
 
 public sealed class CdbSessionService : ICdbSessionService
 {
@@ -15,12 +14,12 @@ public sealed class CdbSessionService : ICdbSessionService
     private StreamWriter? _stdin;
     private bool _isInitialized;
     private readonly object _lock = new();
-    
+
     public string SessionId { get; }
     public string? CurrentDumpFile { get; private set; }
     public bool IsActive => _cdbProcess?.HasExited == false;
 
-    public CdbSessionService(string sessionId, ILogger<CdbSessionService> logger, 
+    public CdbSessionService(string sessionId, ILogger<CdbSessionService> logger,
                             IAnalysisService analysisService,
                             string cdbPath = @"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe",
                             string symbolCache = @"C:\symbols",
@@ -58,10 +57,10 @@ public sealed class CdbSessionService : ICdbSessionService
             }
 
             CurrentDumpFile = dumpFilePath;
-            
+
             // Prepare symbol cache
             Directory.CreateDirectory(_symbolCache);
-            
+
             // Build symbol path
             var msSrv = $"srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols";
             var symbolPath = string.IsNullOrWhiteSpace(_symbolPathExtra) ? msSrv : $"{_symbolPathExtra};{msSrv}";
@@ -81,7 +80,7 @@ public sealed class CdbSessionService : ICdbSessionService
             };
 
             _cdbProcess = Process.Start(startInfo);
-            
+
             if (_cdbProcess == null)
             {
                 _logger.LogError("Failed to start CDB process");
@@ -94,7 +93,7 @@ public sealed class CdbSessionService : ICdbSessionService
 
         // Wait for initialization and set symbols
         await InitializeSessionAsync();
-        
+
         _logger.LogInformation("CDB session {SessionId} loaded dump: {DumpFile}", SessionId, dumpFilePath);
         return true;
     }
@@ -123,14 +122,10 @@ public sealed class CdbSessionService : ICdbSessionService
     public async Task<string> ExecuteCommandAsync(string command)
     {
         if (_cdbProcess?.HasExited != false)
-        {
             return "Error: CDB process is not running. Load a dump file first.";
-        }
 
         if (!_isInitialized)
-        {
             return "Error: Session not initialized. Load a dump file first.";
-        }
 
         return await ExecuteCommandInternalAsync(command);
     }
@@ -138,15 +133,13 @@ public sealed class CdbSessionService : ICdbSessionService
     private async Task<string> ExecuteCommandInternalAsync(string command)
     {
         if (_stdin == null || _cdbProcess?.HasExited != false)
-        {
             return "Error: CDB process is not available";
-        }
 
         try
         {
             var outputBuilder = new StringBuilder();
             var errorBuilder = new StringBuilder();
-            
+
             // Use unique marker to identify end of output
             var marker = $"__END_COMMAND_{Guid.NewGuid():N}__";
             var fullCommand = $"{command}; .echo {marker}";
@@ -163,35 +156,33 @@ public sealed class CdbSessionService : ICdbSessionService
                 var reader = _cdbProcess.StandardOutput;
                 var buffer = new char[1024];
                 var result = new StringBuilder();
-                
+
                 while (!_cdbProcess.HasExited)
                 {
                     var bytesRead = await reader.ReadAsync(buffer, 0, buffer.Length);
                     if (bytesRead == 0) break;
-                    
+
                     var chunk = new string(buffer, 0, bytesRead);
                     result.Append(chunk);
-                    
+
                     // Check for marker
                     if (result.ToString().Contains(marker))
                     {
                         var output = result.ToString();
                         var markerIndex = output.LastIndexOf(marker);
-                        return output.Substring(0, markerIndex).Trim();
+                        return output[..markerIndex].Trim();
                     }
                 }
-                
+
                 return result.ToString();
             });
 
             // Command timeout
             var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30));
             var completedTask = await Task.WhenAny(outputTask, timeoutTask);
-            
+
             if (completedTask == timeoutTask)
-            {
                 return "Error: Command execution timeout";
-            }
 
             return await outputTask;
         }
@@ -211,9 +202,7 @@ public sealed class CdbSessionService : ICdbSessionService
     {
         var commands = _analysisService.GetAnalysisCommands(analysisName);
         if (commands.Length == 0)
-        {
             return $"Unknown analysis type: {analysisName}. Available analyses: {string.Join(", ", _analysisService.GetAvailableAnalyses())}";
-        }
 
         var results = new StringBuilder();
         results.AppendLine($"Executing {analysisName} analysis:");
@@ -240,11 +229,9 @@ public sealed class CdbSessionService : ICdbSessionService
                 {
                     _stdin?.WriteLine("q");
                     _stdin?.Flush();
-                    
+
                     if (!_cdbProcess.WaitForExit(5000))
-                    {
                         _cdbProcess.Kill();
-                    }
                 }
             }
             catch (Exception ex)

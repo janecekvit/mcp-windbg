@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace CdbMcpServer.Models;
+namespace McpProxy.Models;
 
 public class McpError
 {
