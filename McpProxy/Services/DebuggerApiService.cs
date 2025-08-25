@@ -45,21 +45,13 @@ public class DebuggerApiService : IDebuggerApiService
 
             if (!args.TryGetProperty("dump_file_path", out var dumpFileElement))
             {
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = "Missing dump_file_path parameter" } },
-                    IsError = true
-                };
+                return McpToolResult.Error("Missing dump_file_path parameter");
             }
 
             var dumpFilePath = dumpFileElement.GetString();
             if (string.IsNullOrEmpty(dumpFilePath))
             {
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = "Empty dump_file_path parameter" } },
-                    IsError = true
-                };
+                return McpToolResult.Error("Empty dump_file_path parameter");
             }
 
             if (!string.IsNullOrEmpty(progressToken))
@@ -84,36 +76,17 @@ public class DebuggerApiService : IDebuggerApiService
                 if (!string.IsNullOrEmpty(progressToken))
                     await _notificationService.SendProgressNotificationAsync(progressToken, 1.0, "Dump loaded successfully!");
 
-                return new McpToolResult
-                {
-                    Content = new[]
-                    {
-                        new McpContent
-                        {
-                            Type = "text",
-                            Text = $"Session created successfully!\nSession ID: {sessionId}\nDump file: {dumpFilePath}\n\n{message}"
-                        }
-                    },
-                    IsError = false
-                };
+                return McpToolResult.Success($"Session created successfully!\nSession ID: {sessionId}\nDump file: {dumpFilePath}\n\n{message}");
             }
             else
             {
                 var errorText = await response.Content.ReadAsStringAsync();
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = $"Failed to load dump: {errorText}" } },
-                    IsError = true
-                };
+                return McpToolResult.Error($"Failed to load dump: {errorText}");
             }
         }
         catch (Exception ex)
         {
-            return new McpToolResult
-            {
-                Content = new[] { new McpContent { Type = "text", Text = $"Error: {ex.Message}" } },
-                IsError = true
-            };
+            return McpToolResult.Error($"Error: {ex.Message}");
         }
     }
 
@@ -124,11 +97,7 @@ public class DebuggerApiService : IDebuggerApiService
             if (!args.TryGetProperty("session_id", out var sessionIdElement) ||
                 !args.TryGetProperty("command", out var commandElement))
             {
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = "Missing session_id or command parameter" } },
-                    IsError = true
-                };
+                return McpToolResult.Error("Missing session_id or command parameter");
             }
 
             var sessionId = sessionIdElement.GetString();
@@ -136,11 +105,7 @@ public class DebuggerApiService : IDebuggerApiService
 
             if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(command))
             {
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = "Empty session_id or command parameter" } },
-                    IsError = true
-                };
+                return McpToolResult.Error("Empty session_id or command parameter");
             }
 
             var requestBody = JsonSerializer.Serialize(new { sessionId, command });
@@ -154,29 +119,17 @@ public class DebuggerApiService : IDebuggerApiService
                 var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
                 var result = responseData.GetProperty("result").GetString();
 
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = result ?? "" } },
-                    IsError = false
-                };
+                return McpToolResult.Success(result ?? "");
             }
             else
             {
                 var errorText = await response.Content.ReadAsStringAsync();
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = $"Error: {errorText}" } },
-                    IsError = true
-                };
+                return McpToolResult.Error($"Error: {errorText}");
             }
         }
         catch (Exception ex)
         {
-            return new McpToolResult
-            {
-                Content = new[] { new McpContent { Type = "text", Text = $"Error: {ex.Message}" } },
-                IsError = true
-            };
+            return McpToolResult.Error($"Error: {ex.Message}");
         }
     }
 
@@ -189,21 +142,13 @@ public class DebuggerApiService : IDebuggerApiService
 
             if (!args.TryGetProperty("session_id", out var sessionIdElement))
             {
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = "Missing session_id parameter" } },
-                    IsError = true
-                };
+                return McpToolResult.Error("Missing session_id parameter");
             }
 
             var sessionId = sessionIdElement.GetString();
             if (string.IsNullOrEmpty(sessionId))
             {
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = "Empty session_id parameter" } },
-                    IsError = true
-                };
+                return McpToolResult.Error("Empty session_id parameter");
             }
 
             if (!string.IsNullOrEmpty(progressToken))
@@ -226,29 +171,17 @@ public class DebuggerApiService : IDebuggerApiService
                 if (!string.IsNullOrEmpty(progressToken))
                     await _notificationService.SendProgressNotificationAsync(progressToken, 1.0, "Analysis completed!");
 
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = result ?? "" } },
-                    IsError = false
-                };
+                return McpToolResult.Success(result ?? "");
             }
             else
             {
                 var errorText = await response.Content.ReadAsStringAsync();
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = $"Error: {errorText}" } },
-                    IsError = true
-                };
+                return McpToolResult.Error($"Error: {errorText}");
             }
         }
         catch (Exception ex)
         {
-            return new McpToolResult
-            {
-                Content = new[] { new McpContent { Type = "text", Text = $"Error: {ex.Message}" } },
-                IsError = true
-            };
+            return McpToolResult.Error($"Error: {ex.Message}");
         }
     }
 
@@ -259,11 +192,7 @@ public class DebuggerApiService : IDebuggerApiService
             if (!args.TryGetProperty("session_id", out var sessionIdElement) ||
                 !args.TryGetProperty("analysis_type", out var analysisTypeElement))
             {
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = "Missing session_id or analysis_type parameter" } },
-                    IsError = true
-                };
+                return McpToolResult.Error("Missing session_id or analysis_type parameter");
             }
 
             var sessionId = sessionIdElement.GetString();
@@ -271,11 +200,7 @@ public class DebuggerApiService : IDebuggerApiService
 
             if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(analysisType))
             {
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = "Empty session_id or analysis_type parameter" } },
-                    IsError = true
-                };
+                return McpToolResult.Error("Empty session_id or analysis_type parameter");
             }
 
             var requestBody = JsonSerializer.Serialize(new { sessionId, analysisType });
@@ -289,29 +214,17 @@ public class DebuggerApiService : IDebuggerApiService
                 var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
                 var result = responseData.GetProperty("result").GetString();
 
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = result ?? "" } },
-                    IsError = false
-                };
+                return McpToolResult.Success(result ?? "");
             }
             else
             {
                 var errorText = await response.Content.ReadAsStringAsync();
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = $"Error: {errorText}" } },
-                    IsError = true
-                };
+                return McpToolResult.Error($"Error: {errorText}");
             }
         }
         catch (Exception ex)
         {
-            return new McpToolResult
-            {
-                Content = new[] { new McpContent { Type = "text", Text = $"Error: {ex.Message}" } },
-                IsError = true
-            };
+            return McpToolResult.Error($"Error: {ex.Message}");
         }
     }
 
@@ -341,29 +254,17 @@ public class DebuggerApiService : IDebuggerApiService
                     sessionList.AppendLine();
                 }
 
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = sessionList.ToString() } },
-                    IsError = false
-                };
+                return McpToolResult.Success(sessionList.ToString());
             }
             else
             {
                 var errorText = await response.Content.ReadAsStringAsync();
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = $"Error: {errorText}" } },
-                    IsError = true
-                };
+                return McpToolResult.Error($"Error: {errorText}");
             }
         }
         catch (Exception ex)
         {
-            return new McpToolResult
-            {
-                Content = new[] { new McpContent { Type = "text", Text = $"Error: {ex.Message}" } },
-                IsError = true
-            };
+            return McpToolResult.Error($"Error: {ex.Message}");
         }
     }
 
@@ -373,21 +274,13 @@ public class DebuggerApiService : IDebuggerApiService
         {
             if (!args.TryGetProperty("session_id", out var sessionIdElement))
             {
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = "Missing session_id parameter" } },
-                    IsError = true
-                };
+                return McpToolResult.Error("Missing session_id parameter");
             }
 
             var sessionId = sessionIdElement.GetString();
             if (string.IsNullOrEmpty(sessionId))
             {
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = "Empty session_id parameter" } },
-                    IsError = true
-                };
+                return McpToolResult.Error("Empty session_id parameter");
             }
 
             var response = await _httpClient.DeleteAsync($"{_backgroundServiceUrl}/api/sessions/{sessionId}");
@@ -398,29 +291,17 @@ public class DebuggerApiService : IDebuggerApiService
                 var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
                 var message = responseData.GetProperty("message").GetString();
 
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = message ?? "" } },
-                    IsError = false
-                };
+                return McpToolResult.Success(message ?? "");
             }
             else
             {
                 var errorText = await response.Content.ReadAsStringAsync();
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = $"Error: {errorText}" } },
-                    IsError = true
-                };
+                return McpToolResult.Error($"Error: {errorText}");
             }
         }
         catch (Exception ex)
         {
-            return new McpToolResult
-            {
-                Content = new[] { new McpContent { Type = "text", Text = $"Error: {ex.Message}" } },
-                IsError = true
-            };
+            return McpToolResult.Error($"Error: {ex.Message}");
         }
     }
 
@@ -464,29 +345,17 @@ public class DebuggerApiService : IDebuggerApiService
                     result.AppendLine($"  {envVar.Name}: {value}");
                 }
 
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = result.ToString() } },
-                    IsError = false
-                };
+                return McpToolResult.Success(result.ToString());
             }
             else
             {
                 var errorText = await response.Content.ReadAsStringAsync();
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = $"Error: {errorText}" } },
-                    IsError = true
-                };
+                return McpToolResult.Error($"Error: {errorText}");
             }
         }
         catch (Exception ex)
         {
-            return new McpToolResult
-            {
-                Content = new[] { new McpContent { Type = "text", Text = $"Error detecting debuggers: {ex.Message}" } },
-                IsError = true
-            };
+            return McpToolResult.Error(ex, "Error detecting debuggers");
         }
     }
 
@@ -513,29 +382,17 @@ public class DebuggerApiService : IDebuggerApiService
                     result.AppendLine($"{name}: {description}");
                 }
 
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = result.ToString() } },
-                    IsError = false
-                };
+                return McpToolResult.Success(result.ToString());
             }
             else
             {
                 var errorText = await response.Content.ReadAsStringAsync();
-                return new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = $"Error: {errorText}" } },
-                    IsError = true
-                };
+                return McpToolResult.Error($"Error: {errorText}");
             }
         }
         catch (Exception ex)
         {
-            return new McpToolResult
-            {
-                Content = new[] { new McpContent { Type = "text", Text = $"Error: {ex.Message}" } },
-                IsError = true
-            };
+            return McpToolResult.Error($"Error: {ex.Message}");
         }
     }
 

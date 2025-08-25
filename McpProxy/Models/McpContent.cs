@@ -9,4 +9,16 @@ public class McpContent
 
     [JsonPropertyName("text")]
     public string Text { get; set; } = "";
+
+    public McpContent()
+    {
+    }
+
+    public McpContent(string text, string type = "text")
+    {
+        Text = text;
+        Type = type;
+    }
+
+    public static McpContent CreateText(string text) => new(text, "text");
 }

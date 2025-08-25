@@ -150,11 +150,7 @@ public class ToolsService : IToolsService
             }
         };
 
-        return new McpResponse
-        {
-            Id = requestId,
-            Result = new { tools }
-        };
+        return McpResponse.Success(requestId, new { tools });
     }
 
     public async Task<McpResponse> HandleToolCallAsync(int requestId, JsonElement args, Func<string, string?, JsonElement, Task<McpToolResult>> toolHandler)
@@ -162,11 +158,7 @@ public class ToolsService : IToolsService
         if (!args.TryGetProperty("name", out var nameElement) ||
             !args.TryGetProperty("arguments", out var argsElement))
         {
-            return new McpResponse
-            {
-                Id = requestId,
-                Error = new McpError { Code = -32602, Message = "Invalid params - missing name or arguments" }
-            };
+            return McpResponse.CreateError(requestId, -32602, "Invalid params - missing name or arguments");
         }
 
         var toolName = nameElement.GetString() ?? "";
@@ -185,10 +177,6 @@ public class ToolsService : IToolsService
 
     public McpResponse CreateToolCallResponse(int requestId, McpToolResult result)
     {
-        return new McpResponse
-        {
-            Id = requestId,
-            Result = result
-        };
+        return McpResponse.Success(requestId, result);
     }
 }

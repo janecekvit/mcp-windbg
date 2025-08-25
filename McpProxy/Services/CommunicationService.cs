@@ -87,11 +87,7 @@ public class CommunicationService : ICommunicationService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling request method: {Method}", request.Method);
-            return new McpResponse
-            {
-                Id = request.Id,
-                Error = new McpError { Code = -1, Message = ex.Message }
-            };
+            return McpResponse.CreateError(request.Id, -1, ex.Message);
         }
     }
 
@@ -127,26 +123,22 @@ public class CommunicationService : ICommunicationService
 
     private static McpResponse CreateInitializeResponse(int requestId, bool isHealthy)
     {
-        return new McpResponse
+        return McpResponse.Success(requestId, new
         {
-            Id = requestId,
-            Result = new
+            protocolVersion = "2024-11-05",
+            capabilities = new
             {
-                protocolVersion = "2024-11-05",
-                capabilities = new
+                tools = new
                 {
-                    tools = new
-                    {
-                        listChanged = false
-                    }
-                },
-                serverInfo = new
-                {
-                    name = "cdb-mcp-server-proxy",
-                    version = "2.0.0"
+                    listChanged = false
                 }
+            },
+            serverInfo = new
+            {
+                name = "cdb-mcp-server-proxy",
+                version = "2.0.0"
             }
-        };
+        });
     }
 
     private async Task<McpResponse> HandleToolCallAsync(McpRequest request, Func<string, string?, JsonElement, Task<McpToolResult>> handleToolCall)
@@ -170,38 +162,22 @@ public class CommunicationService : ICommunicationService
 
     public async Task SendErrorResponseAsync(int requestId, McpError error)
     {
-        var errorResponse = new McpResponse
-        {
-            Id = requestId,
-            Error = error
-        };
+        var errorResponse = McpResponse.CreateError(requestId, error);
         await SendResponseAsync(errorResponse);
     }
 
     private static McpResponse CreateNotInitializedError(int requestId)
     {
-        return new McpResponse
-        {
-            Id = requestId,
-            Error = new McpError { Code = -32002, Message = "Server not initialized" }
-        };
+        return McpResponse.NotInitialized(requestId);
     }
 
     private static McpResponse CreateMethodNotFoundError(int requestId, string method)
     {
-        return new McpResponse
-        {
-            Id = requestId,
-            Error = new McpError { Code = -32601, Message = $"Method not found: {method}" }
-        };
+        return McpResponse.MethodNotFound(requestId, method);
     }
 
     private static McpResponse CreateInvalidParamsError(int requestId)
     {
-        return new McpResponse
-        {
-            Id = requestId,
-            Error = new McpError { Code = -32602, Message = "Invalid params" }
-        };
+        return McpResponse.InvalidParams(requestId);
     }
 }
