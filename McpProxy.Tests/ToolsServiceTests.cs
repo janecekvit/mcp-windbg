@@ -1,3 +1,4 @@
+using Common;
 using McpProxy.Services;
 
 namespace McpProxy.Tests;
@@ -32,17 +33,7 @@ public class ToolsServiceTests
     {
         // Arrange
         var requestId = 456;
-        var expectedToolNames = new[]
-        {
-            "load_dump",
-            "execute_command",
-            "basic_analysis",
-            "list_sessions",
-            "close_session",
-            "predefined_analysis",
-            "list_analyses",
-            "detect_debuggers"
-        };
+        var expectedToolNames = McpToolNames.GetAll();
 
         // Act
         var response = _toolsService.CreateListToolsResponse(requestId);

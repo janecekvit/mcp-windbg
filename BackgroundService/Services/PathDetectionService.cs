@@ -4,7 +4,7 @@ public class PathDetectionService : IPathDetectionService
 {
     private readonly ILogger<PathDetectionService> _logger;
 
-    private static readonly string[] PotentialPaths = new[]
+    private static readonly IReadOnlyList<string> PotentialPaths = new List<string>
     {
         // Windows SDK (classic install)
         @"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe",
@@ -130,7 +130,7 @@ public class PathDetectionService : IPathDetectionService
         try
         {
             // Try to find Windows SDK via standard paths
-            var potentialSdkRoots = new[]
+            var potentialSdkRoots = new List<string>
             {
                 @"C:\Program Files (x86)\Windows Kits",
                 @"C:\Program Files\Windows Kits"
@@ -152,7 +152,7 @@ public class PathDetectionService : IPathDetectionService
                         continue;
 
                     // Try x64 and x86 versions
-                    foreach (var arch in new[] { "x64", "x86" })
+                    foreach (var arch in new List<string> { "x64", "x86" })
                     {
                         var cdbPath = Path.Combine(debuggerDir, arch, "cdb.exe");
                         if (File.Exists(cdbPath))

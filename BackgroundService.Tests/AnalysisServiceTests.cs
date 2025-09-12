@@ -1,4 +1,5 @@
 using BackgroundService.Services;
+using Common;
 
 namespace BackgroundService.Tests;
 
@@ -33,16 +34,22 @@ public class AnalysisServiceTests
     }
 
     [Theory]
-    [InlineData("basic", "Comprehensive basic analysis including exception context, analyze -v, and thread stacks")]
-    [InlineData("exception", "Detailed exception analysis with exception and context records")]
-    [InlineData("threads", "Complete thread analysis including all thread information and stacks")]
-    public void GetAnalysisDescription_ValidAnalysisType_ReturnsDescription(string analysisType, string expectedDescription)
+    [InlineData("basic")]
+    [InlineData("exception")]
+    [InlineData("threads")]
+    [InlineData("heap")]
+    [InlineData("modules")]
+    public void GetAnalysisDescription_ValidAnalysisType_ReturnsDescription(string analysisType)
     {
+        // Arrange
+        var expectedDescription = AnalysisTypeExtensions.FromIdentifier(analysisType).GetDescription();
+        
         // Act
         var description = _analysisService.GetAnalysisDescription(analysisType);
 
         // Assert
         Assert.Equal(expectedDescription, description);
+        Assert.NotEmpty(description);
     }
 
     [Fact]

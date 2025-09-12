@@ -22,7 +22,7 @@ public class McpToolResult
 
     public McpToolResult(string text, bool isError = false)
     {
-        Content = new[] { McpContent.CreateText(text) };
+        Content = new[] { text.ToMcpContent() };
         IsError = isError;
     }
 

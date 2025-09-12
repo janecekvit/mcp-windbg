@@ -1,4 +1,4 @@
-namespace McpProxy.Models;
+namespace Common;
 
 public readonly record struct Result<T>
 {
@@ -40,8 +40,6 @@ public readonly record struct Result<T>
         return this;
     }
 
-    public McpToolResult ToMcpToolResult() 
-        => IsSuccess ? McpToolResult.Success(Value?.ToString() ?? "") : McpToolResult.Error(Error);
 }
 
 public static class Result

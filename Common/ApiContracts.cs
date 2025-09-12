@@ -14,7 +14,6 @@ public static class ApiEndpoints
     public const string DetectDebuggers = "/api/detect-debuggers";
     public const string Analyses = "/api/analyses";
     
-    public static string SessionById(string sessionId) => $"/api/sessions/{sessionId}";
 }
 
 // Shared Request Models
@@ -61,15 +60,25 @@ public record CloseSessionResponse([property: JsonPropertyName("message")] strin
 
 public record ErrorResponse([property: JsonPropertyName("error")] string Error);
 
-// Validation Helper
-public static class ValidationHelper
+// Extensions
+public static class StringValidationExtensions
 {
-    public static string? ValidateSessionId(string? sessionId) =>
+    public static string? ValidateAsSessionId(this string? sessionId) =>
         string.IsNullOrWhiteSpace(sessionId) ? "Session ID is required" : null;
     
-    public static string? ValidateCommand(string? command) =>
+    public static string? ValidateAsCommand(this string? command) =>
         string.IsNullOrWhiteSpace(command) ? "Command is required" : null;
         
-    public static string? ValidateDumpFilePath(string? dumpFilePath) =>
+    public static string? ValidateAsDumpFilePath(this string? dumpFilePath) =>
         string.IsNullOrWhiteSpace(dumpFilePath) ? "Dump file path is required" : null;
+}
+
+public static class ApiEndpointExtensions
+{
+    /// <summary>
+    /// Creates an API endpoint path for a specific session
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <returns>API endpoint path for the session</returns>
+    public static string ToSessionEndpoint(this string sessionId) => $"/api/sessions/{sessionId}";
 }

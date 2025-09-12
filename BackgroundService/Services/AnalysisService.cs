@@ -1,10 +1,12 @@
+using Common;
+
 namespace BackgroundService.Services;
 
 public class AnalysisService : IAnalysisService
 {
-    private static readonly Dictionary<string, string[]> Analyses = new()
+    private static readonly Dictionary<AnalysisType, IReadOnlyList<string>> Analyses = new()
     {
-        ["basic"] = new[]
+        [AnalysisType.Basic] = new[]
         {
             ".echo ---------- BASIC INFO ----------",
             "version",
@@ -18,7 +20,7 @@ public class AnalysisService : IAnalysisService
             "~* kb"
         },
 
-        ["exception"] = new[]
+        [AnalysisType.Exception] = new[]
         {
             ".echo ---------- EXCEPTION ANALYSIS ----------",
             ".ecxr",
@@ -31,7 +33,7 @@ public class AnalysisService : IAnalysisService
             "kb"
         },
 
-        ["threads"] = new[]
+        [AnalysisType.Threads] = new[]
         {
             ".echo ---------- ALL THREADS ----------",
             "~",
@@ -41,7 +43,7 @@ public class AnalysisService : IAnalysisService
             "~* !teb"
         },
 
-        ["heap"] = new[]
+        [AnalysisType.Heap] = new[]
         {
             ".echo ---------- HEAP INFORMATION ----------",
             "!heap -s",
@@ -51,7 +53,7 @@ public class AnalysisService : IAnalysisService
             "!heap -x"
         },
 
-        ["modules"] = new[]
+        [AnalysisType.Modules] = new[]
         {
             ".echo ---------- LOADED MODULES ----------",
             "lm",
@@ -61,7 +63,7 @@ public class AnalysisService : IAnalysisService
             "lmu"
         },
 
-        ["handles"] = new[]
+        [AnalysisType.Handles] = new[]
         {
             ".echo ---------- HANDLE INFORMATION ----------",
             "!handle",
@@ -71,7 +73,7 @@ public class AnalysisService : IAnalysisService
             "!handle -p"
         },
 
-        ["locks"] = new[]
+        [AnalysisType.Locks] = new[]
         {
             ".echo ---------- CRITICAL SECTIONS ----------",
             "!locks",
@@ -81,7 +83,7 @@ public class AnalysisService : IAnalysisService
             "!cs -l"
         },
 
-        ["memory"] = new[]
+        [AnalysisType.Memory] = new[]
         {
             ".echo ---------- VIRTUAL MEMORY ----------",
             "!vm",
@@ -91,7 +93,7 @@ public class AnalysisService : IAnalysisService
             "!address -summary"
         },
 
-        ["drivers"] = new[]
+        [AnalysisType.Drivers] = new[]
         {
             ".echo ---------- LOADED DRIVERS ----------",
             "!drvobj",
@@ -101,7 +103,7 @@ public class AnalysisService : IAnalysisService
             "!devobj"
         },
 
-        ["processes"] = new[]
+        [AnalysisType.Processes] = new[]
         {
             ".echo ---------- PROCESS INFORMATION ----------",
             "!process 0 0",
@@ -112,33 +114,34 @@ public class AnalysisService : IAnalysisService
         }
     };
 
-    public string[] GetAnalysisCommands(string analysisName)
+    public IReadOnlyList<string> GetAnalysisCommands(string analysisName)
     {
-        return Analyses.TryGetValue(analysisName.ToLowerInvariant(), out var commands)
-            ? commands
-            : Array.Empty<string>();
+        try
+        {
+            var analysisType = AnalysisTypeExtensions.FromIdentifier(analysisName);
+            return Analyses.TryGetValue(analysisType, out var commands) ? commands : Array.Empty<string>();
+        }
+        catch (ArgumentException)
+        {
+            return Array.Empty<string>();
+        }
     }
 
     public IEnumerable<string> GetAvailableAnalyses()
     {
-        return Analyses.Keys;
+        return Analyses.Keys.Select(key => key.ToIdentifier());
     }
 
     public string GetAnalysisDescription(string analysisName)
     {
-        return analysisName.ToLowerInvariant() switch
+        try
         {
-            "basic" => "Comprehensive basic analysis including exception context, analyze -v, and thread stacks",
-            "exception" => "Detailed exception analysis with exception and context records",
-            "threads" => "Complete thread analysis including all thread information and stacks",
-            "heap" => "Heap analysis including statistics, summary, and validation",
-            "modules" => "Module analysis including loaded, detailed, and unloaded modules",
-            "handles" => "Handle analysis including handle information and process handles",
-            "locks" => "Lock analysis including critical sections and deadlock detection",
-            "memory" => "Memory analysis including virtual memory and address space",
-            "drivers" => "Driver analysis including loaded drivers and device objects",
-            "processes" => "Process analysis including process information and tree",
-            _ => "Unknown analysis type"
-        };
+            var analysisType = AnalysisTypeExtensions.FromIdentifier(analysisName);
+            return analysisType.GetDescription();
+        }
+        catch (ArgumentException)
+        {
+            return "Unknown analysis type";
+        }
     }
 }

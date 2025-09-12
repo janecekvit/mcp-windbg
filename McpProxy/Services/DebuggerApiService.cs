@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Common;
+using McpProxy.Extensions;
 using McpProxy.Models;
 using Microsoft.Extensions.Logging;
 
@@ -53,11 +54,11 @@ public class DebuggerApiService : IDebuggerApiService
 
     public async Task<McpToolResult> LoadDumpAsync(JsonElement args, string? progressToken = null)
     {
-        if (!args.TryGetProperty("dump_file_path", out var pathElement))
-            return McpToolResult.Error("Missing dump_file_path parameter");
-
-        var dumpFilePath = pathElement.GetString();
-        var error = ValidationHelper.ValidateDumpFilePath(dumpFilePath);
+        var pathResult = args.GetRequiredString("dump_file_path");
+        if (pathResult.IsFailure) return McpToolResult.Error(pathResult.Error);
+        
+        var dumpFilePath = pathResult.Value;
+        var error = dumpFilePath.ValidateAsDumpFilePath();
         if (error != null) return McpToolResult.Error(error);
 
         await SendProgress(progressToken, 0.1, "Loading dump file...");
@@ -71,19 +72,15 @@ public class DebuggerApiService : IDebuggerApiService
 
     public async Task<McpToolResult> ExecuteCommandAsync(JsonElement args, string? progressToken = null)
     {
-        if (!args.TryGetProperty("session_id", out var sessionElement) ||
-            !args.TryGetProperty("command", out var cmdElement))
-        {
-            return McpToolResult.Error("Missing session_id or command parameter");
-        }
-
-        var sessionId = sessionElement.GetString();
-        var command = cmdElement.GetString();
-
-        var sessionError = ValidationHelper.ValidateSessionId(sessionId);
+        var paramsResult = args.GetRequiredStrings("session_id", "command");
+        if (paramsResult.IsFailure) return McpToolResult.Error(paramsResult.Error);
+        
+        var (sessionId, command) = paramsResult.Value;
+        
+        var sessionError = sessionId.ValidateAsSessionId();
         if (sessionError != null) return McpToolResult.Error(sessionError);
 
-        var cmdError = ValidationHelper.ValidateCommand(command);
+        var cmdError = command.ValidateAsCommand();
         if (cmdError != null) return McpToolResult.Error(cmdError);
 
         var request = new ExecuteCommandRequest(sessionId!, command!);
@@ -94,11 +91,11 @@ public class DebuggerApiService : IDebuggerApiService
 
     public async Task<McpToolResult> BasicAnalysisAsync(JsonElement args, string? progressToken = null)
     {
-        if (!args.TryGetProperty("session_id", out var sessionElement))
-            return McpToolResult.Error("Missing session_id parameter");
-
-        var sessionId = sessionElement.GetString();
-        var error = ValidationHelper.ValidateSessionId(sessionId);
+        var sessionResult = args.GetRequiredString("session_id");
+        if (sessionResult.IsFailure) return McpToolResult.Error(sessionResult.Error);
+        
+        var sessionId = sessionResult.Value;
+        var error = sessionId.ValidateAsSessionId();
         if (error != null) return McpToolResult.Error(error);
 
         await SendProgress(progressToken, 0.1, "Running analysis...");
@@ -112,20 +109,13 @@ public class DebuggerApiService : IDebuggerApiService
 
     public async Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null)
     {
-        if (!args.TryGetProperty("session_id", out var sessionElement) ||
-            !args.TryGetProperty("analysis_type", out var typeElement))
-        {
-            return McpToolResult.Error("Missing session_id or analysis_type parameter");
-        }
-
-        var sessionId = sessionElement.GetString();
-        var analysisType = typeElement.GetString();
-
-        var sessionError = ValidationHelper.ValidateSessionId(sessionId);
+        var paramsResult = args.GetRequiredStrings("session_id", "analysis_type");
+        if (paramsResult.IsFailure) return McpToolResult.Error(paramsResult.Error);
+        
+        var (sessionId, analysisType) = paramsResult.Value;
+        
+        var sessionError = sessionId.ValidateAsSessionId();
         if (sessionError != null) return McpToolResult.Error(sessionError);
-
-        if (string.IsNullOrWhiteSpace(analysisType))
-            return McpToolResult.Error("Analysis type is required");
 
         var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
         var response = await PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.PredefinedAnalysis, request);
@@ -137,26 +127,29 @@ public class DebuggerApiService : IDebuggerApiService
     {
         var response = await GetAsync<SessionsResponse>(ApiEndpoints.Sessions);
 
-        var output = new StringBuilder("Active sessions:\n");
+        var output = new StringBuilder()
+            .AppendSection("Active sessions:");
+            
         foreach (var session in response.Sessions)
         {
-            output.AppendLine($"  Session: {session.SessionId}");
-            output.AppendLine($"  Dump: {session.DumpFile}");
-            output.AppendLine($"  Active: {session.IsActive}\n");
+            output.AppendKeyValue("Session", session.SessionId)
+                  .AppendKeyValue("Dump", session.DumpFile)
+                  .AppendKeyValue("Active", session.IsActive)
+                  .AppendLine();
         }
-        return McpToolResult.Success(output.ToString());
+        return output.ToMcpSuccess();
     }
 
     public async Task<McpToolResult> CloseSessionAsync(JsonElement args)
     {
-        if (!args.TryGetProperty("session_id", out var sessionElement))
-            return McpToolResult.Error("Missing session_id parameter");
-
-        var sessionId = sessionElement.GetString();
-        var error = ValidationHelper.ValidateSessionId(sessionId);
+        var sessionResult = args.GetRequiredString("session_id");
+        if (sessionResult.IsFailure) return McpToolResult.Error(sessionResult.Error);
+        
+        var sessionId = sessionResult.Value;
+        var error = sessionId.ValidateAsSessionId();
         if (error != null) return McpToolResult.Error(error);
 
-        var response = await DeleteAsync<CloseSessionResponse>(ApiEndpoints.SessionById(sessionId!));
+        var response = await DeleteAsync<CloseSessionResponse>(sessionId!.ToSessionEndpoint());
         return McpToolResult.Success(response.Message);
     }
 
@@ -164,7 +157,8 @@ public class DebuggerApiService : IDebuggerApiService
     {
         var response = await GetAsync<DebuggerDetectionResponse>(ApiEndpoints.DetectDebuggers);
 
-        var output = new StringBuilder("🔍 Debugger Detection:\n\n");
+        var output = new StringBuilder()
+            .AppendSection("🔍 Debugger Detection:");
 
         if (!string.IsNullOrEmpty(response.CdbPath))
             output.AppendLine($"✅ CDB: {response.CdbPath}");
@@ -174,22 +168,24 @@ public class DebuggerApiService : IDebuggerApiService
         if (!string.IsNullOrEmpty(response.WinDbgPath) && response.WinDbgPath != response.CdbPath)
             output.AppendLine($"📊 WinDbg: {response.WinDbgPath}");
 
-        output.AppendLine("\n🔧 Environment:");
+        output.AppendSection("🔧 Environment:");
         foreach (var env in response.EnvironmentVariables)
-            output.AppendLine($"  {env.Key}: {env.Value ?? "(not set)"}");
+            output.AppendKeyValue(env.Key, env.Value ?? "(not set)");
 
-        return McpToolResult.Success(output.ToString());
+        return output.ToMcpSuccess();
     }
 
     public async Task<McpToolResult> ListAnalysesAsync()
     {
         var response = await GetAsync<AnalysesResponse>(ApiEndpoints.Analyses);
 
-        var output = new StringBuilder("Available analyses:\n\n");
+        var output = new StringBuilder()
+            .AppendSection("Available analyses:");
+            
         foreach (var analysis in response.Analyses)
-            output.AppendLine($"{analysis.Name}: {analysis.Description}");
+            output.AppendKeyValue(analysis.Name, analysis.Description);
 
-        return McpToolResult.Success(output.ToString());
+        return output.ToMcpSuccess();
     }
 
     private async Task<TResponse> PostAsync<TRequest, TResponse>(string endpoint, TRequest request)

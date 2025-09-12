@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Common;
 
 namespace BackgroundService.Services;
 
@@ -102,7 +103,7 @@ public sealed class CdbSessionService : ICdbSessionService
     {
         if (_isInitialized) return;
 
-        var initCommands = new[]
+        var initCommands = new List<string>
         {
             $".symfix {_symbolCache}",
             ".symopt+ 0x40",
@@ -231,17 +232,16 @@ public sealed class CdbSessionService : ICdbSessionService
     public async Task<string> ExecutePredefinedAnalysisAsync(string analysisName)
     {
         var commands = _analysisService.GetAnalysisCommands(analysisName);
-        if (commands.Length == 0)
+        if (commands.Count == 0)
         {
             var error = $"Unknown analysis type: {analysisName}. Available analyses: {string.Join(", ", _analysisService.GetAvailableAnalyses())}";
             _logger.LogError(error);
             throw new ArgumentException(error, nameof(analysisName));
         }
 
-        var results = new StringBuilder();
-        results.AppendLine($"Executing {analysisName} analysis:");
-        results.AppendLine($"Description: {_analysisService.GetAnalysisDescription(analysisName)}");
-        results.AppendLine();
+        var results = new StringBuilder()
+            .AppendSection($"Executing {analysisName} analysis:")
+            .AppendKeyValue("Description", _analysisService.GetAnalysisDescription(analysisName));
 
         foreach (var command in commands)
         {

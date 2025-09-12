@@ -3,11 +3,11 @@ namespace BackgroundService.Services;
 public interface IAnalysisService
 {
     /// <summary>
-    /// Gets the array of WinDbg/CDB commands for a specific analysis type
+    /// Gets the list of WinDbg/CDB commands for a specific analysis type
     /// </summary>
     /// <param name="analysisName">Name of the analysis (e.g., 'basic', 'exception', 'threads')</param>
-    /// <returns>Array of debugger commands to execute</returns>
-    string[] GetAnalysisCommands(string analysisName);
+    /// <returns>List of debugger commands to execute</returns>
+    IReadOnlyList<string> GetAnalysisCommands(string analysisName);
     
     /// <summary>
     /// Gets the list of all available predefined analysis types

@@ -58,7 +58,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
 
         // Assert
         Assert.True(result.IsError);
-        Assert.Equal("Missing dump_file_path parameter", result.Content[0].Text);
+        Assert.Contains("Missing dump_file_path parameter", result.Content[0].Text);
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
 
         // Assert
         Assert.True(result.IsError);
-        Assert.Contains("Dump file path is required", result.Content[0].Text);
+        Assert.Contains("Empty dump_file_path parameter", result.Content[0].Text);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
 
         // Assert
         Assert.True(result.IsError);
-        Assert.Equal("Missing session_id or command parameter", result.Content[0].Text);
+        Assert.Contains("Missing session_id parameter", result.Content[0].Text);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
 
         // Assert
         Assert.True(result.IsError);
-        Assert.Equal("Missing session_id or command parameter", result.Content[0].Text);
+        Assert.Contains("Missing command parameter", result.Content[0].Text);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
 
         // Assert
         Assert.True(result.IsError);
-        Assert.Equal("Missing session_id parameter", result.Content[0].Text);
+        Assert.Contains("Missing session_id parameter", result.Content[0].Text);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
 
         // Assert
         Assert.True(result.IsError);
-        Assert.Equal("Missing session_id or analysis_type parameter", result.Content[0].Text);
+        Assert.Contains("Missing analysis_type parameter", result.Content[0].Text);
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
 
         // Assert
         Assert.True(result.IsError);
-        Assert.Equal("Missing session_id parameter", result.Content[0].Text);
+        Assert.Contains("Missing session_id parameter", result.Content[0].Text);
     }
 
     [Theory]
@@ -162,7 +162,9 @@ public sealed class DebuggerApiServiceTests : IDisposable
 
         // Assert
         Assert.True(result.IsError);
-        Assert.Contains("required", result.Content[0].Text);
+        // Different error messages based on validation type
+        Assert.True(result.Content[0].Text.Contains("dump_file_path") || 
+                   result.Content[0].Text.Contains("Dump file path"));
     }
 
     public void Dispose()

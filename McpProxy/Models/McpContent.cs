@@ -19,6 +19,14 @@ public class McpContent
         Text = text;
         Type = type;
     }
+}
 
-    public static McpContent CreateText(string text) => new(text, "text");
+public static class McpContentExtensions
+{
+    /// <summary>
+    /// Creates an MCP text content object from a string
+    /// </summary>
+    /// <param name="text">The text content</param>
+    /// <returns>MCP content object with type "text"</returns>
+    public static McpContent ToMcpContent(this string text) => new(text, "text");
 }
