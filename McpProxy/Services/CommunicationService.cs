@@ -60,11 +60,7 @@ public class CommunicationService : ICommunicationService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing request: {Line}", line);
-                var errorResponse = new McpResponse
-                {
-                    Id = 0,
-                    Error = new McpError { Code = -1, Message = ex.Message }
-                };
+                var errorResponse = McpResponse.CreateError(0, McpError.Custom(-1, ex.Message));
                 await SendResponseAsync(errorResponse);
             }
         }

@@ -1,8 +1,7 @@
 using System.Text.Json;
-using McpProxy.Services;
-using Microsoft.Extensions.Logging;
 using McpProxy.Models;
 using McpProxy.Services;
+using Microsoft.Extensions.Logging;
 
 namespace McpProxy;
 
@@ -40,21 +39,13 @@ public class McpProxy
                 "list_analyses" => await _debuggerApiService.ListAnalysesAsync(),
                 "detect_debuggers" => await _debuggerApiService.DetectDebuggersAsync(),
                 "close_session" => await _debuggerApiService.CloseSessionAsync(args),
-                _ => new McpToolResult
-                {
-                    Content = new[] { new McpContent { Type = "text", Text = $"Unknown tool: {toolName}" } },
-                    IsError = true
-                }
+                _ => McpToolResult.Error($"Unknown tool: {toolName}")
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error executing tool: {ToolName}", toolName);
-            return new McpToolResult
-            {
-                Content = new[] { new McpContent { Type = "text", Text = $"Error executing tool {toolName}: {ex.Message}" } },
-                IsError = true
-            };
+            return McpToolResult.Error(ex, $"Error executing tool {toolName}");
         }
     }
 }
