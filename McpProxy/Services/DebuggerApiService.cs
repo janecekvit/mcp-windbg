@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Common;
 using McpProxy.Models;
@@ -8,29 +9,46 @@ namespace McpProxy.Services;
 public class DebuggerApiService : IDebuggerApiService
 {
     private readonly ILogger<DebuggerApiService> _logger;
-    private readonly IApiHttpClient _httpClient;
-    private readonly INotificationService _notificationService;
+    private readonly HttpClient _httpClient;
+    private readonly ICommunicationService _communicationService;
+    private readonly string _baseUrl;
+    
+    private readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     public DebuggerApiService(
         ILogger<DebuggerApiService> logger,
-        IApiHttpClient httpClient,
-        INotificationService notificationService)
+        HttpClient httpClient,
+        ICommunicationService communicationService)
     {
         _logger = logger;
         _httpClient = httpClient;
-        _notificationService = notificationService;
+        _communicationService = communicationService;
+        _baseUrl = Environment.GetEnvironmentVariable("BACKGROUND_SERVICE_URL") ?? "http://localhost:8080";
+        
+        _logger.LogInformation("Configured API client for: {BaseUrl}", _baseUrl);
     }
 
     public async Task<bool> CheckHealthAsync()
     {
-        var result = await _httpClient.CheckHealthAsync();
-        return result.IsSuccess && result.Value;
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}{ApiEndpoints.Health}");
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Health check failed");
+            return false;
+        }
     }
 
     private async Task SendProgress(string? token, double progress, string message)
     {
         if (!string.IsNullOrEmpty(token))
-            await _notificationService.SendProgressNotificationAsync(token, progress, message);
+            await _communicationService.SendProgressNotificationAsync(token, progress, message);
     }
 
     public async Task<McpToolResult> LoadDumpAsync(JsonElement args, string? progressToken = null)
@@ -45,11 +63,9 @@ public class DebuggerApiService : IDebuggerApiService
         await SendProgress(progressToken, 0.1, "Loading dump file...");
         var request = new LoadDumpRequest(dumpFilePath!);
         
-        var result = await _httpClient.PostAsync<LoadDumpRequest, LoadDumpResponse>(ApiEndpoints.LoadDump, request);
-        if (result.IsFailure) return McpToolResult.Error(result.Error);
-
+        var response = await PostAsync<LoadDumpRequest, LoadDumpResponse>(ApiEndpoints.LoadDump, request);
+        
         await SendProgress(progressToken, 1.0, "Dump loaded successfully!");
-        var response = result.Value;
         return McpToolResult.Success($"Session created: {response.SessionId}\nDump: {dumpFilePath}\n\n{response.Message}");
     }
 
@@ -69,9 +85,9 @@ public class DebuggerApiService : IDebuggerApiService
         if (cmdError != null) return McpToolResult.Error(cmdError);
 
         var request = new ExecuteCommandRequest(sessionId!, command!);
-        var result = await _httpClient.PostAsync<ExecuteCommandRequest, CommandExecutionResponse>(ApiEndpoints.ExecuteCommand, request);
+        var response = await PostAsync<ExecuteCommandRequest, CommandExecutionResponse>(ApiEndpoints.ExecuteCommand, request);
         
-        return result.IsSuccess ? McpToolResult.Success(result.Value.Result) : McpToolResult.Error(result.Error);
+        return McpToolResult.Success(response.Result);
     }
 
     public async Task<McpToolResult> BasicAnalysisAsync(JsonElement args, string? progressToken = null)
@@ -86,11 +102,10 @@ public class DebuggerApiService : IDebuggerApiService
         await SendProgress(progressToken, 0.1, "Running analysis...");
         var request = new BasicAnalysisRequest(sessionId!);
         
-        var result = await _httpClient.PostAsync<BasicAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.BasicAnalysis, request);
-        if (result.IsFailure) return McpToolResult.Error(result.Error);
+        var response = await PostAsync<BasicAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.BasicAnalysis, request);
 
         await SendProgress(progressToken, 1.0, "Analysis completed!");
-        return McpToolResult.Success(result.Value.Result);
+        return McpToolResult.Success(response.Result);
     }
 
     public async Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null)
@@ -109,18 +124,17 @@ public class DebuggerApiService : IDebuggerApiService
             return McpToolResult.Error("Analysis type is required");
 
         var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
-        var result = await _httpClient.PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.PredefinedAnalysis, request);
+        var response = await PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.PredefinedAnalysis, request);
         
-        return result.IsSuccess ? McpToolResult.Success(result.Value.Result) : McpToolResult.Error(result.Error);
+        return McpToolResult.Success(response.Result);
     }
 
     public async Task<McpToolResult> ListSessionsAsync()
     {
-        var result = await _httpClient.GetAsync<SessionsResponse>(ApiEndpoints.Sessions);
-        if (result.IsFailure) return McpToolResult.Error(result.Error);
+        var response = await GetAsync<SessionsResponse>(ApiEndpoints.Sessions);
 
         var output = new System.Text.StringBuilder("Active sessions:\n");
-        foreach (var session in result.Value.Sessions)
+        foreach (var session in response.Sessions)
         {
             output.AppendLine($"  Session: {session.SessionId}");
             output.AppendLine($"  Dump: {session.DumpFile}");
@@ -138,16 +152,14 @@ public class DebuggerApiService : IDebuggerApiService
         var error = ValidationHelper.ValidateSessionId(sessionId);
         if (error != null) return McpToolResult.Error(error);
 
-        var result = await _httpClient.DeleteAsync<CloseSessionResponse>(ApiEndpoints.SessionById(sessionId!));
-        return result.IsSuccess ? McpToolResult.Success(result.Value.Message) : McpToolResult.Error(result.Error);
+        var response = await DeleteAsync<CloseSessionResponse>(ApiEndpoints.SessionById(sessionId!));
+        return McpToolResult.Success(response.Message);
     }
 
     public async Task<McpToolResult> DetectDebuggersAsync()
     {
-        var result = await _httpClient.GetAsync<DebuggerDetectionResponse>(ApiEndpoints.DetectDebuggers);
-        if (result.IsFailure) return McpToolResult.Error(result.Error);
+        var response = await GetAsync<DebuggerDetectionResponse>(ApiEndpoints.DetectDebuggers);
 
-        var response = result.Value;
         var output = new System.Text.StringBuilder("🔍 Debugger Detection:\n\n");
 
         if (!string.IsNullOrEmpty(response.CdbPath))
@@ -167,13 +179,86 @@ public class DebuggerApiService : IDebuggerApiService
 
     public async Task<McpToolResult> ListAnalysesAsync()
     {
-        var result = await _httpClient.GetAsync<AnalysesResponse>(ApiEndpoints.Analyses);
-        if (result.IsFailure) return McpToolResult.Error(result.Error);
+        var response = await GetAsync<AnalysesResponse>(ApiEndpoints.Analyses);
 
         var output = new System.Text.StringBuilder("Available analyses:\n\n");
-        foreach (var analysis in result.Value.Analyses)
+        foreach (var analysis in response.Analyses)
             output.AppendLine($"{analysis.Name}: {analysis.Description}");
 
         return McpToolResult.Success(output.ToString());
+    }
+    
+    private async Task<TResponse> PostAsync<TRequest, TResponse>(string endpoint, TRequest request) 
+        where TRequest : class 
+        where TResponse : class
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(request, _jsonOptions);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            
+            var response = await _httpClient.PostAsync($"{_baseUrl}{endpoint}", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var responseText = await response.Content.ReadAsStringAsync();
+                var responseData = JsonSerializer.Deserialize<TResponse>(responseText, _jsonOptions);
+                return responseData ?? throw new InvalidOperationException("Failed to deserialize response");
+            }
+            
+            var errorText = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"HTTP {(int)response.StatusCode}: {errorText}");
+        }
+        catch (Exception ex) when (ex is not HttpRequestException)
+        {
+            _logger.LogError(ex, "POST request failed for endpoint: {Endpoint}", endpoint);
+            throw new HttpRequestException($"Request failed: {ex.Message}", ex);
+        }
+    }
+
+    private async Task<TResponse> GetAsync<TResponse>(string endpoint) where TResponse : class
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}{endpoint}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var responseText = await response.Content.ReadAsStringAsync();
+                var responseData = JsonSerializer.Deserialize<TResponse>(responseText, _jsonOptions);
+                return responseData ?? throw new InvalidOperationException("Failed to deserialize response");
+            }
+            
+            var errorText = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"HTTP {(int)response.StatusCode}: {errorText}");
+        }
+        catch (Exception ex) when (ex is not HttpRequestException)
+        {
+            _logger.LogError(ex, "GET request failed for endpoint: {Endpoint}", endpoint);
+            throw new HttpRequestException($"Request failed: {ex.Message}", ex);
+        }
+    }
+
+    private async Task<TResponse> DeleteAsync<TResponse>(string endpoint) where TResponse : class
+    {
+        try
+        {
+            var response = await _httpClient.DeleteAsync($"{_baseUrl}{endpoint}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var responseText = await response.Content.ReadAsStringAsync();
+                var responseData = JsonSerializer.Deserialize<TResponse>(responseText, _jsonOptions);
+                return responseData ?? throw new InvalidOperationException("Failed to deserialize response");
+            }
+            
+            var errorText = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"HTTP {(int)response.StatusCode}: {errorText}");
+        }
+        catch (Exception ex) when (ex is not HttpRequestException)
+        {
+            _logger.LogError(ex, "DELETE request failed for endpoint: {Endpoint}", endpoint);
+            throw new HttpRequestException($"Request failed: {ex.Message}", ex);
+        }
     }
 }

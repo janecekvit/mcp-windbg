@@ -15,10 +15,7 @@ internal class Program
                 .ConfigureServices((context, services) =>
                 {
                     services.AddHttpClient();
-                    services.AddScoped<IApiHttpClient, ApiHttpClient>();
                     services.AddScoped<IDebuggerApiService, DebuggerApiService>();
-                    services.AddScoped<IToolsService, ToolsService>();
-                    services.AddScoped<INotificationService, NotificationService>();
                     services.AddScoped<ICommunicationService, CommunicationService>();
                     services.AddSingleton<McpProxy>();
                 })
