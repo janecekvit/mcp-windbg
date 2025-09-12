@@ -14,6 +14,7 @@ public sealed class CdbSessionService : ICdbSessionService
     private StreamWriter? _stdin;
     private bool _isInitialized;
     private readonly object _lock = new();
+    private readonly SemaphoreSlim _commandSemaphore = new(1, 1);
 
     public string SessionId { get; }
     public string? CurrentDumpFile { get; private set; }
@@ -134,7 +135,15 @@ public sealed class CdbSessionService : ICdbSessionService
             throw new InvalidOperationException(error);
         }
 
-        return await ExecuteCommandInternalAsync(command);
+        await _commandSemaphore.WaitAsync();
+        try
+        {
+            return await ExecuteCommandInternalAsync(command);
+        }
+        finally
+        {
+            _commandSemaphore.Release();
+        }
     }
 
     private async Task<string> ExecuteCommandInternalAsync(string command)
@@ -148,9 +157,6 @@ public sealed class CdbSessionService : ICdbSessionService
 
         try
         {
-            var outputBuilder = new StringBuilder();
-            var errorBuilder = new StringBuilder();
-
             // Use unique marker to identify end of output
             var marker = $"__END_COMMAND_{Guid.NewGuid():N}__";
             var fullCommand = $"{command}; .echo {marker}";
@@ -161,45 +167,54 @@ public sealed class CdbSessionService : ICdbSessionService
                 _stdin.Flush();
             }
 
-            // Read output until we find the marker
-            var outputTask = Task.Run(async () =>
+            // Read output until we find the marker - without Task.Run to avoid concurrent stream access
+            var reader = _cdbProcess.StandardOutput;
+            var buffer = new char[4096];
+            var result = new StringBuilder();
+            
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2)); // Increased timeout
+
+            while (!_cdbProcess.HasExited && !cts.Token.IsCancellationRequested)
             {
-                var reader = _cdbProcess.StandardOutput;
-                var buffer = new char[1024];
-                var result = new StringBuilder();
-
-                while (!_cdbProcess.HasExited)
+                try
                 {
-                    var bytesRead = await reader.ReadAsync(buffer, 0, buffer.Length);
-                    if (bytesRead == 0) break;
+                    var readTask = reader.ReadAsync(buffer, 0, buffer.Length);
+                    var bytesRead = await readTask.ConfigureAwait(false);
+                    
+                    if (bytesRead == 0) 
+                        break;
 
-                    var chunk = new string(buffer, 0, bytesRead);
+                    var chunk = buffer.AsSpan(0, bytesRead).ToString();
                     result.Append(chunk);
 
                     // Check for marker
-                    if (result.ToString().Contains(marker))
+                    var currentOutput = result.ToString();
+                    if (currentOutput.Contains(marker))
                     {
-                        var output = result.ToString();
-                        var markerIndex = output.LastIndexOf(marker);
-                        return output[..markerIndex].Trim();
+                        var markerIndex = currentOutput.LastIndexOf(marker);
+                        return currentOutput[..markerIndex].Trim();
                     }
                 }
-
-                return result.ToString();
-            });
-
-            // Command timeout
-            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30));
-            var completedTask = await Task.WhenAny(outputTask, timeoutTask);
-
-            if (completedTask == timeoutTask)
-            {
-                var error = "Command execution timeout";
-                _logger.LogError("Command execution timeout for: {Command}", command);
-                throw new TimeoutException(error);
+                catch (OperationCanceledException)
+                {
+                    _logger.LogError("Command execution timeout for: {Command}", command);
+                    throw new TimeoutException("Command execution timeout");
+                }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("currently in use"))
+                {
+                    // Stream is busy, wait a bit and retry
+                    await Task.Delay(50, cts.Token).ConfigureAwait(false);
+                    continue;
+                }
             }
 
-            return await outputTask;
+            if (cts.Token.IsCancellationRequested)
+            {
+                _logger.LogError("Command execution timeout for: {Command}", command);
+                throw new TimeoutException("Command execution timeout");
+            }
+
+            return result.ToString();
         }
         catch (Exception ex) when (!(ex is TimeoutException || ex is InvalidOperationException))
         {
@@ -261,6 +276,7 @@ public sealed class CdbSessionService : ICdbSessionService
             {
                 _stdin?.Dispose();
                 _cdbProcess?.Dispose();
+                _commandSemaphore.Dispose();
             }
         }
         GC.SuppressFinalize(this);

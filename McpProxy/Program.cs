@@ -15,6 +15,8 @@ internal class Program
                 .ConfigureServices((context, services) =>
                 {
                     services.AddHttpClient();
+                    services.AddScoped<IApiHttpClient, ApiHttpClient>();
+                    services.AddScoped<IValidationService, ValidationService>();
                     services.AddScoped<IDebuggerApiService, DebuggerApiService>();
                     services.AddScoped<IToolsService, ToolsService>();
                     services.AddScoped<INotificationService, NotificationService>();

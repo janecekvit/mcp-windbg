@@ -1,399 +1,203 @@
-using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Logging;
+using McpProxy.Constants;
 using McpProxy.Models;
+using Microsoft.Extensions.Logging;
 
 namespace McpProxy.Services;
 
 public class DebuggerApiService : IDebuggerApiService
 {
     private readonly ILogger<DebuggerApiService> _logger;
-    private readonly HttpClient _httpClient;
+    private readonly IApiHttpClient _httpClient;
+    private readonly IValidationService _validationService;
     private readonly INotificationService _notificationService;
-    private readonly string _backgroundServiceUrl;
 
-    public DebuggerApiService(ILogger<DebuggerApiService> logger, HttpClient httpClient, INotificationService notificationService)
+    public DebuggerApiService(
+        ILogger<DebuggerApiService> logger,
+        IApiHttpClient httpClient,
+        IValidationService validationService,
+        INotificationService notificationService)
     {
         _logger = logger;
         _httpClient = httpClient;
+        _validationService = validationService;
         _notificationService = notificationService;
-        _backgroundServiceUrl = Environment.GetEnvironmentVariable("BACKGROUND_SERVICE_URL") ?? "http://localhost:8080";
-
-        _logger.LogInformation("Configured to use background service at: {Url}", _backgroundServiceUrl);
     }
 
     public async Task<bool> CheckHealthAsync()
     {
-        try
-        {
-            var response = await _httpClient.GetAsync($"{_backgroundServiceUrl}/health");
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to connect to background service");
-            return false;
-        }
+        var result = await _httpClient.CheckHealthAsync();
+        return result.IsSuccess && result.Value;
+    }
+
+    private async Task SendProgressNotification(string? progressToken, double progress, string message)
+    {
+        if (!string.IsNullOrEmpty(progressToken))
+            await _notificationService.SendProgressNotificationAsync(progressToken, progress, message);
     }
 
     public async Task<McpToolResult> LoadDumpAsync(JsonElement args, string? progressToken = null)
     {
-        try
-        {
-            if (!string.IsNullOrEmpty(progressToken))
-                await _notificationService.SendProgressNotificationAsync(progressToken, 0.1, "Validating dump file path...");
+        var validationResult = _validationService.ValidateDumpFilePath(args);
+        if (validationResult.IsFailure)
+            return McpToolResult.Error(validationResult.Error);
 
-            if (!args.TryGetProperty("dump_file_path", out var dumpFileElement))
-            {
-                return McpToolResult.Error("Missing dump_file_path parameter");
-            }
+        await SendProgressNotification(progressToken, ProgressValues.ValidationStart, "Validating dump file path...");
 
-            var dumpFilePath = dumpFileElement.GetString();
-            if (string.IsNullOrEmpty(dumpFilePath))
-            {
-                return McpToolResult.Error("Empty dump_file_path parameter");
-            }
+        var request = new LoadDumpRequest(validationResult.Value);
+        await SendProgressNotification(progressToken, ProgressValues.ProcessingStart, "Loading dump file...");
 
-            if (!string.IsNullOrEmpty(progressToken))
-                await _notificationService.SendProgressNotificationAsync(progressToken, 0.3, "Loading dump file...");
+        var result = await _httpClient.PostAsync<LoadDumpRequest, LoadDumpResponse>(
+            ApiEndpoints.LoadDump, request);
 
-            var requestBody = JsonSerializer.Serialize(new { dumpFilePath });
-            var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+        if (result.IsFailure)
+            return McpToolResult.Error(result.Error);
 
-            var response = await _httpClient.PostAsync($"{_backgroundServiceUrl}/api/load-dump", content);
+        await SendProgressNotification(progressToken, ProgressValues.ProcessingMiddle, "Creating debugging session...");
+        var response = result.Value;
+        await SendProgressNotification(progressToken, ProgressValues.Completed, "Dump loaded successfully!");
 
-            if (response.IsSuccessStatusCode)
-            {
-                if (!string.IsNullOrEmpty(progressToken))
-                    await _notificationService.SendProgressNotificationAsync(progressToken, 0.8, "Creating debugging session...");
-
-                var responseText = await response.Content.ReadAsStringAsync();
-                var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
-
-                var sessionId = responseData.GetProperty("sessionId").GetString();
-                var message = responseData.GetProperty("message").GetString();
-
-                if (!string.IsNullOrEmpty(progressToken))
-                    await _notificationService.SendProgressNotificationAsync(progressToken, 1.0, "Dump loaded successfully!");
-
-                return McpToolResult.Success($"Session created successfully!\nSession ID: {sessionId}\nDump file: {dumpFilePath}\n\n{message}");
-            }
-            else
-            {
-                var errorText = await response.Content.ReadAsStringAsync();
-                return McpToolResult.Error($"Failed to load dump: {errorText}");
-            }
-        }
-        catch (Exception ex)
-        {
-            return McpToolResult.Error($"Error: {ex.Message}");
-        }
+        return McpToolResult.Success(
+            $"Session created successfully!\nSession ID: {response.SessionId}\nDump file: {validationResult.Value}\n\n{response.Message}");
     }
 
     public async Task<McpToolResult> ExecuteCommandAsync(JsonElement args, string? progressToken = null)
     {
-        try
-        {
-            if (!args.TryGetProperty("session_id", out var sessionIdElement) ||
-                !args.TryGetProperty("command", out var commandElement))
-            {
-                return McpToolResult.Error("Missing session_id or command parameter");
-            }
+        var validationResult = _validationService.ValidateExecuteCommand(args);
+        if (validationResult.IsFailure)
+            return McpToolResult.Error(validationResult.Error);
 
-            var sessionId = sessionIdElement.GetString();
-            var command = commandElement.GetString();
+        var (sessionId, command) = validationResult.Value;
+        var request = new ExecuteCommandRequest(sessionId, command);
+        
+        var result = await _httpClient.PostAsync<ExecuteCommandRequest, CommandExecutionResponse>(
+            ApiEndpoints.ExecuteCommand, request);
 
-            if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(command))
-            {
-                return McpToolResult.Error("Empty session_id or command parameter");
-            }
-
-            var requestBody = JsonSerializer.Serialize(new { sessionId, command });
-            var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.PostAsync($"{_backgroundServiceUrl}/api/execute-command", content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseText = await response.Content.ReadAsStringAsync();
-                var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
-                var result = responseData.GetProperty("result").GetString();
-
-                return McpToolResult.Success(result ?? "");
-            }
-            else
-            {
-                var errorText = await response.Content.ReadAsStringAsync();
-                return McpToolResult.Error($"Error: {errorText}");
-            }
-        }
-        catch (Exception ex)
-        {
-            return McpToolResult.Error($"Error: {ex.Message}");
-        }
+        return result.IsSuccess 
+            ? McpToolResult.Success(result.Value.Result) 
+            : McpToolResult.Error(result.Error);
     }
 
     public async Task<McpToolResult> BasicAnalysisAsync(JsonElement args, string? progressToken = null)
     {
-        try
-        {
-            if (!string.IsNullOrEmpty(progressToken))
-                await _notificationService.SendProgressNotificationAsync(progressToken, 0.1, "Preparing basic analysis...");
+        var validationResult = _validationService.ValidateSessionId(args);
+        if (validationResult.IsFailure)
+            return McpToolResult.Error(validationResult.Error);
 
-            if (!args.TryGetProperty("session_id", out var sessionIdElement))
-            {
-                return McpToolResult.Error("Missing session_id parameter");
-            }
+        await SendProgressNotification(progressToken, ProgressValues.ValidationStart, "Preparing basic analysis...");
 
-            var sessionId = sessionIdElement.GetString();
-            if (string.IsNullOrEmpty(sessionId))
-            {
-                return McpToolResult.Error("Empty session_id parameter");
-            }
+        var request = new BasicAnalysisRequest(validationResult.Value);
+        await SendProgressNotification(progressToken, ProgressValues.ProcessingStart, "Running comprehensive analysis...");
 
-            if (!string.IsNullOrEmpty(progressToken))
-                await _notificationService.SendProgressNotificationAsync(progressToken, 0.3, "Running comprehensive analysis...");
+        var result = await _httpClient.PostAsync<BasicAnalysisRequest, CommandExecutionResponse>(
+            ApiEndpoints.BasicAnalysis, request);
 
-            var requestBody = JsonSerializer.Serialize(new { sessionId });
-            var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+        if (result.IsFailure)
+            return McpToolResult.Error(result.Error);
 
-            var response = await _httpClient.PostAsync($"{_backgroundServiceUrl}/api/basic-analysis", content);
+        await SendProgressNotification(progressToken, ProgressValues.ProcessingEnd, "Processing analysis results...");
+        await SendProgressNotification(progressToken, ProgressValues.Completed, "Analysis completed!");
 
-            if (response.IsSuccessStatusCode)
-            {
-                if (!string.IsNullOrEmpty(progressToken))
-                    await _notificationService.SendProgressNotificationAsync(progressToken, 0.9, "Processing analysis results...");
-
-                var responseText = await response.Content.ReadAsStringAsync();
-                var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
-                var result = responseData.GetProperty("result").GetString();
-
-                if (!string.IsNullOrEmpty(progressToken))
-                    await _notificationService.SendProgressNotificationAsync(progressToken, 1.0, "Analysis completed!");
-
-                return McpToolResult.Success(result ?? "");
-            }
-            else
-            {
-                var errorText = await response.Content.ReadAsStringAsync();
-                return McpToolResult.Error($"Error: {errorText}");
-            }
-        }
-        catch (Exception ex)
-        {
-            return McpToolResult.Error($"Error: {ex.Message}");
-        }
+        return McpToolResult.Success(result.Value.Result);
     }
 
     public async Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null)
     {
-        try
-        {
-            if (!args.TryGetProperty("session_id", out var sessionIdElement) ||
-                !args.TryGetProperty("analysis_type", out var analysisTypeElement))
-            {
-                return McpToolResult.Error("Missing session_id or analysis_type parameter");
-            }
+        var validationResult = _validationService.ValidatePredefinedAnalysis(args);
+        if (validationResult.IsFailure)
+            return McpToolResult.Error(validationResult.Error);
 
-            var sessionId = sessionIdElement.GetString();
-            var analysisType = analysisTypeElement.GetString();
+        var (sessionId, analysisType) = validationResult.Value;
+        var request = new PredefinedAnalysisRequest(sessionId, analysisType);
 
-            if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(analysisType))
-            {
-                return McpToolResult.Error("Empty session_id or analysis_type parameter");
-            }
+        var result = await _httpClient.PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(
+            ApiEndpoints.PredefinedAnalysis, request);
 
-            var requestBody = JsonSerializer.Serialize(new { sessionId, analysisType });
-            var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.PostAsync($"{_backgroundServiceUrl}/api/predefined-analysis", content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseText = await response.Content.ReadAsStringAsync();
-                var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
-                var result = responseData.GetProperty("result").GetString();
-
-                return McpToolResult.Success(result ?? "");
-            }
-            else
-            {
-                var errorText = await response.Content.ReadAsStringAsync();
-                return McpToolResult.Error($"Error: {errorText}");
-            }
-        }
-        catch (Exception ex)
-        {
-            return McpToolResult.Error($"Error: {ex.Message}");
-        }
+        return result.IsSuccess 
+            ? McpToolResult.Success(result.Value.Result) 
+            : McpToolResult.Error(result.Error);
     }
 
     public async Task<McpToolResult> ListSessionsAsync()
     {
-        try
+        var result = await _httpClient.GetAsync<SessionsResponse>(ApiEndpoints.Sessions);
+        if (result.IsFailure)
+            return McpToolResult.Error(result.Error);
+
+        var sessionList = new System.Text.StringBuilder();
+        sessionList.AppendLine("Active sessions:");
+
+        foreach (var session in result.Value.Sessions)
         {
-            var response = await _httpClient.GetAsync($"{_backgroundServiceUrl}/api/sessions");
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseText = await response.Content.ReadAsStringAsync();
-                var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
-                var sessions = responseData.GetProperty("sessions");
-
-                var sessionList = new StringBuilder();
-                sessionList.AppendLine("Active sessions:");
-
-                foreach (var session in sessions.EnumerateArray())
-                {
-                    var sessionId = session.GetProperty("SessionId").GetString();
-                    var dumpFile = session.GetProperty("DumpFile").GetString();
-                    var isActive = session.GetProperty("IsActive").GetBoolean();
-                    sessionList.AppendLine($"  Session ID: {sessionId}");
-                    sessionList.AppendLine($"    Dump File: {dumpFile}");
-                    sessionList.AppendLine($"    Active: {isActive}");
-                    sessionList.AppendLine();
-                }
-
-                return McpToolResult.Success(sessionList.ToString());
-            }
-            else
-            {
-                var errorText = await response.Content.ReadAsStringAsync();
-                return McpToolResult.Error($"Error: {errorText}");
-            }
+            sessionList.AppendLine($"  Session ID: {session.SessionId}");
+            sessionList.AppendLine($"    Dump File: {session.DumpFile}");
+            sessionList.AppendLine($"    Active: {session.IsActive}");
+            sessionList.AppendLine();
         }
-        catch (Exception ex)
-        {
-            return McpToolResult.Error($"Error: {ex.Message}");
-        }
+
+        return McpToolResult.Success(sessionList.ToString());
     }
 
     public async Task<McpToolResult> CloseSessionAsync(JsonElement args)
     {
-        try
-        {
-            if (!args.TryGetProperty("session_id", out var sessionIdElement))
-            {
-                return McpToolResult.Error("Missing session_id parameter");
-            }
+        var validationResult = _validationService.ValidateSessionId(args);
+        if (validationResult.IsFailure)
+            return McpToolResult.Error(validationResult.Error);
 
-            var sessionId = sessionIdElement.GetString();
-            if (string.IsNullOrEmpty(sessionId))
-            {
-                return McpToolResult.Error("Empty session_id parameter");
-            }
+        var result = await _httpClient.DeleteAsync<CloseSessionResponse>(
+            ApiEndpoints.SessionById(validationResult.Value));
 
-            var response = await _httpClient.DeleteAsync($"{_backgroundServiceUrl}/api/sessions/{sessionId}");
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseText = await response.Content.ReadAsStringAsync();
-                var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
-                var message = responseData.GetProperty("message").GetString();
-
-                return McpToolResult.Success(message ?? "");
-            }
-            else
-            {
-                var errorText = await response.Content.ReadAsStringAsync();
-                return McpToolResult.Error($"Error: {errorText}");
-            }
-        }
-        catch (Exception ex)
-        {
-            return McpToolResult.Error($"Error: {ex.Message}");
-        }
+        return result.IsSuccess 
+            ? McpToolResult.Success(result.Value.Message) 
+            : McpToolResult.Error(result.Error);
     }
 
     public async Task<McpToolResult> DetectDebuggersAsync()
     {
-        try
+        var result = await _httpClient.GetAsync<DebuggerDetectionResponse>(ApiEndpoints.DetectDebuggers);
+        if (result.IsFailure)
+            return McpToolResult.Error(result.Error);
+
+        var response = result.Value;
+        var output = new System.Text.StringBuilder();
+        output.AppendLine("🔍 Debugger Detection Results:");
+        output.AppendLine();
+
+        if (!string.IsNullOrEmpty(response.CdbPath))
+            output.AppendLine($"✅ Primary debugger: {response.CdbPath}");
+        else
+            output.AppendLine("❌ No CDB found");
+
+        if (!string.IsNullOrEmpty(response.WinDbgPath) && response.WinDbgPath != response.CdbPath)
+            output.AppendLine($"📊 WinDbg available: {response.WinDbgPath}");
+
+        output.AppendLine();
+        output.AppendLine("🔧 Environment variables:");
+
+        foreach (var envVar in response.EnvironmentVariables)
         {
-            var response = await _httpClient.GetAsync($"{_backgroundServiceUrl}/api/detect-debuggers");
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseText = await response.Content.ReadAsStringAsync();
-                var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
-
-                var result = new StringBuilder();
-                result.AppendLine("🔍 Debugger Detection Results:");
-                result.AppendLine();
-
-                var cdbPath = responseData.GetProperty("cdbPath").GetString();
-                var winDbgPath = responseData.GetProperty("winDbgPath").GetString();
-
-                if (!string.IsNullOrEmpty(cdbPath))
-                {
-                    result.AppendLine($"✅ Primary debugger: {cdbPath}");
-                }
-                else
-                {
-                    result.AppendLine("❌ No CDB found");
-                }
-
-                if (!string.IsNullOrEmpty(winDbgPath) && winDbgPath != cdbPath)
-                    result.AppendLine($"📊 WinDbg available: {winDbgPath}");
-
-                result.AppendLine();
-                result.AppendLine("🔧 Environment variables:");
-
-                var envVars = responseData.GetProperty("environmentVariables");
-                foreach (var envVar in envVars.EnumerateObject())
-                {
-                    var value = envVar.Value.ValueKind == JsonValueKind.Null ? "(not set)" : envVar.Value.GetString();
-                    result.AppendLine($"  {envVar.Name}: {value}");
-                }
-
-                return McpToolResult.Success(result.ToString());
-            }
-            else
-            {
-                var errorText = await response.Content.ReadAsStringAsync();
-                return McpToolResult.Error($"Error: {errorText}");
-            }
+            var value = envVar.Value ?? "(not set)";
+            output.AppendLine($"  {envVar.Key}: {value}");
         }
-        catch (Exception ex)
-        {
-            return McpToolResult.Error(ex, "Error detecting debuggers");
-        }
+
+        return McpToolResult.Success(output.ToString());
     }
 
     public async Task<McpToolResult> ListAnalysesAsync()
     {
-        try
+        var result = await _httpClient.GetAsync<AnalysesResponse>(ApiEndpoints.Analyses);
+        if (result.IsFailure)
+            return McpToolResult.Error(result.Error);
+
+        var output = new System.Text.StringBuilder();
+        output.AppendLine("Available predefined analyses:");
+        output.AppendLine();
+
+        foreach (var analysis in result.Value.Analyses)
         {
-            var response = await _httpClient.GetAsync($"{_backgroundServiceUrl}/api/analyses");
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseText = await response.Content.ReadAsStringAsync();
-                var responseData = JsonSerializer.Deserialize<JsonElement>(responseText);
-                var analyses = responseData.GetProperty("analyses");
-
-                var result = new StringBuilder();
-                result.AppendLine("Available predefined analyses:");
-                result.AppendLine();
-
-                foreach (var analysis in analyses.EnumerateArray())
-                {
-                    var name = analysis.GetProperty("name").GetString();
-                    var description = analysis.GetProperty("description").GetString();
-                    result.AppendLine($"{name}: {description}");
-                }
-
-                return McpToolResult.Success(result.ToString());
-            }
-            else
-            {
-                var errorText = await response.Content.ReadAsStringAsync();
-                return McpToolResult.Error($"Error: {errorText}");
-            }
+            output.AppendLine($"{analysis.Name}: {analysis.Description}");
         }
-        catch (Exception ex)
-        {
-            return McpToolResult.Error($"Error: {ex.Message}");
-        }
+
+        return McpToolResult.Success(output.ToString());
     }
-
 }
