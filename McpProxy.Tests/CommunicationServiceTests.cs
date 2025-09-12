@@ -1,20 +1,20 @@
-using McpProxy.Models;
 using McpProxy.Services;
 using Microsoft.Extensions.Logging;
 using Moq;
-using System.Text.Json;
 
 namespace McpProxy.Tests;
 
 public class CommunicationServiceTests
 {
     private readonly Mock<ILogger<CommunicationService>> _mockLogger;
+    private readonly Mock<IToolsService> _mockToolsService;
     private readonly CommunicationService _communicationService;
 
     public CommunicationServiceTests()
     {
         _mockLogger = new Mock<ILogger<CommunicationService>>();
-        _communicationService = new CommunicationService(_mockLogger.Object);
+        _mockToolsService = new Mock<IToolsService>();
+        _communicationService = new CommunicationService(_mockLogger.Object, _mockToolsService.Object);
     }
 
     [Fact]

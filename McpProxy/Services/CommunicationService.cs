@@ -7,13 +7,16 @@ namespace McpProxy.Services;
 public class CommunicationService : ICommunicationService
 {
     private readonly ILogger<CommunicationService> _logger;
+    private readonly IToolsService _toolsService;
     private StreamWriter? _writer;
     private bool _isInitialized = false;
 
     public CommunicationService(
-        ILogger<CommunicationService> logger)
+        ILogger<CommunicationService> logger,
+        IToolsService toolsService)
     {
         _logger = logger;
+        _toolsService = toolsService;
     }
 
     public async Task RunAsync(Func<string, string?, JsonElement, Task<McpToolResult>> handleToolCall, Func<Task<bool>>? healthCheck = null)
@@ -68,9 +71,9 @@ public class CommunicationService : ICommunicationService
             return request.Method switch
             {
                 "initialize" => await HandleInitializeAsync(request.Id, healthCheck),
-                "tools/list" => _isInitialized ? CreateListToolsResponse(request.Id) : CreateNotInitializedError(request.Id),
-                "tools/call" => _isInitialized ? await HandleToolCallAsync(request, handleToolCall) : CreateNotInitializedError(request.Id),
-                _ => CreateMethodNotFoundError(request.Id, request.Method)
+                "tools/list" => _isInitialized ? _toolsService.CreateListToolsResponse(request.Id) : McpResponse.NotInitialized(request.Id),
+                "tools/call" => _isInitialized ? await HandleToolCallAsync(request, handleToolCall) : McpResponse.NotInitialized(request.Id),
+                _ => McpResponse.MethodNotFound(request.Id, request.Method)
             };
         }
         catch (Exception ex)
@@ -130,11 +133,11 @@ public class CommunicationService : ICommunicationService
         });
     }
 
-    private async Task<McpResponse> HandleToolCallAsync(McpRequest request, Func<string, string?, JsonElement, Task<McpToolResult>> handleToolCall)
+    private static async Task<McpResponse> HandleToolCallAsync(McpRequest request, Func<string, string?, JsonElement, Task<McpToolResult>> handleToolCall)
     {
         if (request.Params == null)
         {
-            return CreateInvalidParamsError(request.Id);
+            return McpResponse.InvalidParams(request.Id);
         }
 
         var args = request.Params.Value;
@@ -208,158 +211,4 @@ public class CommunicationService : ICommunicationService
         await _writer.WriteLineAsync(json);
     }
 
-    private static McpResponse CreateNotInitializedError(int requestId)
-    {
-        return McpResponse.NotInitialized(requestId);
-    }
-
-    private static McpResponse CreateMethodNotFoundError(int requestId, string method)
-    {
-        return McpResponse.MethodNotFound(requestId, method);
-    }
-
-    private static McpResponse CreateInvalidParamsError(int requestId)
-    {
-        return McpResponse.InvalidParams(requestId);
-    }
-
-    private McpResponse CreateListToolsResponse(int requestId)
-    {
-        var tools = new[]
-        {
-            new McpTool
-            {
-                Name = "load_dump",
-                Description = "Load a memory dump file and create a new CDB debugging session",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        dump_file_path = new
-                        {
-                            type = "string",
-                            description = "Path to the memory dump file (.dmp)"
-                        }
-                    },
-                    required = new[] { "dump_file_path" }
-                }
-            },
-            new McpTool
-            {
-                Name = "execute_command",
-                Description = "Execute a WinDbg/CDB command in an existing debugging session",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        session_id = new
-                        {
-                            type = "string",
-                            description = "ID of the debugging session"
-                        },
-                        command = new
-                        {
-                            type = "string",
-                            description = "WinDbg/CDB command to execute (e.g., 'kb', '!analyze -v', 'dt')"
-                        }
-                    },
-                    required = new[] { "session_id", "command" }
-                }
-            },
-            new McpTool
-            {
-                Name = "basic_analysis",
-                Description = "Run a comprehensive basic analysis of the loaded dump (equivalent to the PowerShell script)",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        session_id = new
-                        {
-                            type = "string",
-                            description = "ID of the debugging session"
-                        }
-                    },
-                    required = new[] { "session_id" }
-                }
-            },
-            new McpTool
-            {
-                Name = "list_sessions",
-                Description = "List all active debugging sessions",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new { }
-                }
-            },
-            new McpTool
-            {
-                Name = "close_session",
-                Description = "Close a debugging session and free resources",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        session_id = new
-                        {
-                            type = "string",
-                            description = "ID of the debugging session to close"
-                        }
-                    },
-                    required = new[] { "session_id" }
-                }
-            },
-            new McpTool
-            {
-                Name = "predefined_analysis",
-                Description = "Run a predefined analysis on the loaded dump (basic, exception, threads, heap, modules, handles, locks, memory, drivers, processes)",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        session_id = new
-                        {
-                            type = "string",
-                            description = "ID of the debugging session"
-                        },
-                        analysis_type = new
-                        {
-                            type = "string",
-                            description = "Type of analysis to run",
-                            @enum = new[] { "basic", "exception", "threads", "heap", "modules", "handles", "locks", "memory", "drivers", "processes" }
-                        }
-                    },
-                    required = new[] { "session_id", "analysis_type" }
-                }
-            },
-            new McpTool
-            {
-                Name = "list_analyses",
-                Description = "List all available predefined analyses with descriptions",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new { }
-                }
-            },
-            new McpTool
-            {
-                Name = "detect_debuggers",
-                Description = "Detect available CDB/WinDbg installations on the system",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new { }
-                }
-            }
-        };
-
-        return McpResponse.Success(requestId, new { tools });
-    }
 }

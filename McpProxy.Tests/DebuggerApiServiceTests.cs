@@ -1,10 +1,9 @@
-using Common;
+using System.Net;
+using System.Text.Json;
 using McpProxy.Services;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
-using System.Net;
-using System.Text.Json;
 
 namespace McpProxy.Tests;
 
@@ -21,7 +20,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
         _mockLogger = new Mock<ILogger<DebuggerApiService>>();
         _mockCommunicationService = new Mock<ICommunicationService>();
         _mockHttpMessageHandler = new Mock<HttpMessageHandler>();
-        
+
         // Setup HttpClient to return failure for health check
         _mockHttpMessageHandler
             .Protected()
@@ -31,9 +30,9 @@ public sealed class DebuggerApiServiceTests : IDisposable
                 ItExpr.IsAny<CancellationToken>()
             )
             .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
-        
+
         _httpClient = new HttpClient(_mockHttpMessageHandler.Object);
-        
+
         _debuggerApiService = new DebuggerApiService(_mockLogger.Object, _httpClient, _mockCommunicationService.Object);
     }
 
@@ -42,7 +41,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
     {
         // Act
         var result = await _debuggerApiService.CheckHealthAsync();
-        
+
         // Assert
         // Should return false when background service is not running
         Assert.False(result);
@@ -53,10 +52,10 @@ public sealed class DebuggerApiServiceTests : IDisposable
     {
         // Arrange
         var args = JsonDocument.Parse("{}").RootElement;
-        
+
         // Act
         var result = await _debuggerApiService.LoadDumpAsync(args);
-        
+
         // Assert
         Assert.True(result.IsError);
         Assert.Equal("Missing dump_file_path parameter", result.Content[0].Text);
@@ -67,10 +66,10 @@ public sealed class DebuggerApiServiceTests : IDisposable
     {
         // Arrange
         var args = JsonDocument.Parse("{\"dump_file_path\": \"\"}").RootElement;
-        
+
         // Act
         var result = await _debuggerApiService.LoadDumpAsync(args);
-        
+
         // Assert
         Assert.True(result.IsError);
         Assert.Contains("Dump file path is required", result.Content[0].Text);
@@ -81,10 +80,10 @@ public sealed class DebuggerApiServiceTests : IDisposable
     {
         // Arrange
         var args = JsonDocument.Parse("{\"command\": \"kb\"}").RootElement;
-        
+
         // Act
         var result = await _debuggerApiService.ExecuteCommandAsync(args);
-        
+
         // Assert
         Assert.True(result.IsError);
         Assert.Equal("Missing session_id or command parameter", result.Content[0].Text);
@@ -95,10 +94,10 @@ public sealed class DebuggerApiServiceTests : IDisposable
     {
         // Arrange
         var args = JsonDocument.Parse("{\"session_id\": \"test123\"}").RootElement;
-        
+
         // Act
         var result = await _debuggerApiService.ExecuteCommandAsync(args);
-        
+
         // Assert
         Assert.True(result.IsError);
         Assert.Equal("Missing session_id or command parameter", result.Content[0].Text);
@@ -109,10 +108,10 @@ public sealed class DebuggerApiServiceTests : IDisposable
     {
         // Arrange
         var args = JsonDocument.Parse("{}").RootElement;
-        
+
         // Act
         var result = await _debuggerApiService.BasicAnalysisAsync(args);
-        
+
         // Assert
         Assert.True(result.IsError);
         Assert.Equal("Missing session_id parameter", result.Content[0].Text);
@@ -123,10 +122,10 @@ public sealed class DebuggerApiServiceTests : IDisposable
     {
         // Arrange
         var args = JsonDocument.Parse("{\"session_id\": \"test123\"}").RootElement;
-        
+
         // Act
         var result = await _debuggerApiService.PredefinedAnalysisAsync(args);
-        
+
         // Assert
         Assert.True(result.IsError);
         Assert.Equal("Missing session_id or analysis_type parameter", result.Content[0].Text);
@@ -137,10 +136,10 @@ public sealed class DebuggerApiServiceTests : IDisposable
     {
         // Arrange
         var args = JsonDocument.Parse("{}").RootElement;
-        
+
         // Act
         var result = await _debuggerApiService.CloseSessionAsync(args);
-        
+
         // Assert
         Assert.True(result.IsError);
         Assert.Equal("Missing session_id parameter", result.Content[0].Text);
@@ -153,14 +152,14 @@ public sealed class DebuggerApiServiceTests : IDisposable
     public async Task LoadDumpAsync_WithInvalidPath_ReturnsValidationError(string? invalidPath)
     {
         // Arrange
-        var jsonContent = invalidPath == null 
-            ? "{\"dump_file_path\": null}" 
+        var jsonContent = invalidPath == null
+            ? "{\"dump_file_path\": null}"
             : $"{{\"dump_file_path\": \"{invalidPath}\"}}";
         var args = JsonDocument.Parse(jsonContent).RootElement;
-        
+
         // Act
         var result = await _debuggerApiService.LoadDumpAsync(args);
-        
+
         // Assert
         Assert.True(result.IsError);
         Assert.Contains("required", result.Content[0].Text);

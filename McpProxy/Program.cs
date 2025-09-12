@@ -16,6 +16,7 @@ internal class Program
                 {
                     services.AddHttpClient();
                     services.AddScoped<IDebuggerApiService, DebuggerApiService>();
+                    services.AddScoped<IToolsService, ToolsService>();
                     services.AddScoped<ICommunicationService, CommunicationService>();
                     services.AddSingleton<McpProxy>();
                 })

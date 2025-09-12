@@ -9,10 +9,10 @@ public class McpModelsTests
     {
         // Arrange
         var content = "Test content";
-        
+
         // Act
         var result = McpToolResult.Success(content);
-        
+
         // Assert
         Assert.False(result.IsError);
         Assert.Single(result.Content);
@@ -25,10 +25,10 @@ public class McpModelsTests
     {
         // Arrange
         var errorMessage = "Test error";
-        
+
         // Act
         var result = McpToolResult.Error(errorMessage);
-        
+
         // Assert
         Assert.True(result.IsError);
         Assert.Single(result.Content);
@@ -42,10 +42,10 @@ public class McpModelsTests
         // Arrange
         var id = 123;
         var resultData = new { message = "success" };
-        
+
         // Act
         var response = McpResponse.Success(id, resultData);
-        
+
         // Assert
         Assert.Equal("2.0", response.JsonRpc);
         Assert.Equal(id, response.Id);
@@ -59,10 +59,10 @@ public class McpModelsTests
         // Arrange
         var id = 456;
         var error = McpError.Custom(-1, "Test error");
-        
+
         // Act
         var response = McpResponse.CreateError(id, error);
-        
+
         // Assert
         Assert.Equal("2.0", response.JsonRpc);
         Assert.Equal(id, response.Id);
@@ -77,10 +77,10 @@ public class McpModelsTests
     {
         // Arrange
         var id = 789;
-        
+
         // Act
         var response = McpResponse.NotInitialized(id);
-        
+
         // Assert
         Assert.Equal("2.0", response.JsonRpc);
         Assert.Equal(id, response.Id);
@@ -96,10 +96,10 @@ public class McpModelsTests
         // Arrange
         var id = 101;
         var method = "unknown_method";
-        
+
         // Act
         var response = McpResponse.MethodNotFound(id, method);
-        
+
         // Assert
         Assert.Equal("2.0", response.JsonRpc);
         Assert.Equal(id, response.Id);
@@ -114,10 +114,10 @@ public class McpModelsTests
     {
         // Arrange
         var id = 202;
-        
+
         // Act
         var response = McpResponse.InvalidParams(id);
-        
+
         // Assert
         Assert.Equal("2.0", response.JsonRpc);
         Assert.Equal(id, response.Id);
@@ -132,7 +132,7 @@ public class McpModelsTests
     {
         // Act
         var error = McpError.ServerNotInitialized();
-        
+
         // Assert
         Assert.Equal(-32002, error.Code);
         Assert.Equal("Server not initialized", error.Message);
@@ -144,10 +144,10 @@ public class McpModelsTests
         // Arrange
         var code = -1000;
         var message = "Custom error message";
-        
+
         // Act
         var error = McpError.Custom(code, message);
-        
+
         // Assert
         Assert.Equal(code, error.Code);
         Assert.Equal(message, error.Message);

@@ -16,7 +16,7 @@ public class AnalysisServiceTests
     {
         // Act
         var analyses = _analysisService.GetAvailableAnalyses();
-        
+
         // Assert
         Assert.NotEmpty(analyses);
         Assert.Contains("basic", analyses);
@@ -40,7 +40,7 @@ public class AnalysisServiceTests
     {
         // Act
         var description = _analysisService.GetAnalysisDescription(analysisType);
-        
+
         // Assert
         Assert.Equal(expectedDescription, description);
     }
@@ -50,10 +50,10 @@ public class AnalysisServiceTests
     {
         // Arrange
         var invalidType = "nonexistent";
-        
+
         // Act
         var description = _analysisService.GetAnalysisDescription(invalidType);
-        
+
         // Assert
         Assert.Equal("Unknown analysis type", description);
     }
@@ -73,7 +73,7 @@ public class AnalysisServiceTests
     {
         // Act
         var commands = _analysisService.GetAnalysisCommands(analysisType);
-        
+
         // Assert
         Assert.NotEmpty(commands);
         Assert.All(commands, cmd => Assert.False(string.IsNullOrWhiteSpace(cmd)));
@@ -84,10 +84,10 @@ public class AnalysisServiceTests
     {
         // Arrange
         var invalidType = "nonexistent";
-        
+
         // Act
         var commands = _analysisService.GetAnalysisCommands(invalidType);
-        
+
         // Assert
         Assert.Empty(commands);
     }

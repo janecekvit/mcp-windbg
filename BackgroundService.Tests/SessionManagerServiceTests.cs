@@ -18,14 +18,14 @@ public sealed class SessionManagerServiceTests : IDisposable
         _mockLoggerFactory = new Mock<ILoggerFactory>();
         _mockPathDetection = new Mock<IPathDetectionService>();
         _mockAnalysisService = new Mock<IAnalysisService>();
-        
+
         // Setup path detection to return a valid CDB path
         _mockPathDetection.Setup(x => x.DetectDebuggerPaths())
             .Returns(("C:\\cdb.exe", "C:\\windbg.exe", new List<string> { "C:\\cdb.exe" }));
-        
+
         _mockPathDetection.Setup(x => x.ValidateDebuggerPath(It.IsAny<string>()))
             .Returns(true);
-        
+
         _sessionManager = new SessionManagerService(
             _mockLogger.Object,
             _mockLoggerFactory.Object,
@@ -44,7 +44,7 @@ public sealed class SessionManagerServiceTests : IDisposable
     {
         // Arrange
         var dumpPath = @"C:\nonexistent.dmp";
-        
+
         // Act & Assert
         await Assert.ThrowsAsync<FileNotFoundException>(
             () => _sessionManager.CreateSessionWithDumpAsync(dumpPath));
@@ -55,7 +55,7 @@ public sealed class SessionManagerServiceTests : IDisposable
     {
         // Arrange
         var invalidPath = "";
-        
+
         // Act & Assert
         await Assert.ThrowsAsync<FileNotFoundException>(
             () => _sessionManager.CreateSessionWithDumpAsync(invalidPath));
@@ -66,7 +66,7 @@ public sealed class SessionManagerServiceTests : IDisposable
     {
         // Act
         var sessions = _sessionManager.GetActiveSessions();
-        
+
         // Assert
         Assert.Empty(sessions);
     }
@@ -77,7 +77,7 @@ public sealed class SessionManagerServiceTests : IDisposable
         // Arrange
         var invalidSessionId = "nonexistent";
         var command = "kb";
-        
+
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(
             () => _sessionManager.ExecuteCommandAsync(invalidSessionId, command));
@@ -88,7 +88,7 @@ public sealed class SessionManagerServiceTests : IDisposable
     {
         // Arrange
         var invalidSessionId = "nonexistent";
-        
+
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(
             () => _sessionManager.ExecuteBasicAnalysisAsync(invalidSessionId));
@@ -100,7 +100,7 @@ public sealed class SessionManagerServiceTests : IDisposable
         // Arrange
         var invalidSessionId = "nonexistent";
         var analysisType = "basic";
-        
+
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(
             () => _sessionManager.ExecutePredefinedAnalysisAsync(invalidSessionId, analysisType));
@@ -111,7 +111,7 @@ public sealed class SessionManagerServiceTests : IDisposable
     {
         // Arrange
         var invalidSessionId = "nonexistent";
-        
+
         // Act & Assert
         Assert.Throws<ArgumentException>(
             () => _sessionManager.CloseSession(invalidSessionId));
