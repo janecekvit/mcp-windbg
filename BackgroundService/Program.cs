@@ -81,7 +81,7 @@ internal class Program
         {
             var sessions = sessionManager.GetActiveSessions()
                 .Select(s => new SessionInfo(s.SessionId, s.DumpFile, s.IsActive))
-                .ToArray();
+                .ToList();
             return Results.Ok(new SessionsResponse(sessions));
         });
 
@@ -104,7 +104,7 @@ internal class Program
                 ["SYMBOL_PATH_EXTRA"] = Environment.GetEnvironmentVariable("SYMBOL_PATH_EXTRA")
             };
 
-            return Results.Ok(new DebuggerDetectionResponse(cdbPath, winDbgPath, foundPaths.ToArray(), envVars));
+            return Results.Ok(new DebuggerDetectionResponse(cdbPath, winDbgPath, foundPaths, envVars));
         });
 
         // List analyses
@@ -112,7 +112,7 @@ internal class Program
         {
             var analyses = analysisService.GetAvailableAnalyses()
                 .Select(a => new AnalysisInfo(a, analysisService.GetAnalysisDescription(a)))
-                .ToArray();
+                .ToList();
             return Results.Ok(new AnalysesResponse(analyses));
         });
     }

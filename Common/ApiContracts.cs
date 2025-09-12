@@ -43,18 +43,18 @@ public record SessionInfo(
     [property: JsonPropertyName("dumpFile")] string DumpFile,
     [property: JsonPropertyName("isActive")] bool IsActive);
 
-public record SessionsResponse([property: JsonPropertyName("sessions")] SessionInfo[] Sessions);
+public record SessionsResponse([property: JsonPropertyName("sessions")] IReadOnlyList<SessionInfo> Sessions);
 
 public record AnalysisInfo(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("description")] string Description);
 
-public record AnalysesResponse([property: JsonPropertyName("analyses")] AnalysisInfo[] Analyses);
+public record AnalysesResponse([property: JsonPropertyName("analyses")] IReadOnlyList<AnalysisInfo> Analyses);
 
 public record DebuggerDetectionResponse(
     [property: JsonPropertyName("cdbPath")] string? CdbPath,
     [property: JsonPropertyName("winDbgPath")] string? WinDbgPath,
-    [property: JsonPropertyName("foundPaths")] string[] FoundPaths,
+    [property: JsonPropertyName("foundPaths")] IReadOnlyList<string> FoundPaths,
     [property: JsonPropertyName("environmentVariables")] Dictionary<string, string?> EnvironmentVariables);
 
 public record CloseSessionResponse([property: JsonPropertyName("message")] string Message);
