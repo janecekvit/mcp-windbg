@@ -1,5 +1,5 @@
-using BackgroundService.Models;
 using BackgroundService.Services;
+using Common;
 
 namespace BackgroundService;
 
@@ -21,18 +21,11 @@ internal class Program
             builder.Logging.AddConsole();
             builder.Logging.SetMinimumLevel(LogLevel.Information);
 
-            // Build the app
             var app = builder.Build();
-
             var logger = app.Services.GetRequiredService<ILogger<Program>>();
-            var sessionManager = app.Services.GetRequiredService<ISessionManagerService>();
-            var pathDetectionService = app.Services.GetRequiredService<IPathDetectionService>();
-            var analysisService = app.Services.GetRequiredService<IAnalysisService>();
 
-            logger.LogInformation("Starting CDB Background Service...");
-
-            // Configure HTTP endpoints
-            ConfigureEndpoints(app, sessionManager, pathDetectionService, analysisService, logger);
+            // Configure endpoints
+            MapEndpoints(app, logger);
 
             // Start the service
             var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : 8080;
@@ -50,201 +43,77 @@ internal class Program
         }
     }
 
-    private static void ConfigureEndpoints(WebApplication app, ISessionManagerService sessionManager,
-                                         IPathDetectionService pathDetectionService, IAnalysisService analysisService,
-                                         ILogger logger)
+    private static void MapEndpoints(WebApplication app, ILogger logger)
     {
         // Health check
-        app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+        app.MapGet(ApiEndpoints.Health, () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
 
-        // Load dump and create session
-        app.MapPost("/api/load-dump", async (LoadDumpRequest request) =>
+        // Load dump
+        app.MapPost(ApiEndpoints.LoadDump, async (LoadDumpRequest request, ISessionManagerService sessionManager) =>
         {
-            try
-            {
-                logger.LogInformation("Loading dump: {DumpFile}", request.DumpFilePath);
-                var sessionId = await sessionManager.CreateSessionWithDumpAsync(request.DumpFilePath);
-
-                return Results.Ok(new { sessionId, message = $"Session {sessionId} created successfully", dumpFile = request.DumpFilePath });
-            }
-            catch (FileNotFoundException ex)
-            {
-                logger.LogError(ex, "Dump file not found: {DumpFile}", request.DumpFilePath);
-                return Results.BadRequest(new { error = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error loading dump: {DumpFile}", request.DumpFilePath);
-                return Results.StatusCode(500);
-            }
+            var sessionId = await sessionManager.CreateSessionWithDumpAsync(request.DumpFilePath);
+            return Results.Ok(new LoadDumpResponse(sessionId, $"Session {sessionId} created successfully", request.DumpFilePath));
         });
 
         // Execute command
-        app.MapPost("/api/execute-command", async (ExecuteCommandRequest request) =>
+        app.MapPost(ApiEndpoints.ExecuteCommand, async (ExecuteCommandRequest request, ISessionManagerService sessionManager) =>
         {
-            try
-            {
-                logger.LogInformation("Executing command in session {SessionId}: {Command}", request.SessionId, request.Command);
-                var result = await sessionManager.ExecuteCommandAsync(request.SessionId, request.Command);
-
-                return Results.Ok(new { result });
-            }
-            catch (ArgumentException ex)
-            {
-                logger.LogError(ex, "Invalid session: {SessionId}", request.SessionId);
-                return Results.BadRequest(new { error = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                logger.LogError(ex, "Session operation error: {SessionId}", request.SessionId);
-                return Results.BadRequest(new { error = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error executing command in session {SessionId}", request.SessionId);
-                return Results.StatusCode(500);
-            }
+            var result = await sessionManager.ExecuteCommandAsync(request.SessionId, request.Command);
+            return Results.Ok(new CommandExecutionResponse(result));
         });
 
         // Basic analysis
-        app.MapPost("/api/basic-analysis", async (BasicAnalysisRequest request) =>
+        app.MapPost(ApiEndpoints.BasicAnalysis, async (BasicAnalysisRequest request, ISessionManagerService sessionManager) =>
         {
-            try
-            {
-                logger.LogInformation("Running basic analysis for session {SessionId}", request.SessionId);
-                var result = await sessionManager.ExecuteBasicAnalysisAsync(request.SessionId);
-
-                return Results.Ok(new { result });
-            }
-            catch (ArgumentException ex)
-            {
-                logger.LogError(ex, "Invalid session: {SessionId}", request.SessionId);
-                return Results.BadRequest(new { error = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                logger.LogError(ex, "Session operation error: {SessionId}", request.SessionId);
-                return Results.BadRequest(new { error = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error running basic analysis for session {SessionId}", request.SessionId);
-                return Results.StatusCode(500);
-            }
+            var result = await sessionManager.ExecuteBasicAnalysisAsync(request.SessionId);
+            return Results.Ok(new CommandExecutionResponse(result));
         });
 
         // Predefined analysis
-        app.MapPost("/api/predefined-analysis", async (PredefinedAnalysisRequest request) =>
+        app.MapPost(ApiEndpoints.PredefinedAnalysis, async (PredefinedAnalysisRequest request, ISessionManagerService sessionManager) =>
         {
-            try
-            {
-                logger.LogInformation("Running {AnalysisType} analysis for session {SessionId}", request.AnalysisType, request.SessionId);
-                var result = await sessionManager.ExecutePredefinedAnalysisAsync(request.SessionId, request.AnalysisType);
-
-                return Results.Ok(new { result });
-            }
-            catch (ArgumentException ex)
-            {
-                logger.LogError(ex, "Invalid request: {SessionId}, {AnalysisType}", request.SessionId, request.AnalysisType);
-                return Results.BadRequest(new { error = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                logger.LogError(ex, "Session operation error: {SessionId}", request.SessionId);
-                return Results.BadRequest(new { error = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error running predefined analysis for session {SessionId}", request.SessionId);
-                return Results.StatusCode(500);
-            }
+            var result = await sessionManager.ExecutePredefinedAnalysisAsync(request.SessionId, request.AnalysisType);
+            return Results.Ok(new CommandExecutionResponse(result));
         });
 
         // List sessions
-        app.MapGet("/api/sessions", () =>
+        app.MapGet(ApiEndpoints.Sessions, (ISessionManagerService sessionManager) =>
         {
-            try
-            {
-                var sessions = sessionManager.GetActiveSessions();
-                return Results.Ok(new { sessions });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error listing sessions");
-                return Results.StatusCode(500);
-            }
+            var sessions = sessionManager.GetActiveSessions()
+                .Select(s => new SessionInfo(s.SessionId, s.DumpFile, s.IsActive))
+                .ToArray();
+            return Results.Ok(new SessionsResponse(sessions));
         });
 
         // Close session
-        app.MapDelete("/api/sessions/{sessionId}", (string sessionId) =>
+        app.MapDelete("/api/sessions/{sessionId}", (string sessionId, ISessionManagerService sessionManager) =>
         {
-            try
-            {
-                logger.LogInformation("Closing session {SessionId}", sessionId);
-                sessionManager.CloseSession(sessionId);
-
-                return Results.Ok(new { message = $"Session {sessionId} closed successfully" });
-            }
-            catch (ArgumentException ex)
-            {
-                logger.LogError(ex, "Invalid session: {SessionId}", sessionId);
-                return Results.BadRequest(new { error = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                logger.LogError(ex, "Error closing session {SessionId}", sessionId);
-                return Results.BadRequest(new { error = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Unexpected error closing session {SessionId}", sessionId);
-                return Results.StatusCode(500);
-            }
+            sessionManager.CloseSession(sessionId);
+            return Results.Ok(new CloseSessionResponse($"Session {sessionId} closed successfully"));
         });
 
         // Detect debuggers
-        app.MapGet("/api/detect-debuggers", () =>
+        app.MapGet(ApiEndpoints.DetectDebuggers, (IPathDetectionService pathDetectionService) =>
         {
-            try
+            var (cdbPath, winDbgPath, foundPaths) = pathDetectionService.DetectDebuggerPaths();
+            
+            var envVars = new Dictionary<string, string?>
             {
-                var (cdbPath, winDbgPath, foundPaths) = pathDetectionService.DetectDebuggerPaths();
+                ["CDB_PATH"] = Environment.GetEnvironmentVariable("CDB_PATH"),
+                ["SYMBOL_CACHE"] = Environment.GetEnvironmentVariable("SYMBOL_CACHE"),
+                ["SYMBOL_PATH_EXTRA"] = Environment.GetEnvironmentVariable("SYMBOL_PATH_EXTRA")
+            };
 
-                return Results.Ok(new
-                {
-                    cdbPath,
-                    winDbgPath,
-                    foundPaths,
-                    environmentVariables = new
-                    {
-                        CDB_PATH = Environment.GetEnvironmentVariable("CDB_PATH"),
-                        SYMBOL_CACHE = Environment.GetEnvironmentVariable("SYMBOL_CACHE"),
-                        SYMBOL_PATH_EXTRA = Environment.GetEnvironmentVariable("SYMBOL_PATH_EXTRA")
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error detecting debuggers");
-                return Results.StatusCode(500);
-            }
+            return Results.Ok(new DebuggerDetectionResponse(cdbPath, winDbgPath, foundPaths.ToArray(), envVars));
         });
 
-        // List available analyses
-        app.MapGet("/api/analyses", () =>
+        // List analyses
+        app.MapGet(ApiEndpoints.Analyses, (IAnalysisService analysisService) =>
         {
-            try
-            {
-                var analyses = analysisService.GetAvailableAnalyses()
-                    .Select(a => new { name = a, description = analysisService.GetAnalysisDescription(a) })
-                    .ToArray();
-
-                return Results.Ok(new { analyses });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error listing analyses");
-                return Results.StatusCode(500);
-            }
+            var analyses = analysisService.GetAvailableAnalyses()
+                .Select(a => new AnalysisInfo(a, analysisService.GetAnalysisDescription(a)))
+                .ToArray();
+            return Results.Ok(new AnalysesResponse(analyses));
         });
     }
 }
