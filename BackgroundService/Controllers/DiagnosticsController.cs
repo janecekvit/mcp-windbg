@@ -3,6 +3,7 @@ using BackgroundService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
 using Shared.Extensions;
+using Shared.Models;
 
 namespace BackgroundService.Controllers;
 

@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
-namespace Shared;
+namespace Shared.Models;
 
 // API Endpoints (for ASP.NET Core Controllers)
 public static class ApiEndpoints

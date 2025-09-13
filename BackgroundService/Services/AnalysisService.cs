@@ -1,4 +1,4 @@
-using Shared;
+using Shared.Models;
 
 namespace BackgroundService.Services;
 
@@ -118,7 +118,7 @@ public class AnalysisService : IAnalysisService
     {
         try
         {
-            var analysisType = AnalysisTypeExtensions.ToAnalysisType(analysisName);
+            var analysisType = analysisName.ToAnalysisType();
             return Analyses.TryGetValue(analysisType, out var commands) ? commands : Array.Empty<string>();
         }
         catch (ArgumentException)
@@ -136,7 +136,7 @@ public class AnalysisService : IAnalysisService
     {
         try
         {
-            var analysisType = AnalysisTypeExtensions.ToAnalysisType(analysisName);
+            var analysisType = analysisName.ToAnalysisType();
             return analysisType.GetDescription();
         }
         catch (ArgumentException)

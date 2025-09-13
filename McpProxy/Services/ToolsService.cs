@@ -1,5 +1,6 @@
 using McpProxy.Models;
 using Shared;
+using Shared.Models;
 
 namespace McpProxy.Services;
 

@@ -1,4 +1,4 @@
-namespace Shared;
+namespace Shared.Models;
 
 /// <summary>
 /// Represents different types of analysis that can be performed on memory dumps
@@ -132,5 +132,5 @@ public static class AnalysisTypeExtensions
     /// Gets all analysis type identifiers
     /// </summary>
     /// <returns>Array of string identifiers</returns>
-    public static string[] GetAllIdentifiers() => GetAll().Select(ToString).ToArray();
+    public static IEnumerable<string> GetAllIdentifiers() => GetAll().Select(ToString).ToList();
 }

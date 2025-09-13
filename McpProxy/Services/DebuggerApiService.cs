@@ -4,8 +4,8 @@ using McpProxy.Extensions;
 using McpProxy.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Shared;
 using Shared.Extensions;
+using Shared.Models;
 
 namespace McpProxy.Services;
 
