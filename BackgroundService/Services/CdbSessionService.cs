@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using Common;
+using static Common.Constants;
 
 namespace BackgroundService.Services;
 
@@ -127,8 +128,8 @@ public sealed class CdbSessionService : ICdbSessionService
         {
             _logger.LogDebug("Executing init command for session {SessionId}: {Command}", SessionId, command);
             var result = await ExecuteCommandInternalAsync(command, cancellationToken);
-            _logger.LogDebug("Init command result for session {SessionId}: {Result}", SessionId, result?.Length > 100 ? result[..100] + "..." : result);
-            await Task.Delay(500, cancellationToken); // Short pause between commands
+            _logger.LogDebug("Init command result for session {SessionId}: {Result}", SessionId, result?.Length > Debugging.LogTruncateLength ? result[..Debugging.LogTruncateLength] + "..." : result);
+            await Task.Delay(Debugging.InitializationDelay, cancellationToken); // Short pause between commands
         }
 
         _isInitialized = true;
@@ -185,7 +186,7 @@ public sealed class CdbSessionService : ICdbSessionService
 
             // Read output until we find the marker - without Task.Run to avoid concurrent stream access
             var reader = _cdbProcess.StandardOutput;
-            var buffer = new char[4096];
+            var buffer = new char[Debugging.ReadBufferSize];
             var result = new StringBuilder();
             
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(2)); // Increased timeout
@@ -225,7 +226,7 @@ public sealed class CdbSessionService : ICdbSessionService
                 catch (InvalidOperationException ex) when (ex.Message.Contains("currently in use"))
                 {
                     // Stream is busy, wait a bit and retry
-                    await Task.Delay(50, combinedCts.Token).ConfigureAwait(false);
+                    await Task.Delay(Debugging.PollingDelay, combinedCts.Token).ConfigureAwait(false);
                     continue;
                 }
             }
@@ -290,7 +291,7 @@ public sealed class CdbSessionService : ICdbSessionService
                     _stdin?.WriteLine("q");
                     _stdin?.Flush();
 
-                    if (!_cdbProcess.WaitForExit(5000))
+                    if (!_cdbProcess.WaitForExit(Debugging.ProcessWaitTimeout))
                         _cdbProcess.Kill();
                 }
             }

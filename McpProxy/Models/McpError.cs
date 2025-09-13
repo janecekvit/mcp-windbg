@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using static Common.Constants;
 
 namespace McpProxy.Models;
 
@@ -21,11 +22,11 @@ public class McpError
     }
 
     // Standard JSON-RPC error codes
-    public static McpError ParseError() => new(-32700, "Parse error");
-    public static McpError InvalidRequest() => new(-32600, "Invalid Request");
-    public static McpError MethodNotFound() => new(-32601, "Method not found");
-    public static McpError InvalidParams() => new(-32602, "Invalid params");
-    public static McpError InternalError() => new(-32603, "Internal error");
-    public static McpError ServerNotInitialized() => new(-32002, "Server not initialized");
+    public static McpError ParseError() => new(McpErrorCodes.ParseError, "Parse error");
+    public static McpError InvalidRequest() => new(McpErrorCodes.InvalidRequest, "Invalid Request");
+    public static McpError MethodNotFound() => new(McpErrorCodes.MethodNotFound, "Method not found");
+    public static McpError InvalidParams() => new(McpErrorCodes.InvalidParams, "Invalid params");
+    public static McpError InternalError() => new(McpErrorCodes.InternalError, "Internal error");
+    public static McpError ServerNotInitialized() => new(McpErrorCodes.ServerNotInitialized, "Server not initialized");
     public static McpError Custom(int code, string message) => new(code, message);
 }

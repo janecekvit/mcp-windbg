@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using BackgroundService.Models;
+using static Common.Constants;
 
 namespace BackgroundService.Services;
 
@@ -61,7 +62,7 @@ public sealed class SessionManagerService : ISessionManagerService
             throw new FileNotFoundException($"Dump file not found: {dumpFilePath}", dumpFilePath);
         }
 
-        var sessionId = Guid.NewGuid().ToString("N")[..8];
+        var sessionId = Guid.NewGuid().ToString("N")[..Debugging.SessionIdLength];
         var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
         var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra);
 

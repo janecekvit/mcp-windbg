@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace Common;
@@ -16,17 +17,31 @@ public static class ApiEndpoints
 }
 
 // Shared Request Models
-public record LoadDumpRequest([property: JsonPropertyName("dumpFilePath")] string DumpFilePath);
+public record LoadDumpRequest(
+    [Required(ErrorMessage = "Dump file path is required")]
+    [property: JsonPropertyName("dumpFilePath")]
+    string DumpFilePath);
 
 public record ExecuteCommandRequest(
-    [property: JsonPropertyName("sessionId")] string SessionId, 
-    [property: JsonPropertyName("command")] string Command);
+    [Required(ErrorMessage = "Session ID is required")]
+    [property: JsonPropertyName("sessionId")]
+    string SessionId,
+    [Required(ErrorMessage = "Command is required")]
+    [property: JsonPropertyName("command")]
+    string Command);
 
-public record BasicAnalysisRequest([property: JsonPropertyName("sessionId")] string SessionId);
+public record BasicAnalysisRequest(
+    [Required(ErrorMessage = "Session ID is required")]
+    [property: JsonPropertyName("sessionId")]
+    string SessionId);
 
 public record PredefinedAnalysisRequest(
-    [property: JsonPropertyName("sessionId")] string SessionId, 
-    [property: JsonPropertyName("analysisType")] string AnalysisType);
+    [Required(ErrorMessage = "Session ID is required")]
+    [property: JsonPropertyName("sessionId")]
+    string SessionId,
+    [Required(ErrorMessage = "Analysis type is required")]
+    [property: JsonPropertyName("analysisType")]
+    string AnalysisType);
 
 // Shared Response Models
 public record LoadDumpResponse(

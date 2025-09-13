@@ -4,6 +4,7 @@ using Common;
 using McpProxy.Extensions;
 using McpProxy.Models;
 using Microsoft.Extensions.Logging;
+using static Common.Constants;
 
 namespace McpProxy.Services;
 
@@ -27,7 +28,7 @@ public class DebuggerApiService : IDebuggerApiService
         _logger = logger;
         _httpClient = httpClient;
         _communicationService = communicationService;
-        _baseUrl = Environment.GetEnvironmentVariable("BACKGROUND_SERVICE_URL") ?? "http://localhost:8080";
+        _baseUrl = Environment.GetEnvironmentVariable("BACKGROUND_SERVICE_URL") ?? Network.DefaultBackgroundServiceUrl;
 
         _logger.LogInformation("Configured API client for: {BaseUrl}", _baseUrl);
     }

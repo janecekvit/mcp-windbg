@@ -1,5 +1,6 @@
 using BackgroundService.Services;
 using Common;
+using static Common.Constants;
 
 namespace BackgroundService;
 
@@ -15,9 +16,12 @@ internal class Program
             builder.Services.AddSingleton<IPathDetectionService, PathDetectionService>();
             builder.Services.AddSingleton<IAnalysisService, AnalysisService>();
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
-            
+
             // Configure controllers
             builder.Services.AddControllers();
+
+            // Configure Problem Details for standardized error responses
+            builder.Services.AddProblemDetails();
 
             // Configure logging
             builder.Logging.ClearProviders();
@@ -27,11 +31,15 @@ internal class Program
             var app = builder.Build();
             var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
+            // Configure error handling middleware
+            app.UseExceptionHandler();
+            app.UseStatusCodePages();
+
             // Configure controllers
             app.MapControllers();
 
             // Start the service
-            var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : 8080;
+            var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : Network.DefaultBackgroundServicePort;
             app.Urls.Add($"http://localhost:{port}");
 
             logger.LogInformation("CDB Background Service listening on port {Port}", port);

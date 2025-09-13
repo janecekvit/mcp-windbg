@@ -2,6 +2,7 @@ using System.Reflection;
 using BackgroundService.Services;
 using Common;
 using Microsoft.AspNetCore.Mvc;
+using static Common.Constants;
 
 namespace BackgroundService.Controllers;
 
@@ -65,7 +66,10 @@ public class DiagnosticsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in enhanced debugger detection");
-            return StatusCode(500, new ErrorResponse($"Error detecting debuggers: {ex.Message}"));
+            return Problem(
+                detail: $"Error detecting debuggers: {ex.Message}",
+                statusCode: Http.InternalServerError,
+                title: "Debugger Detection Failed");
         }
     }
 
@@ -90,7 +94,10 @@ public class DiagnosticsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving enhanced analyses");
-            return StatusCode(500, new ErrorResponse($"Error retrieving analyses: {ex.Message}"));
+            return Problem(
+                detail: $"Error retrieving analyses: {ex.Message}",
+                statusCode: Http.InternalServerError,
+                title: "Analysis Retrieval Failed");
         }
     }
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using McpProxy.Models;
 using Microsoft.Extensions.Logging;
+using static Common.Constants;
 
 namespace McpProxy.Services;
 
@@ -117,7 +118,7 @@ public class CommunicationService : ICommunicationService
     {
         return McpResponse.Success(requestId, new
         {
-            protocolVersion = "2024-11-05",
+            protocolVersion = Mcp.ProtocolVersion,
             capabilities = new
             {
                 tools = new
