@@ -4,7 +4,6 @@ using Common;
 using McpProxy.Extensions;
 using McpProxy.Models;
 using Microsoft.Extensions.Logging;
-using static Common.Constants;
 
 namespace McpProxy.Services;
 
@@ -28,7 +27,7 @@ public class DebuggerApiService : IDebuggerApiService
         _logger = logger;
         _httpClient = httpClient;
         _communicationService = communicationService;
-        _baseUrl = Environment.GetEnvironmentVariable("BACKGROUND_SERVICE_URL") ?? Network.DefaultBackgroundServiceUrl;
+        _baseUrl = Environment.GetEnvironmentVariable("BACKGROUND_SERVICE_URL") ?? Constants.Network.DefaultBackgroundServiceUrl;
 
         _logger.LogInformation("Configured API client for: {BaseUrl}", _baseUrl);
     }
@@ -57,7 +56,7 @@ public class DebuggerApiService : IDebuggerApiService
     {
         var pathResult = args.GetRequiredString("dump_file_path");
         if (pathResult.IsFailure) return McpToolResult.Error(pathResult.Error);
-        
+
         var dumpFilePath = pathResult.Value;
         var error = dumpFilePath.ValidateAsDumpFilePath();
         if (error != null) return McpToolResult.Error(error);
@@ -75,9 +74,9 @@ public class DebuggerApiService : IDebuggerApiService
     {
         var paramsResult = args.GetRequiredStrings("session_id", "command");
         if (paramsResult.IsFailure) return McpToolResult.Error(paramsResult.Error);
-        
+
         var (sessionId, command) = paramsResult.Value;
-        
+
         var sessionError = sessionId.ValidateAsSessionId();
         if (sessionError != null) return McpToolResult.Error(sessionError);
 
@@ -94,7 +93,7 @@ public class DebuggerApiService : IDebuggerApiService
     {
         var sessionResult = args.GetRequiredString("session_id");
         if (sessionResult.IsFailure) return McpToolResult.Error(sessionResult.Error);
-        
+
         var sessionId = sessionResult.Value;
         var error = sessionId.ValidateAsSessionId();
         if (error != null) return McpToolResult.Error(error);
@@ -112,9 +111,9 @@ public class DebuggerApiService : IDebuggerApiService
     {
         var paramsResult = args.GetRequiredStrings("session_id", "analysis_type");
         if (paramsResult.IsFailure) return McpToolResult.Error(paramsResult.Error);
-        
+
         var (sessionId, analysisType) = paramsResult.Value;
-        
+
         var sessionError = sessionId.ValidateAsSessionId();
         if (sessionError != null) return McpToolResult.Error(sessionError);
 
@@ -130,7 +129,7 @@ public class DebuggerApiService : IDebuggerApiService
 
         var output = new StringBuilder()
             .AppendSection("Active sessions:");
-            
+
         foreach (var session in response.Sessions)
         {
             output.AppendKeyValue("Session", session.SessionId)
@@ -145,7 +144,7 @@ public class DebuggerApiService : IDebuggerApiService
     {
         var sessionResult = args.GetRequiredString("session_id");
         if (sessionResult.IsFailure) return McpToolResult.Error(sessionResult.Error);
-        
+
         var sessionId = sessionResult.Value;
         var error = sessionId.ValidateAsSessionId();
         if (error != null) return McpToolResult.Error(error);
@@ -182,7 +181,7 @@ public class DebuggerApiService : IDebuggerApiService
 
         var output = new StringBuilder()
             .AppendSection("Available analyses:");
-            
+
         foreach (var analysis in response.Analyses)
             output.AppendKeyValue(analysis.Name, analysis.Description);
 

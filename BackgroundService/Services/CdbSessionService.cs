@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text;
 using Common;
-using static Common.Constants;
 
 namespace BackgroundService.Services;
 
@@ -128,8 +127,8 @@ public sealed class CdbSessionService : ICdbSessionService
         {
             _logger.LogDebug("Executing init command for session {SessionId}: {Command}", SessionId, command);
             var result = await ExecuteCommandInternalAsync(command, cancellationToken);
-            _logger.LogDebug("Init command result for session {SessionId}: {Result}", SessionId, result?.Length > Debugging.LogTruncateLength ? result[..Debugging.LogTruncateLength] + "..." : result);
-            await Task.Delay(Debugging.InitializationDelay, cancellationToken); // Short pause between commands
+            _logger.LogDebug("Init command result for session {SessionId}: {Result}", SessionId, result?.Length > Constants.Debugging.LogTruncateLength ? result[..Constants.Debugging.LogTruncateLength] + "..." : result);
+            await Task.Delay(Constants.Debugging.InitializationDelay, cancellationToken); // Short pause between commands
         }
 
         _isInitialized = true;
@@ -186,9 +185,9 @@ public sealed class CdbSessionService : ICdbSessionService
 
             // Read output until we find the marker - without Task.Run to avoid concurrent stream access
             var reader = _cdbProcess.StandardOutput;
-            var buffer = new char[Debugging.ReadBufferSize];
+            var buffer = new char[Constants.Debugging.ReadBufferSize];
             var result = new StringBuilder();
-            
+
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(2)); // Increased timeout
             using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
@@ -198,8 +197,8 @@ public sealed class CdbSessionService : ICdbSessionService
                 {
                     var readTask = reader.ReadAsync(buffer, 0, buffer.Length);
                     var bytesRead = await readTask.ConfigureAwait(false);
-                    
-                    if (bytesRead == 0) 
+
+                    if (bytesRead == 0)
                         break;
 
                     var chunk = buffer.AsSpan(0, bytesRead).ToString();
@@ -226,7 +225,7 @@ public sealed class CdbSessionService : ICdbSessionService
                 catch (InvalidOperationException ex) when (ex.Message.Contains("currently in use"))
                 {
                     // Stream is busy, wait a bit and retry
-                    await Task.Delay(Debugging.PollingDelay, combinedCts.Token).ConfigureAwait(false);
+                    await Task.Delay(Constants.Debugging.PollingDelay, combinedCts.Token).ConfigureAwait(false);
                     continue;
                 }
             }
@@ -244,7 +243,7 @@ public sealed class CdbSessionService : ICdbSessionService
 
             return result.ToString();
         }
-        catch (Exception ex) when (!(ex is TimeoutException || ex is InvalidOperationException))
+        catch (Exception ex) when (ex is not (TimeoutException or InvalidOperationException))
         {
             _logger.LogError(ex, "Error executing command: {Command}", command);
             throw new InvalidOperationException($"Error executing command: {ex.Message}", ex);
@@ -291,7 +290,7 @@ public sealed class CdbSessionService : ICdbSessionService
                     _stdin?.WriteLine("q");
                     _stdin?.Flush();
 
-                    if (!_cdbProcess.WaitForExit(Debugging.ProcessWaitTimeout))
+                    if (!_cdbProcess.WaitForExit(Constants.Debugging.ProcessWaitTimeout))
                         _cdbProcess.Kill();
                 }
             }

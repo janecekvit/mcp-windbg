@@ -15,7 +15,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BackgroundService.Tests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "McpProxy.Tests", "McpProxy.Tests\McpProxy.Tests.csproj", "{6446AE8B-8F41-B494-EF47-ADAF060D6F2C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "Common\Common.csproj", "{E15E491A-E872-91D8-DF7A-CA59C792F064}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared", "Shared\Shared.csproj", "{E15E491A-E872-91D8-DF7A-CA59C792F064}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -1,7 +1,6 @@
 using BackgroundService.Services;
 using Common;
 using Microsoft.AspNetCore.Mvc;
-using static Common.Constants;
 
 namespace BackgroundService.Controllers;
 
@@ -43,7 +42,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Dump file not found: {DumpFile}", request.DumpFilePath);
             return Problem(
                 detail: $"Dump file not found: {request.DumpFilePath}",
-                statusCode: Http.BadRequest,
+                statusCode: Constants.Http.BadRequest,
                 title: "Dump File Not Found");
         }
         catch (Exception ex)
@@ -51,7 +50,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Error loading dump file: {DumpFile}", request.DumpFilePath);
             return Problem(
                 detail: $"Error loading dump: {ex.Message}",
-                statusCode: Http.InternalServerError,
+                statusCode: Constants.Http.InternalServerError,
                 title: "Dump Loading Failed");
         }
     }
@@ -79,7 +78,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Session not found: {SessionId}", request.SessionId);
             return Problem(
                 detail: $"Session {request.SessionId} not found",
-                statusCode: Http.NotFound,
+                statusCode: Constants.Http.NotFound,
                 title: "Session Not Found");
         }
         catch (InvalidOperationException ex)
@@ -87,7 +86,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Session not active: {SessionId}", request.SessionId);
             return Problem(
                 detail: $"Session {request.SessionId} is not active",
-                statusCode: Http.BadRequest,
+                statusCode: Constants.Http.BadRequest,
                 title: "Session Not Active");
         }
         catch (Exception ex)
@@ -95,7 +94,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Error executing command in session {SessionId}: {Command}", request.SessionId, request.Command);
             return Problem(
                 detail: $"Error executing command: {ex.Message}",
-                statusCode: Http.InternalServerError,
+                statusCode: Constants.Http.InternalServerError,
                 title: "Command Execution Failed");
         }
     }
@@ -122,7 +121,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Session not found: {SessionId}", request.SessionId);
             return Problem(
                 detail: $"Session {request.SessionId} not found",
-                statusCode: Http.NotFound,
+                statusCode: Constants.Http.NotFound,
                 title: "Session Not Found");
         }
         catch (Exception ex)
@@ -130,7 +129,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Error executing basic analysis in session {SessionId}", request.SessionId);
             return Problem(
                 detail: $"Error executing analysis: {ex.Message}",
-                statusCode: Http.InternalServerError,
+                statusCode: Constants.Http.InternalServerError,
                 title: "Analysis Execution Failed");
         }
     }
@@ -157,7 +156,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Session not found or invalid analysis: {SessionId}", request.SessionId);
             return Problem(
                 detail: $"Session {request.SessionId} not found or invalid analysis type",
-                statusCode: Http.NotFound,
+                statusCode: Constants.Http.NotFound,
                 title: "Session Not Found or Invalid Analysis");
         }
         catch (Exception ex)
@@ -165,7 +164,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Error executing predefined analysis in session {SessionId}: {AnalysisType}", request.SessionId, request.AnalysisType);
             return Problem(
                 detail: $"Error executing analysis: {ex.Message}",
-                statusCode: Http.InternalServerError,
+                statusCode: Constants.Http.InternalServerError,
                 title: "Analysis Execution Failed");
         }
     }
@@ -207,7 +206,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Session not found: {SessionId}", sessionId);
             return Problem(
                 detail: $"Session {sessionId} not found",
-                statusCode: Http.NotFound,
+                statusCode: Constants.Http.NotFound,
                 title: "Session Not Found");
         }
         catch (Exception ex)
@@ -215,7 +214,7 @@ public class SessionsController : ControllerBase
             _logger.LogError(ex, "Error closing session: {SessionId}", sessionId);
             return Problem(
                 detail: $"Error closing session: {ex.Message}",
-                statusCode: Http.InternalServerError,
+                statusCode: Constants.Http.InternalServerError,
                 title: "Session Closure Failed");
         }
     }
