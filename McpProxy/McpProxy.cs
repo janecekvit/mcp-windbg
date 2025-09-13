@@ -18,12 +18,12 @@ public class McpProxy
         _communicationService = communicationService;
     }
 
-    public async Task RunAsync()
+    public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        await _communicationService.RunAsync(HandleToolCallAsync, _debuggerApiService.CheckHealthAsync);
+        await _communicationService.RunAsync(HandleToolCallAsync, _debuggerApiService.CheckHealthAsync, cancellationToken);
     }
 
-    private async Task<McpToolResult> HandleToolCallAsync(string toolName, string? progressToken, JsonElement args)
+    private async Task<McpToolResult> HandleToolCallAsync(string toolName, string? progressToken, JsonElement args, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Executing tool: {ToolName}", toolName);
 
@@ -31,14 +31,14 @@ public class McpProxy
         {
             return toolName switch
             {
-                "load_dump" => await _debuggerApiService.LoadDumpAsync(args, progressToken),
-                "execute_command" => await _debuggerApiService.ExecuteCommandAsync(args, progressToken),
-                "basic_analysis" => await _debuggerApiService.BasicAnalysisAsync(args, progressToken),
-                "predefined_analysis" => await _debuggerApiService.PredefinedAnalysisAsync(args, progressToken),
-                "list_sessions" => await _debuggerApiService.ListSessionsAsync(),
-                "list_analyses" => await _debuggerApiService.ListAnalysesAsync(),
-                "detect_debuggers" => await _debuggerApiService.DetectDebuggersAsync(),
-                "close_session" => await _debuggerApiService.CloseSessionAsync(args),
+                "load_dump" => await _debuggerApiService.LoadDumpAsync(args, progressToken, cancellationToken),
+                "execute_command" => await _debuggerApiService.ExecuteCommandAsync(args, progressToken, cancellationToken),
+                "basic_analysis" => await _debuggerApiService.BasicAnalysisAsync(args, progressToken, cancellationToken),
+                "predefined_analysis" => await _debuggerApiService.PredefinedAnalysisAsync(args, progressToken, cancellationToken),
+                "list_sessions" => await _debuggerApiService.ListSessionsAsync(cancellationToken),
+                "list_analyses" => await _debuggerApiService.ListAnalysesAsync(cancellationToken),
+                "detect_debuggers" => await _debuggerApiService.DetectDebuggersAsync(cancellationToken),
+                "close_session" => await _debuggerApiService.CloseSessionAsync(args, cancellationToken),
                 _ => McpToolResult.Error($"Unknown tool: {toolName}")
             };
         }

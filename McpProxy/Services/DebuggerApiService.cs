@@ -32,11 +32,11 @@ public class DebuggerApiService : IDebuggerApiService
         _logger.LogInformation("Configured API client for: {BaseUrl}", _baseUrl);
     }
 
-    public async Task<bool> CheckHealthAsync()
+    public async Task<bool> CheckHealthAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var response = await _httpClient.GetAsync($"{_baseUrl}{ApiEndpoints.Health}");
+            var response = await _httpClient.GetAsync($"{_baseUrl}{ApiEndpoints.Health}", cancellationToken);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -46,13 +46,13 @@ public class DebuggerApiService : IDebuggerApiService
         }
     }
 
-    private async Task SendProgress(string? token, double progress, string message)
+    private async Task SendProgress(string? token, double progress, string message, CancellationToken cancellationToken = default)
     {
         if (!string.IsNullOrEmpty(token))
-            await _communicationService.SendProgressNotificationAsync(token, progress, message);
+            await _communicationService.SendProgressNotificationAsync(token, progress, message, cancellationToken);
     }
 
-    public async Task<McpToolResult> LoadDumpAsync(JsonElement args, string? progressToken = null)
+    public async Task<McpToolResult> LoadDumpAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
     {
         var pathResult = args.GetRequiredString("dump_file_path");
         if (pathResult.IsFailure) return McpToolResult.Error(pathResult.Error);
@@ -61,16 +61,16 @@ public class DebuggerApiService : IDebuggerApiService
         var error = dumpFilePath.ValidateAsDumpFilePath();
         if (error != null) return McpToolResult.Error(error);
 
-        await SendProgress(progressToken, 0.1, "Loading dump file...");
+        await SendProgress(progressToken, 0.1, "Loading dump file...", cancellationToken);
         var request = new LoadDumpRequest(dumpFilePath!);
 
-        var response = await PostAsync<LoadDumpRequest, LoadDumpResponse>(ApiEndpoints.LoadDump, request);
+        var response = await PostAsync<LoadDumpRequest, LoadDumpResponse>(ApiEndpoints.LoadDump, request, cancellationToken);
 
-        await SendProgress(progressToken, 1.0, "Dump loaded successfully!");
+        await SendProgress(progressToken, 1.0, "Dump loaded successfully!", cancellationToken);
         return McpToolResult.Success($"Session created: {response.SessionId}\nDump: {dumpFilePath}\n\n{response.Message}");
     }
 
-    public async Task<McpToolResult> ExecuteCommandAsync(JsonElement args, string? progressToken = null)
+    public async Task<McpToolResult> ExecuteCommandAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
     {
         var paramsResult = args.GetRequiredStrings("session_id", "command");
         if (paramsResult.IsFailure) return McpToolResult.Error(paramsResult.Error);
@@ -84,12 +84,12 @@ public class DebuggerApiService : IDebuggerApiService
         if (cmdError != null) return McpToolResult.Error(cmdError);
 
         var request = new ExecuteCommandRequest(sessionId!, command!);
-        var response = await PostAsync<ExecuteCommandRequest, CommandExecutionResponse>(ApiEndpoints.ExecuteCommand, request);
+        var response = await PostAsync<ExecuteCommandRequest, CommandExecutionResponse>(ApiEndpoints.ExecuteCommand, request, cancellationToken);
 
         return McpToolResult.Success(response.Result);
     }
 
-    public async Task<McpToolResult> BasicAnalysisAsync(JsonElement args, string? progressToken = null)
+    public async Task<McpToolResult> BasicAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
     {
         var sessionResult = args.GetRequiredString("session_id");
         if (sessionResult.IsFailure) return McpToolResult.Error(sessionResult.Error);
@@ -98,16 +98,16 @@ public class DebuggerApiService : IDebuggerApiService
         var error = sessionId.ValidateAsSessionId();
         if (error != null) return McpToolResult.Error(error);
 
-        await SendProgress(progressToken, 0.1, "Running analysis...");
+        await SendProgress(progressToken, 0.1, "Running analysis...", cancellationToken);
         var request = new BasicAnalysisRequest(sessionId!);
 
-        var response = await PostAsync<BasicAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.BasicAnalysis, request);
+        var response = await PostAsync<BasicAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.BasicAnalysis, request, cancellationToken);
 
-        await SendProgress(progressToken, 1.0, "Analysis completed!");
+        await SendProgress(progressToken, 1.0, "Analysis completed!", cancellationToken);
         return McpToolResult.Success(response.Result);
     }
 
-    public async Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null)
+    public async Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
     {
         var paramsResult = args.GetRequiredStrings("session_id", "analysis_type");
         if (paramsResult.IsFailure) return McpToolResult.Error(paramsResult.Error);
@@ -118,14 +118,14 @@ public class DebuggerApiService : IDebuggerApiService
         if (sessionError != null) return McpToolResult.Error(sessionError);
 
         var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
-        var response = await PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.PredefinedAnalysis, request);
+        var response = await PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.PredefinedAnalysis, request, cancellationToken);
 
         return McpToolResult.Success(response.Result);
     }
 
-    public async Task<McpToolResult> ListSessionsAsync()
+    public async Task<McpToolResult> ListSessionsAsync(CancellationToken cancellationToken = default)
     {
-        var response = await GetAsync<SessionsResponse>(ApiEndpoints.Sessions);
+        var response = await GetAsync<SessionsResponse>(ApiEndpoints.Sessions, cancellationToken);
 
         var output = new StringBuilder()
             .AppendSection("Active sessions:");
@@ -140,7 +140,7 @@ public class DebuggerApiService : IDebuggerApiService
         return output.ToMcpSuccess();
     }
 
-    public async Task<McpToolResult> CloseSessionAsync(JsonElement args)
+    public async Task<McpToolResult> CloseSessionAsync(JsonElement args, CancellationToken cancellationToken = default)
     {
         var sessionResult = args.GetRequiredString("session_id");
         if (sessionResult.IsFailure) return McpToolResult.Error(sessionResult.Error);
@@ -149,13 +149,13 @@ public class DebuggerApiService : IDebuggerApiService
         var error = sessionId.ValidateAsSessionId();
         if (error != null) return McpToolResult.Error(error);
 
-        var response = await DeleteAsync<CloseSessionResponse>(sessionId!.ToSessionEndpoint());
+        var response = await DeleteAsync<CloseSessionResponse>(sessionId!.ToSessionEndpoint(), cancellationToken);
         return McpToolResult.Success(response.Message);
     }
 
-    public async Task<McpToolResult> DetectDebuggersAsync()
+    public async Task<McpToolResult> DetectDebuggersAsync(CancellationToken cancellationToken = default)
     {
-        var response = await GetAsync<DebuggerDetectionResponse>(ApiEndpoints.DetectDebuggers);
+        var response = await GetAsync<DebuggerDetectionResponse>(ApiEndpoints.DetectDebuggers, cancellationToken);
 
         var output = new StringBuilder()
             .AppendSection("🔍 Debugger Detection:");
@@ -175,9 +175,9 @@ public class DebuggerApiService : IDebuggerApiService
         return output.ToMcpSuccess();
     }
 
-    public async Task<McpToolResult> ListAnalysesAsync()
+    public async Task<McpToolResult> ListAnalysesAsync(CancellationToken cancellationToken = default)
     {
-        var response = await GetAsync<AnalysesResponse>(ApiEndpoints.Analyses);
+        var response = await GetAsync<AnalysesResponse>(ApiEndpoints.Analyses, cancellationToken);
 
         var output = new StringBuilder()
             .AppendSection("Available analyses:");
@@ -188,7 +188,7 @@ public class DebuggerApiService : IDebuggerApiService
         return output.ToMcpSuccess();
     }
 
-    private async Task<TResponse> PostAsync<TRequest, TResponse>(string endpoint, TRequest request)
+    private async Task<TResponse> PostAsync<TRequest, TResponse>(string endpoint, TRequest request, CancellationToken cancellationToken = default)
         where TRequest : class
         where TResponse : class
     {
@@ -197,7 +197,7 @@ public class DebuggerApiService : IDebuggerApiService
             var json = JsonSerializer.Serialize(request, _jsonOptions);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync($"{_baseUrl}{endpoint}", content);
+            var response = await _httpClient.PostAsync($"{_baseUrl}{endpoint}", content, cancellationToken);
 
             if (response.IsSuccessStatusCode)
             {
@@ -216,11 +216,11 @@ public class DebuggerApiService : IDebuggerApiService
         }
     }
 
-    private async Task<TResponse> GetAsync<TResponse>(string endpoint) where TResponse : class
+    private async Task<TResponse> GetAsync<TResponse>(string endpoint, CancellationToken cancellationToken = default) where TResponse : class
     {
         try
         {
-            var response = await _httpClient.GetAsync($"{_baseUrl}{endpoint}");
+            var response = await _httpClient.GetAsync($"{_baseUrl}{endpoint}", cancellationToken);
 
             if (response.IsSuccessStatusCode)
             {
@@ -239,11 +239,11 @@ public class DebuggerApiService : IDebuggerApiService
         }
     }
 
-    private async Task<TResponse> DeleteAsync<TResponse>(string endpoint) where TResponse : class
+    private async Task<TResponse> DeleteAsync<TResponse>(string endpoint, CancellationToken cancellationToken = default) where TResponse : class
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"{_baseUrl}{endpoint}");
+            var response = await _httpClient.DeleteAsync($"{_baseUrl}{endpoint}", cancellationToken);
 
             if (response.IsSuccessStatusCode)
             {

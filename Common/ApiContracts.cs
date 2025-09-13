@@ -2,18 +2,17 @@ using System.Text.Json.Serialization;
 
 namespace Common;
 
-// API Endpoints
+// API Endpoints (for ASP.NET Core Controllers)
 public static class ApiEndpoints
 {
-    public const string Health = "/health";
-    public const string LoadDump = "/api/load-dump";
-    public const string ExecuteCommand = "/api/execute-command";
-    public const string BasicAnalysis = "/api/basic-analysis";
-    public const string PredefinedAnalysis = "/api/predefined-analysis";
+    public const string Health = "/api/diagnostics/health";
+    public const string LoadDump = "/api/sessions/load-dump";
+    public const string ExecuteCommand = "/api/sessions/execute-command";
+    public const string BasicAnalysis = "/api/sessions/basic-analysis";
+    public const string PredefinedAnalysis = "/api/sessions/predefined-analysis";
     public const string Sessions = "/api/sessions";
-    public const string DetectDebuggers = "/api/detect-debuggers";
-    public const string Analyses = "/api/analyses";
-    
+    public const string DetectDebuggers = "/api/diagnostics/detect-debuggers";
+    public const string Analyses = "/api/diagnostics/analyses";
 }
 
 // Shared Request Models

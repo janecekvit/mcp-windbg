@@ -53,7 +53,7 @@ public sealed class SessionManagerService : ISessionManagerService
                               _cdbPath, _symbolCache, _symbolPathExtra);
     }
 
-    public async Task<string> CreateSessionWithDumpAsync(string dumpFilePath)
+    public async Task<string> CreateSessionWithDumpAsync(string dumpFilePath, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(dumpFilePath))
         {
@@ -65,21 +65,35 @@ public sealed class SessionManagerService : ISessionManagerService
         var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
         var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra);
 
+        // Add session to dictionary first to prevent race conditions
+        _sessions[sessionId] = session;
+        _logger.LogInformation("Created new CDB session {SessionId}, loading dump: {DumpFile}", sessionId, dumpFilePath);
+
         try
         {
-            await session.LoadDumpAsync(dumpFilePath);
-            _sessions[sessionId] = session;
-            _logger.LogInformation("Created new CDB session {SessionId} for dump: {DumpFile}", sessionId, dumpFilePath);
+            await session.LoadDumpAsync(dumpFilePath, cancellationToken);
+            
+            // Verify session is still active after loading
+            if (!session.IsActive)
+            {
+                _sessions.TryRemove(sessionId, out _);
+                session.Dispose();
+                throw new InvalidOperationException($"CDB process failed to start or exited during dump loading for session {sessionId}");
+            }
+            
+            _logger.LogInformation("Successfully loaded dump in session {SessionId}: {DumpFile}", sessionId, dumpFilePath);
             return sessionId;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to load dump in session {SessionId}: {DumpFile}", sessionId, dumpFilePath);
+            _sessions.TryRemove(sessionId, out _);
             session.Dispose();
             throw;
         }
     }
 
-    public async Task<string> ExecuteCommandAsync(string sessionId, string command)
+    public async Task<string> ExecuteCommandAsync(string sessionId, string command, CancellationToken cancellationToken = default)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
@@ -97,7 +111,7 @@ public sealed class SessionManagerService : ISessionManagerService
 
         try
         {
-            return await session.ExecuteCommandAsync(command);
+            return await session.ExecuteCommandAsync(command, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -106,12 +120,12 @@ public sealed class SessionManagerService : ISessionManagerService
         }
     }
 
-    public async Task<string> ExecuteBasicAnalysisAsync(string sessionId)
+    public async Task<string> ExecuteBasicAnalysisAsync(string sessionId, CancellationToken cancellationToken = default)
     {
-        return await ExecutePredefinedAnalysisAsync(sessionId, "basic");
+        return await ExecutePredefinedAnalysisAsync(sessionId, "basic", cancellationToken);
     }
 
-    public async Task<string> ExecutePredefinedAnalysisAsync(string sessionId, string analysisName)
+    public async Task<string> ExecutePredefinedAnalysisAsync(string sessionId, string analysisName, CancellationToken cancellationToken = default)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
@@ -129,7 +143,7 @@ public sealed class SessionManagerService : ISessionManagerService
 
         try
         {
-            return await session.ExecutePredefinedAnalysisAsync(analysisName);
+            return await session.ExecutePredefinedAnalysisAsync(analysisName, cancellationToken);
         }
         catch (Exception ex)
         {

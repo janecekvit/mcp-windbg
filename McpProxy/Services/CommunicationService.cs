@@ -19,7 +19,7 @@ public class CommunicationService : ICommunicationService
         _toolsService = toolsService;
     }
 
-    public async Task RunAsync(Func<string, string?, JsonElement, Task<McpToolResult>> handleToolCall, Func<Task<bool>>? healthCheck = null)
+    public async Task RunAsync(Func<string, string?, JsonElement, CancellationToken, Task<McpToolResult>> handleToolCall, Func<CancellationToken, Task<bool>>? healthCheck = null, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Starting CDB MCP Server Proxy...");
 
@@ -34,7 +34,7 @@ public class CommunicationService : ICommunicationService
         _logger.LogInformation("MCP Server Proxy ready to accept requests");
 
         string? line;
-        while ((line = await reader.ReadLineAsync()) != null)
+        while ((line = await reader.ReadLineAsync().WaitAsync(cancellationToken)) != null)
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
 
@@ -46,7 +46,7 @@ public class CommunicationService : ICommunicationService
                 if (request != null)
                 {
                     _logger.LogInformation("Processing method: {Method}, ID: {Id}", request.Method, request.Id);
-                    var response = await HandleMcpRequestAsync(request, handleToolCall, healthCheck);
+                    var response = await HandleMcpRequestAsync(request, handleToolCall, healthCheck, cancellationToken);
                     if (response != null)
                     {
                         await SendResponseAsync(response);
@@ -57,22 +57,22 @@ public class CommunicationService : ICommunicationService
             {
                 _logger.LogError(ex, "Error processing request: {Line}", line);
                 var errorResponse = McpResponse.CreateError(0, McpError.Custom(-1, ex.Message));
-                await SendResponseAsync(errorResponse);
+                await SendResponseAsync(errorResponse, cancellationToken);
             }
         }
 
         _logger.LogInformation("MCP Server Proxy shutting down");
     }
 
-    private async Task<McpResponse?> HandleMcpRequestAsync(McpRequest request, Func<string, string?, JsonElement, Task<McpToolResult>> handleToolCall, Func<Task<bool>>? healthCheck)
+    private async Task<McpResponse?> HandleMcpRequestAsync(McpRequest request, Func<string, string?, JsonElement, CancellationToken, Task<McpToolResult>> handleToolCall, Func<CancellationToken, Task<bool>>? healthCheck, CancellationToken cancellationToken = default)
     {
         try
         {
             return request.Method switch
             {
-                "initialize" => await HandleInitializeAsync(request.Id, healthCheck),
+                "initialize" => await HandleInitializeAsync(request.Id, healthCheck, cancellationToken),
                 "tools/list" => _isInitialized ? _toolsService.CreateListToolsResponse(request.Id) : McpResponse.NotInitialized(request.Id),
-                "tools/call" => _isInitialized ? await HandleToolCallAsync(request, handleToolCall) : McpResponse.NotInitialized(request.Id),
+                "tools/call" => _isInitialized ? await HandleToolCallAsync(request, handleToolCall, cancellationToken) : McpResponse.NotInitialized(request.Id),
                 _ => McpResponse.MethodNotFound(request.Id, request.Method)
             };
         }
@@ -83,7 +83,7 @@ public class CommunicationService : ICommunicationService
         }
     }
 
-    private async Task<McpResponse> HandleInitializeAsync(int requestId, Func<Task<bool>>? healthCheck)
+    private async Task<McpResponse> HandleInitializeAsync(int requestId, Func<CancellationToken, Task<bool>>? healthCheck, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Received initialize request");
 
@@ -91,7 +91,7 @@ public class CommunicationService : ICommunicationService
         var isHealthy = true;
         if (healthCheck != null)
         {
-            isHealthy = await healthCheck();
+            isHealthy = await healthCheck(cancellationToken);
             if (isHealthy)
             {
                 _logger.LogInformation("Background service is healthy");
@@ -107,7 +107,7 @@ public class CommunicationService : ICommunicationService
 
         if (response.Error == null)
         {
-            await SendInitializedNotificationAsync();
+            await SendInitializedNotificationAsync(cancellationToken);
         }
 
         return response;
@@ -133,7 +133,7 @@ public class CommunicationService : ICommunicationService
         });
     }
 
-    private static async Task<McpResponse> HandleToolCallAsync(McpRequest request, Func<string, string?, JsonElement, Task<McpToolResult>> handleToolCall)
+    private static async Task<McpResponse> HandleToolCallAsync(McpRequest request, Func<string, string?, JsonElement, CancellationToken, Task<McpToolResult>> handleToolCall, CancellationToken cancellationToken = default)
     {
         if (request.Params == null)
         {
@@ -157,26 +157,26 @@ public class CommunicationService : ICommunicationService
             progressToken = tokenElement.GetString();
         }
 
-        var result = await handleToolCall(toolName, progressToken, argsElement);
+        var result = await handleToolCall(toolName, progressToken, argsElement, cancellationToken);
         return McpResponse.Success(request.Id, result);
     }
 
-    public async Task SendResponseAsync(McpResponse response)
+    public async Task SendResponseAsync(McpResponse response, CancellationToken cancellationToken = default)
     {
         if (_writer == null) return;
 
         var responseJson = JsonSerializer.Serialize(response);
         _logger.LogInformation("Sending response: {Response}", responseJson);
-        await _writer.WriteLineAsync(responseJson);
+        await _writer.WriteLineAsync(responseJson).WaitAsync(cancellationToken);
     }
 
-    public async Task SendErrorResponseAsync(int requestId, McpError error)
+    public async Task SendErrorResponseAsync(int requestId, McpError error, CancellationToken cancellationToken = default)
     {
         var errorResponse = McpResponse.CreateError(requestId, error);
-        await SendResponseAsync(errorResponse);
+        await SendResponseAsync(errorResponse, cancellationToken);
     }
 
-    public async Task SendProgressNotificationAsync(string progressToken, double progress, string? message = null)
+    public async Task SendProgressNotificationAsync(string progressToken, double progress, string? message = null, CancellationToken cancellationToken = default)
     {
         if (_writer == null) return;
 
@@ -194,10 +194,10 @@ public class CommunicationService : ICommunicationService
         };
 
         var json = JsonSerializer.Serialize(notification);
-        await _writer.WriteLineAsync(json);
+        await _writer.WriteLineAsync(json).WaitAsync(cancellationToken);
     }
 
-    private async Task SendInitializedNotificationAsync()
+    private async Task SendInitializedNotificationAsync(CancellationToken cancellationToken = default)
     {
         if (_writer == null) return;
 
@@ -208,7 +208,7 @@ public class CommunicationService : ICommunicationService
         };
 
         var json = JsonSerializer.Serialize(notification);
-        await _writer.WriteLineAsync(json);
+        await _writer.WriteLineAsync(json).WaitAsync(cancellationToken);
     }
 
 }

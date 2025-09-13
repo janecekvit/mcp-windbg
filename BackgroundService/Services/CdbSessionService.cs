@@ -35,7 +35,7 @@ public sealed class CdbSessionService : ICdbSessionService
         _symbolPathExtra = symbolPathExtra;
     }
 
-    public async Task LoadDumpAsync(string dumpFilePath)
+    public async Task LoadDumpAsync(string dumpFilePath, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(dumpFilePath))
         {
@@ -81,27 +81,39 @@ public sealed class CdbSessionService : ICdbSessionService
                 StandardErrorEncoding = Encoding.UTF8
             };
 
+            _logger.LogInformation("Starting CDB process for session {SessionId}: {CdbPath} {Arguments}", SessionId, _cdbPath, startInfo.Arguments);
             _cdbProcess = Process.Start(startInfo);
 
             if (_cdbProcess == null)
             {
-                _logger.LogError("Failed to start CDB process");
+                _logger.LogError("Failed to start CDB process for session {SessionId}", SessionId);
                 throw new InvalidOperationException("Failed to start CDB process");
             }
 
+            _logger.LogInformation("CDB process started for session {SessionId}, PID: {ProcessId}", SessionId, _cdbProcess.Id);
             _stdin = _cdbProcess.StandardInput;
             _isInitialized = false;
+
+            // Check if process exited immediately
+            if (_cdbProcess.HasExited)
+            {
+                var exitCode = _cdbProcess.ExitCode;
+                _logger.LogError("CDB process exited immediately for session {SessionId} with exit code: {ExitCode}", SessionId, exitCode);
+                throw new InvalidOperationException($"CDB process exited immediately with exit code: {exitCode}");
+            }
         }
 
         // Wait for initialization and set symbols
-        await InitializeSessionAsync();
+        await InitializeSessionAsync(cancellationToken);
 
         _logger.LogInformation("CDB session {SessionId} loaded dump: {DumpFile}", SessionId, dumpFilePath);
     }
 
-    private async Task InitializeSessionAsync()
+    private async Task InitializeSessionAsync(CancellationToken cancellationToken = default)
     {
         if (_isInitialized) return;
+
+        _logger.LogInformation("Initializing CDB session {SessionId}", SessionId);
 
         var initCommands = new List<string>
         {
@@ -113,14 +125,17 @@ public sealed class CdbSessionService : ICdbSessionService
 
         foreach (var command in initCommands)
         {
-            await ExecuteCommandInternalAsync(command);
-            await Task.Delay(500); // Short pause between commands
+            _logger.LogDebug("Executing init command for session {SessionId}: {Command}", SessionId, command);
+            var result = await ExecuteCommandInternalAsync(command, cancellationToken);
+            _logger.LogDebug("Init command result for session {SessionId}: {Result}", SessionId, result?.Length > 100 ? result[..100] + "..." : result);
+            await Task.Delay(500, cancellationToken); // Short pause between commands
         }
 
         _isInitialized = true;
+        _logger.LogInformation("CDB session {SessionId} initialized successfully", SessionId);
     }
 
-    public async Task<string> ExecuteCommandAsync(string command)
+    public async Task<string> ExecuteCommandAsync(string command, CancellationToken cancellationToken = default)
     {
         if (_cdbProcess?.HasExited != false)
         {
@@ -139,7 +154,7 @@ public sealed class CdbSessionService : ICdbSessionService
         await _commandSemaphore.WaitAsync();
         try
         {
-            return await ExecuteCommandInternalAsync(command);
+            return await ExecuteCommandInternalAsync(command, cancellationToken);
         }
         finally
         {
@@ -147,7 +162,7 @@ public sealed class CdbSessionService : ICdbSessionService
         }
     }
 
-    private async Task<string> ExecuteCommandInternalAsync(string command)
+    private async Task<string> ExecuteCommandInternalAsync(string command, CancellationToken cancellationToken = default)
     {
         if (_stdin == null || _cdbProcess?.HasExited != false)
         {
@@ -173,9 +188,10 @@ public sealed class CdbSessionService : ICdbSessionService
             var buffer = new char[4096];
             var result = new StringBuilder();
             
-            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2)); // Increased timeout
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(2)); // Increased timeout
+            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-            while (!_cdbProcess.HasExited && !cts.Token.IsCancellationRequested)
+            while (!_cdbProcess.HasExited && !combinedCts.Token.IsCancellationRequested)
             {
                 try
                 {
@@ -198,19 +214,29 @@ public sealed class CdbSessionService : ICdbSessionService
                 }
                 catch (OperationCanceledException)
                 {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        _logger.LogInformation("Command execution cancelled for: {Command}", command);
+                        throw;
+                    }
                     _logger.LogError("Command execution timeout for: {Command}", command);
                     throw new TimeoutException("Command execution timeout");
                 }
                 catch (InvalidOperationException ex) when (ex.Message.Contains("currently in use"))
                 {
                     // Stream is busy, wait a bit and retry
-                    await Task.Delay(50, cts.Token).ConfigureAwait(false);
+                    await Task.Delay(50, combinedCts.Token).ConfigureAwait(false);
                     continue;
                 }
             }
 
-            if (cts.Token.IsCancellationRequested)
+            if (combinedCts.Token.IsCancellationRequested)
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogInformation("Command execution cancelled for: {Command}", command);
+                    throw new OperationCanceledException("Command execution was cancelled", cancellationToken);
+                }
                 _logger.LogError("Command execution timeout for: {Command}", command);
                 throw new TimeoutException("Command execution timeout");
             }
@@ -224,12 +250,12 @@ public sealed class CdbSessionService : ICdbSessionService
         }
     }
 
-    public async Task<string> ExecuteBasicAnalysisAsync()
+    public async Task<string> ExecuteBasicAnalysisAsync(CancellationToken cancellationToken = default)
     {
-        return await ExecutePredefinedAnalysisAsync("basic");
+        return await ExecutePredefinedAnalysisAsync("basic", cancellationToken);
     }
 
-    public async Task<string> ExecutePredefinedAnalysisAsync(string analysisName)
+    public async Task<string> ExecutePredefinedAnalysisAsync(string analysisName, CancellationToken cancellationToken = default)
     {
         var commands = _analysisService.GetAnalysisCommands(analysisName);
         if (commands.Count == 0)
@@ -245,7 +271,7 @@ public sealed class CdbSessionService : ICdbSessionService
 
         foreach (var command in commands)
         {
-            var result = await ExecuteCommandAsync(command);
+            var result = await ExecuteCommandAsync(command, cancellationToken);
             results.AppendLine(result);
             results.AppendLine();
         }
