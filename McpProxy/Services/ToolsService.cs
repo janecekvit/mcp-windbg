@@ -1,5 +1,5 @@
-using Common;
 using McpProxy.Models;
+using Shared;
 
 namespace McpProxy.Services;
 
@@ -11,7 +11,7 @@ public class ToolsService : IToolsService
         {
             new McpTool
             {
-                Name = McpToolNames.LoadDump,
+                Name = Constants.McpToolNames.LoadDump,
                 Description = "Load a memory dump file and create a new CDB debugging session",
                 InputSchema = new
                 {
@@ -29,7 +29,7 @@ public class ToolsService : IToolsService
             },
             new McpTool
             {
-                Name = McpToolNames.ExecuteCommand,
+                Name = Constants.McpToolNames.ExecuteCommand,
                 Description = "Execute a WinDbg/CDB command in an existing debugging session",
                 InputSchema = new
                 {
@@ -52,7 +52,7 @@ public class ToolsService : IToolsService
             },
             new McpTool
             {
-                Name = McpToolNames.BasicAnalysis,
+                Name = Constants.McpToolNames.BasicAnalysis,
                 Description = "Run a comprehensive basic analysis of the loaded dump (equivalent to the PowerShell script)",
                 InputSchema = new
                 {
@@ -70,7 +70,7 @@ public class ToolsService : IToolsService
             },
             new McpTool
             {
-                Name = McpToolNames.ListSessions,
+                Name = Constants.McpToolNames.ListSessions,
                 Description = "List all active debugging sessions",
                 InputSchema = new
                 {
@@ -80,7 +80,7 @@ public class ToolsService : IToolsService
             },
             new McpTool
             {
-                Name = McpToolNames.CloseSession,
+                Name = Constants.McpToolNames.CloseSession,
                 Description = "Close a debugging session and free resources",
                 InputSchema = new
                 {
@@ -98,7 +98,7 @@ public class ToolsService : IToolsService
             },
             new McpTool
             {
-                Name = McpToolNames.PredefinedAnalysis,
+                Name = Constants.McpToolNames.PredefinedAnalysis,
                 Description = "Run a predefined analysis on the loaded dump (basic, exception, threads, heap, modules, handles, locks, memory, drivers, processes)",
                 InputSchema = new
                 {
@@ -122,7 +122,7 @@ public class ToolsService : IToolsService
             },
             new McpTool
             {
-                Name = McpToolNames.ListAnalyses,
+                Name = Constants.McpToolNames.ListAnalyses,
                 Description = "List all available predefined analyses with descriptions",
                 InputSchema = new
                 {
@@ -132,7 +132,7 @@ public class ToolsService : IToolsService
             },
             new McpTool
             {
-                Name = McpToolNames.DetectDebuggers,
+                Name = Constants.McpToolNames.DetectDebuggers,
                 Description = "Detect available CDB/WinDbg installations on the system",
                 InputSchema = new
                 {

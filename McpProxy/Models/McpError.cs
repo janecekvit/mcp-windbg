@@ -1,5 +1,5 @@
 using System.Text.Json.Serialization;
-using static Common.Constants;
+using static Shared.Constants;
 
 namespace McpProxy.Models;
 

@@ -1,5 +1,5 @@
 using BackgroundService.Services;
-using Common;
+using Shared;
 
 namespace BackgroundService.Tests;
 
@@ -42,8 +42,8 @@ public class AnalysisServiceTests
     public void GetAnalysisDescription_ValidAnalysisType_ReturnsDescription(string analysisType)
     {
         // Arrange
-        var expectedDescription = AnalysisTypeExtensions.FromIdentifier(analysisType).GetDescription();
-        
+        var expectedDescription = AnalysisTypeExtensions.ToAnalysisType(analysisType).GetDescription();
+
         // Act
         var description = _analysisService.GetAnalysisDescription(analysisType);
 

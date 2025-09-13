@@ -1,4 +1,4 @@
-namespace Common;
+namespace Shared;
 
 /// <summary>
 /// Application-wide constants to eliminate magic numbers and strings
@@ -65,5 +65,40 @@ public static class Constants
     public static class WindowsSdk
     {
         public static readonly string[] SupportedVersions = { "10", "11" };
+    }
+
+    /// <summary>
+    /// Provides a collection of constants representing the names of tools available in the MCP (Managed Control
+    /// Protocol) system.
+    /// </summary>
+    /// <remarks>This class contains predefined string constants for various MCP tool names, which can be used
+    /// to reference specific tools in the system. It also provides a method to retrieve all available tool names as an
+    /// array.</remarks>
+    public static class McpToolNames
+    {
+        public const string LoadDump = "load_dump";
+        public const string ExecuteCommand = "execute_command";
+        public const string BasicAnalysis = "basic_analysis";
+        public const string ListSessions = "list_sessions";
+        public const string CloseSession = "close_session";
+        public const string PredefinedAnalysis = "predefined_analysis";
+        public const string ListAnalyses = "list_analyses";
+        public const string DetectDebuggers = "detect_debuggers";
+
+        /// <summary>
+        /// Gets all available MCP tool names
+        /// </summary>
+        /// <returns>Array of all tool names</returns>
+        public static string[] GetAll() => new[]
+        {
+        LoadDump,
+        ExecuteCommand,
+        BasicAnalysis,
+        ListSessions,
+        CloseSession,
+        PredefinedAnalysis,
+        ListAnalyses,
+        DetectDebuggers
+    };
     }
 }

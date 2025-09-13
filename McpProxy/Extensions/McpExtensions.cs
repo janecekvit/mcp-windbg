@@ -1,6 +1,6 @@
 using System.Text;
-using Common;
 using McpProxy.Models;
+using Shared.Models;
 
 namespace McpProxy.Extensions;
 
@@ -11,7 +11,7 @@ public static class McpExtensions
     /// </summary>
     /// <param name="result">The Result to convert</param>
     /// <returns>McpToolResult with success or error</returns>
-    public static McpToolResult ToMcpToolResult<T>(this Result<T> result) 
+    public static McpToolResult ToMcpToolResult<T>(this OperationResult<T> result)
         => result.IsSuccess ? McpToolResult.Success(result.Value?.ToString() ?? "") : McpToolResult.Error(result.Error);
 
     /// <summary>

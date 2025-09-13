@@ -1,6 +1,5 @@
 using BackgroundService.Services;
-using Common;
-using static Common.Constants;
+using Shared;
 
 namespace BackgroundService;
 
@@ -39,7 +38,7 @@ internal class Program
             app.MapControllers();
 
             // Start the service
-            var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : Network.DefaultBackgroundServicePort;
+            var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : Constants.Network.DefaultBackgroundServicePort;
             app.Urls.Add($"http://localhost:{port}");
 
             logger.LogInformation("CDB Background Service listening on port {Port}", port);

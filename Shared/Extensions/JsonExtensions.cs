@@ -1,6 +1,7 @@
 using System.Text.Json;
+using Shared.Models;
 
-namespace Common;
+namespace Shared.Extensions;
 
 public static class JsonElementExtensions
 {
@@ -10,16 +11,16 @@ public static class JsonElementExtensions
     /// <param name="element">The JSON element to parse</param>
     /// <param name="propertyName">Name of the property to extract</param>
     /// <returns>Result containing the string value or error message</returns>
-    public static Result<string> GetRequiredString(this JsonElement element, string propertyName)
+    public static OperationResult<string> GetRequiredString(this JsonElement element, string propertyName)
     {
         if (!element.TryGetProperty(propertyName, out var prop))
-            return Result<string>.Failure($"Missing {propertyName} parameter");
-            
+            return OperationResult<string>.Failure($"Missing {propertyName} parameter");
+
         var value = prop.GetString();
         if (string.IsNullOrWhiteSpace(value))
-            return Result<string>.Failure($"Empty {propertyName} parameter");
-            
-        return Result<string>.Success(value);
+            return OperationResult<string>.Failure($"Empty {propertyName} parameter");
+
+        return OperationResult<string>.Success(value);
     }
 
     /// <summary>
@@ -29,15 +30,15 @@ public static class JsonElementExtensions
     /// <param name="firstProperty">Name of the first property</param>
     /// <param name="secondProperty">Name of the second property</param>
     /// <returns>Result containing both values as tuple or error message</returns>
-    public static Result<(string First, string Second)> GetRequiredStrings(this JsonElement element, 
+    public static OperationResult<(string First, string Second)> GetRequiredStrings(this JsonElement element,
         string firstProperty, string secondProperty)
     {
         var firstResult = element.GetRequiredString(firstProperty);
-        if (firstResult.IsFailure) return Result<(string, string)>.Failure(firstResult.Error);
-        
+        if (firstResult.IsFailure) return OperationResult<(string, string)>.Failure(firstResult.Error);
+
         var secondResult = element.GetRequiredString(secondProperty);
-        if (secondResult.IsFailure) return Result<(string, string)>.Failure(secondResult.Error);
-        
-        return Result<(string, string)>.Success((firstResult.Value, secondResult.Value));
+        if (secondResult.IsFailure) return OperationResult<(string, string)>.Failure(secondResult.Error);
+
+        return OperationResult<(string, string)>.Success((firstResult.Value, secondResult.Value));
     }
 }

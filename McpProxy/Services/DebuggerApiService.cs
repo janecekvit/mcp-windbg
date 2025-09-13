@@ -1,9 +1,11 @@
 using System.Text;
 using System.Text.Json;
-using Common;
 using McpProxy.Extensions;
 using McpProxy.Models;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Shared;
+using Shared.Extensions;
 
 namespace McpProxy.Services;
 
@@ -22,12 +24,15 @@ public class DebuggerApiService : IDebuggerApiService
     public DebuggerApiService(
         ILogger<DebuggerApiService> logger,
         HttpClient httpClient,
-        ICommunicationService communicationService)
+        ICommunicationService communicationService,
+        IConfiguration configuration)
     {
         _logger = logger;
         _httpClient = httpClient;
         _communicationService = communicationService;
-        _baseUrl = Environment.GetEnvironmentVariable("BACKGROUND_SERVICE_URL") ?? Constants.Network.DefaultBackgroundServiceUrl;
+
+        var backgroundServiceConfig = configuration.GetBackgroundServiceConfiguration();
+        _baseUrl = backgroundServiceConfig.BaseUrl;
 
         _logger.LogInformation("Configured API client for: {BaseUrl}", _baseUrl);
     }

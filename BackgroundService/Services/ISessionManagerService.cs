@@ -48,5 +48,5 @@ public interface ISessionManagerService : IDisposable
     /// Gets information about all currently active debugging sessions
     /// </summary>
     /// <returns>Enumerable of session information objects</returns>
-    IEnumerable<SessionInfo> GetActiveSessions();
+    IEnumerable<BackgroundService.Models.SessionInfo> GetActiveSessions();
 }

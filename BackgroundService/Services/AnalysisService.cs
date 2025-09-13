@@ -1,4 +1,4 @@
-using Common;
+using Shared;
 
 namespace BackgroundService.Services;
 
@@ -118,7 +118,7 @@ public class AnalysisService : IAnalysisService
     {
         try
         {
-            var analysisType = AnalysisTypeExtensions.FromIdentifier(analysisName);
+            var analysisType = AnalysisTypeExtensions.ToAnalysisType(analysisName);
             return Analyses.TryGetValue(analysisType, out var commands) ? commands : Array.Empty<string>();
         }
         catch (ArgumentException)
@@ -129,14 +129,14 @@ public class AnalysisService : IAnalysisService
 
     public IEnumerable<string> GetAvailableAnalyses()
     {
-        return Analyses.Keys.Select(key => key.ToIdentifier());
+        return Analyses.Keys.Select(AnalysisTypeExtensions.ToString);
     }
 
     public string GetAnalysisDescription(string analysisName)
     {
         try
         {
-            var analysisType = AnalysisTypeExtensions.FromIdentifier(analysisName);
+            var analysisType = AnalysisTypeExtensions.ToAnalysisType(analysisName);
             return analysisType.GetDescription();
         }
         catch (ArgumentException)

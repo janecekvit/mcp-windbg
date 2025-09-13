@@ -1,5 +1,5 @@
-using Common;
 using McpProxy.Services;
+using Shared;
 
 namespace McpProxy.Tests;
 
@@ -33,7 +33,7 @@ public class ToolsServiceTests
     {
         // Arrange
         var requestId = 456;
-        var expectedToolNames = McpToolNames.GetAll();
+        var expectedToolNames = Constants.McpToolNames.GetAll();
 
         // Act
         var response = _toolsService.CreateListToolsResponse(requestId);

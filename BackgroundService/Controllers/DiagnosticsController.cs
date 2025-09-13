@@ -1,7 +1,8 @@
 using System.Reflection;
 using BackgroundService.Services;
-using Common;
 using Microsoft.AspNetCore.Mvc;
+using Shared;
+using Shared.Extensions;
 
 namespace BackgroundService.Controllers;
 
@@ -13,15 +14,18 @@ public class DiagnosticsController : ControllerBase
     private readonly ILogger<DiagnosticsController> _logger;
     private readonly IPathDetectionService _pathDetectionService;
     private readonly IAnalysisService _analysisService;
+    private readonly IConfiguration _configuration;
 
     public DiagnosticsController(
         ILogger<DiagnosticsController> logger,
         IPathDetectionService pathDetectionService,
-        IAnalysisService analysisService)
+        IAnalysisService analysisService,
+        IConfiguration configuration)
     {
         _logger = logger;
         _pathDetectionService = pathDetectionService;
         _analysisService = analysisService;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -51,11 +55,12 @@ public class DiagnosticsController : ControllerBase
         {
             var (cdbPath, winDbgPath, foundPaths) = _pathDetectionService.DetectDebuggerPaths();
 
+            var debuggerConfig = _configuration.GetDebuggerConfiguration();
             var envVars = new Dictionary<string, string?>
             {
-                ["CDB_PATH"] = Environment.GetEnvironmentVariable("CDB_PATH"),
-                ["SYMBOL_CACHE"] = Environment.GetEnvironmentVariable("SYMBOL_CACHE"),
-                ["SYMBOL_PATH_EXTRA"] = Environment.GetEnvironmentVariable("SYMBOL_PATH_EXTRA")
+                ["CDB_PATH"] = debuggerConfig.CdbPath,
+                ["SYMBOL_CACHE"] = debuggerConfig.SymbolCache,
+                ["SYMBOL_PATH_EXTRA"] = debuggerConfig.SymbolPathExtra
             };
 
             _logger.LogInformation("Debugger detection completed. CDB: {CdbPath}, WinDbg: {WinDbgPath}", cdbPath, winDbgPath);

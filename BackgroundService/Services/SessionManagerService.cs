@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
-using BackgroundService.Models;
-using static Common.Constants;
+using Shared;
+using Shared.Extensions;
 
 namespace BackgroundService.Services;
 
@@ -18,19 +18,21 @@ public sealed class SessionManagerService : ISessionManagerService
     public SessionManagerService(ILogger<SessionManagerService> logger,
                                ILoggerFactory loggerFactory,
                                IPathDetectionService pathDetectionService,
-                               IAnalysisService analysisService)
+                               IAnalysisService analysisService,
+                               IConfiguration configuration)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;
         _pathDetectionService = pathDetectionService;
         _analysisService = analysisService;
 
-        // Auto-detect CDB path or use environment variable
-        var envCdbPath = Environment.GetEnvironmentVariable("CDB_PATH");
-        if (!string.IsNullOrEmpty(envCdbPath) && _pathDetectionService.ValidateDebuggerPath(envCdbPath))
+        var debuggerConfig = configuration.GetDebuggerConfiguration();
+
+        // Auto-detect CDB path or use configuration/environment variable
+        if (!string.IsNullOrEmpty(debuggerConfig.CdbPath) && _pathDetectionService.ValidateDebuggerPath(debuggerConfig.CdbPath))
         {
-            _cdbPath = envCdbPath;
-            _logger.LogInformation("Using CDB path from environment variable: {Path}", _cdbPath);
+            _cdbPath = debuggerConfig.CdbPath;
+            _logger.LogInformation("Using CDB path from configuration: {Path}", _cdbPath);
         }
         else
         {
@@ -46,9 +48,9 @@ public sealed class SessionManagerService : ISessionManagerService
             }
         }
 
-        _symbolCache = Environment.GetEnvironmentVariable("SYMBOL_CACHE")
+        _symbolCache = debuggerConfig.SymbolCache
                        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CdbMcpServer", "symbols");
-        _symbolPathExtra = Environment.GetEnvironmentVariable("SYMBOL_PATH_EXTRA") ?? "";
+        _symbolPathExtra = debuggerConfig.SymbolPathExtra;
 
         _logger.LogInformation("CDB Configuration - Path: {CdbPath}, SymbolCache: {SymbolCache}, Extra: {Extra}",
                               _cdbPath, _symbolCache, _symbolPathExtra);
@@ -62,7 +64,7 @@ public sealed class SessionManagerService : ISessionManagerService
             throw new FileNotFoundException($"Dump file not found: {dumpFilePath}", dumpFilePath);
         }
 
-        var sessionId = Guid.NewGuid().ToString("N")[..Debugging.SessionIdLength];
+        var sessionId = Guid.NewGuid().ToString("N")[..Constants.Debugging.SessionIdLength];
         var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
         var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra);
 
@@ -73,7 +75,7 @@ public sealed class SessionManagerService : ISessionManagerService
         try
         {
             await session.LoadDumpAsync(dumpFilePath, cancellationToken);
-            
+
             // Verify session is still active after loading
             if (!session.IsActive)
             {
@@ -81,7 +83,7 @@ public sealed class SessionManagerService : ISessionManagerService
                 session.Dispose();
                 throw new InvalidOperationException($"CDB process failed to start or exited during dump loading for session {sessionId}");
             }
-            
+
             _logger.LogInformation("Successfully loaded dump in session {SessionId}: {DumpFile}", sessionId, dumpFilePath);
             return sessionId;
         }
@@ -174,9 +176,9 @@ public sealed class SessionManagerService : ISessionManagerService
         }
     }
 
-    public IEnumerable<SessionInfo> GetActiveSessions()
+    public IEnumerable<Models.SessionInfo> GetActiveSessions()
     {
-        return _sessions.Values.Select(s => new SessionInfo
+        return _sessions.Values.Select(s => new Models.SessionInfo
         {
             SessionId = s.SessionId,
             DumpFile = s.CurrentDumpFile ?? "",

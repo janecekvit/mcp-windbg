@@ -1,5 +1,5 @@
 using BackgroundService.Services;
-using Common;
+using Shared;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BackgroundService.Controllers;

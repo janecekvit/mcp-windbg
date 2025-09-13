@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using McpProxy.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
@@ -11,6 +12,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
 {
     private readonly Mock<ILogger<DebuggerApiService>> _mockLogger;
     private readonly Mock<ICommunicationService> _mockCommunicationService;
+    private readonly Mock<IConfiguration> _mockConfiguration;
     private readonly Mock<HttpMessageHandler> _mockHttpMessageHandler;
     private readonly HttpClient _httpClient;
     private readonly DebuggerApiService _debuggerApiService;
@@ -19,7 +21,11 @@ public sealed class DebuggerApiServiceTests : IDisposable
     {
         _mockLogger = new Mock<ILogger<DebuggerApiService>>();
         _mockCommunicationService = new Mock<ICommunicationService>();
+        _mockConfiguration = new Mock<IConfiguration>();
         _mockHttpMessageHandler = new Mock<HttpMessageHandler>();
+
+        // Setup configuration mock
+        _mockConfiguration.Setup(x => x["BackgroundService:BaseUrl"]).Returns("http://localhost:8080");
 
         // Setup HttpClient to return failure for health check
         _mockHttpMessageHandler
@@ -33,7 +39,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
 
         _httpClient = new HttpClient(_mockHttpMessageHandler.Object);
 
-        _debuggerApiService = new DebuggerApiService(_mockLogger.Object, _httpClient, _mockCommunicationService.Object);
+        _debuggerApiService = new DebuggerApiService(_mockLogger.Object, _httpClient, _mockCommunicationService.Object, _mockConfiguration.Object);
     }
 
     [Fact]

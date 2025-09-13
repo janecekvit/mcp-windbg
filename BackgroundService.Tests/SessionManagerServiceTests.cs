@@ -1,4 +1,5 @@
 using BackgroundService.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -10,6 +11,7 @@ public sealed class SessionManagerServiceTests : IDisposable
     private readonly Mock<ILoggerFactory> _mockLoggerFactory;
     private readonly Mock<IPathDetectionService> _mockPathDetection;
     private readonly Mock<IAnalysisService> _mockAnalysisService;
+    private readonly Mock<IConfiguration> _mockConfiguration;
     private readonly SessionManagerService _sessionManager;
 
     public SessionManagerServiceTests()
@@ -18,6 +20,12 @@ public sealed class SessionManagerServiceTests : IDisposable
         _mockLoggerFactory = new Mock<ILoggerFactory>();
         _mockPathDetection = new Mock<IPathDetectionService>();
         _mockAnalysisService = new Mock<IAnalysisService>();
+        _mockConfiguration = new Mock<IConfiguration>();
+
+        // Setup configuration mock
+        _mockConfiguration.Setup(x => x["Debugger:CdbPath"]).Returns((string?)null);
+        _mockConfiguration.Setup(x => x["Debugger:SymbolCache"]).Returns((string?)null);
+        _mockConfiguration.Setup(x => x["Debugger:SymbolPathExtra"]).Returns("");
 
         // Setup path detection to return a valid CDB path
         _mockPathDetection.Setup(x => x.DetectDebuggerPaths())
@@ -26,11 +34,15 @@ public sealed class SessionManagerServiceTests : IDisposable
         _mockPathDetection.Setup(x => x.ValidateDebuggerPath(It.IsAny<string>()))
             .Returns(true);
 
+        _mockPathDetection.Setup(x => x.GetBestDebuggerPath())
+            .Returns("C:\\cdb.exe");
+
         _sessionManager = new SessionManagerService(
             _mockLogger.Object,
             _mockLoggerFactory.Object,
             _mockPathDetection.Object,
-            _mockAnalysisService.Object);
+            _mockAnalysisService.Object,
+            _mockConfiguration.Object);
     }
 
     public void Dispose()

@@ -1,4 +1,4 @@
-namespace Common;
+namespace Shared;
 
 /// <summary>
 /// Represents different types of analysis that can be performed on memory dumps
@@ -9,47 +9,47 @@ public enum AnalysisType
     /// Comprehensive basic crash analysis including exception context and thread stacks
     /// </summary>
     Basic,
-    
+
     /// <summary>
     /// Detailed exception record and context analysis
     /// </summary>
     Exception,
-    
+
     /// <summary>
     /// Thread enumeration and stack trace analysis
     /// </summary>
     Threads,
-    
+
     /// <summary>
     /// Heap statistics and validation analysis
     /// </summary>
     Heap,
-    
+
     /// <summary>
     /// Loaded and unloaded module analysis
     /// </summary>
     Modules,
-    
+
     /// <summary>
     /// Process handle enumeration and analysis
     /// </summary>
     Handles,
-    
+
     /// <summary>
     /// Critical section and deadlock detection analysis
     /// </summary>
     Locks,
-    
+
     /// <summary>
     /// Virtual memory layout and usage analysis
     /// </summary>
     Memory,
-    
+
     /// <summary>
     /// Device driver analysis and diagnostics
     /// </summary>
     Drivers,
-    
+
     /// <summary>
     /// Process tree and detailed process information analysis
     /// </summary>
@@ -66,10 +66,10 @@ public static class AnalysisTypeExtensions
     /// </summary>
     /// <param name="analysisType">The analysis type</param>
     /// <returns>String identifier</returns>
-    public static string ToIdentifier(this AnalysisType analysisType) => analysisType switch
+    public static string ToString(this AnalysisType analysisType) => analysisType switch
     {
         AnalysisType.Basic => "basic",
-        AnalysisType.Exception => "exception", 
+        AnalysisType.Exception => "exception",
         AnalysisType.Threads => "threads",
         AnalysisType.Heap => "heap",
         AnalysisType.Modules => "modules",
@@ -87,7 +87,7 @@ public static class AnalysisTypeExtensions
     /// <param name="identifier">String identifier</param>
     /// <returns>Corresponding AnalysisType</returns>
     /// <exception cref="ArgumentException">When identifier is invalid</exception>
-    public static AnalysisType FromIdentifier(string identifier) => identifier.ToLowerInvariant() switch
+    public static AnalysisType ToAnalysisType(this string identifier) => identifier.ToLowerInvariant() switch
     {
         "basic" => AnalysisType.Basic,
         "exception" => AnalysisType.Exception,
@@ -132,5 +132,5 @@ public static class AnalysisTypeExtensions
     /// Gets all analysis type identifiers
     /// </summary>
     /// <returns>Array of string identifiers</returns>
-    public static string[] GetAllIdentifiers() => GetAll().Select(a => a.ToIdentifier()).ToArray();
+    public static string[] GetAllIdentifiers() => GetAll().Select(ToString).ToArray();
 }

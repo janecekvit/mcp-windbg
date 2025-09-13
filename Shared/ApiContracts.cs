@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
-namespace Common;
+namespace Shared;
 
 // API Endpoints (for ASP.NET Core Controllers)
 public static class ApiEndpoints
@@ -79,10 +79,10 @@ public static class StringValidationExtensions
 {
     public static string? ValidateAsSessionId(this string? sessionId) =>
         string.IsNullOrWhiteSpace(sessionId) ? "Session ID is required" : null;
-    
+
     public static string? ValidateAsCommand(this string? command) =>
         string.IsNullOrWhiteSpace(command) ? "Command is required" : null;
-        
+
     public static string? ValidateAsDumpFilePath(this string? dumpFilePath) =>
         string.IsNullOrWhiteSpace(dumpFilePath) ? "Dump file path is required" : null;
 }

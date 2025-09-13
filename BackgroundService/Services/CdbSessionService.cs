@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
-using Common;
+using Shared;
+using Shared.Extensions;
 
 namespace BackgroundService.Services;
 
