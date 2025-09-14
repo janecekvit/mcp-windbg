@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
+    branches: [ main, us/mcp-server-refactor-architecture ]  # TEMPORARY: Add for testing
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -175,10 +176,69 @@ jobs:
           *.zip
           package/
 
+  # Diagnostic job to test permissions and token
+  diagnose:
+    needs: build
+    runs-on: windows-latest
+    if: github.ref == 'refs/heads/us/mcp-server-refactor-architecture'  # TEMPORARY: Only on test branch
+    permissions:
+      contents: write
+      actions: read
+      issues: read
+    steps:
+    - name: Debug GitHub Context
+      shell: pwsh
+      run: |
+        Write-Host "🔍 Debugging GitHub token permissions..."
+        Write-Host "Repository: ${{ github.repository }}"
+        Write-Host "Actor: ${{ github.actor }}"
+        Write-Host "Event: ${{ github.event_name }}"
+        Write-Host "Ref: ${{ github.ref }}"
+        Write-Host "Token available: ${{ secrets.GITHUB_TOKEN != '' }}"
+
+    - name: Test GitHub API Access
+      shell: pwsh
+      run: |
+        $headers = @{
+          'Authorization' = 'token ${{ secrets.GITHUB_TOKEN }}'
+          'Accept' = 'application/vnd.github.v3+json'
+        }
+
+        try {
+          Write-Host "🔑 Testing GitHub API permissions..."
+          $response = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}" -Headers $headers
+          Write-Host "✅ Repository access: OK"
+
+          $response = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases" -Headers $headers
+          Write-Host "✅ Releases read access: OK ($($response.Count) releases found)"
+
+          # Test creating a draft release (will be deleted)
+          $testRelease = @{
+            tag_name = "test-permissions-delete-me"
+            name = "Test Permission Release (DELETE ME)"
+            body = "Testing permissions - this should be deleted"
+            draft = $true
+          } | ConvertTo-Json -Compress
+
+          $createResponse = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases" -Method POST -Headers $headers -Body $testRelease -ContentType "application/json"
+          Write-Host "✅ Release create access: OK (ID: $($createResponse.id))"
+
+          # Clean up test release
+          Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases/$($createResponse.id)" -Method DELETE -Headers $headers
+          Write-Host "✅ Test release cleaned up"
+
+        } catch {
+          Write-Error "❌ API Error: $($_.Exception.Message)"
+          Write-Error "Response: $($_.ErrorDetails.Message)"
+        }
+
   release:
     needs: build
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+      actions: read
     
     steps:
     - name: Download build artifacts
