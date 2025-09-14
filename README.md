@@ -1,6 +1,6 @@
-# CDB MCP Server
+# WinDbg MCP Server
 
-MCP (Model Context Protocol) server for interactive debugging of Windows memory dump files using Microsoft Command Line Debugger (cdb.exe).
+MCP (Model Context Protocol) server for interactive debugging of Windows memory dump files using Microsoft Command Line Debugger (cdb.exe) or WinDbg.
 
 ## Features
 
@@ -45,11 +45,51 @@ Use the `detect_debuggers` tool to discover available installations.
 
 ## Configuration
 
-Server is configured using environment variables (optional):
+The server supports multiple configuration methods with the following priority order:
+1. **appsettings.json** (recommended)
+2. **Environment variables** (fallback)
+3. **Default values**
+
+### Configuration Files
+
+#### McpProxy Configuration
+Create `McpProxy/appsettings.json`:
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  },
+  "BackgroundService": {
+    "BaseUrl": "http://localhost:8080"
+  }
+}
+```
+
+#### BackgroundService Configuration
+Create `BackgroundService/appsettings.json`:
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  },
+  "Debugger": {
+    "CdbPath": null,
+    "SymbolCache": null,
+    "SymbolPathExtra": ""
+  }
+}
+```
+
+### Environment Variables (Optional Fallback)
 
 - `CDB_PATH`: Custom path to cdb.exe/windbg.exe (overrides auto-detection)
 - `SYMBOL_CACHE`: Local cache for symbols (default: `%LOCALAPPDATA%\CdbMcpServer\symbols`)
 - `SYMBOL_PATH_EXTRA`: Additional symbol paths
+- `BACKGROUND_SERVICE_URL`: Background service endpoint (default: `http://localhost:8080`)
 
 ## MCP Tools
 
@@ -129,12 +169,13 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 {
   "mcp": {
     "servers": {
-      "cdb-debugging": {
+      "windbg-debugging": {
         "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
         "args": [],
         "env": {
           "CDB_PATH": "C:\\Program Files\\WindowsApps\\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\\amd64\\cdb.exe",
-          "SYMBOL_CACHE": "C:\\Users\\YourUser\\AppData\\Local\\CdbMcpServer\\symbols"
+          "SYMBOL_CACHE": "C:\\Users\\YourUser\\AppData\\Local\\CdbMcpServer\\symbols",
+          "BACKGROUND_SERVICE_URL": "http://localhost:8080"
         }
       }
     }
@@ -142,7 +183,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 }
 ```
 
-**Method B: Project-specific Configuration**
+**Method B: Project-specific Configuration (Recommended)**
 
 Create `.claude/mcp_config.json` in your project root:
 
@@ -150,7 +191,7 @@ Create `.claude/mcp_config.json` in your project root:
 {
   "mcp": {
     "servers": {
-      "cdb-debugging": {
+      "windbg-debugging": {
         "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
         "args": []
       }
@@ -158,6 +199,8 @@ Create `.claude/mcp_config.json` in your project root:
   }
 }
 ```
+
+The server will automatically detect debugger installations and use default settings. For custom paths, use environment variables or modify the appsettings.json files in the published directory.
 
 #### 3. Usage in Claude Code
 
@@ -175,17 +218,26 @@ After restarting Claude Code, you can use:
 3. "Perform basic_analysis on session"
 4. "Run predefined_analysis of type heap"
 
-#### 4. Environment Variables (Optional)
+#### 4. Advanced Configuration
 
-If auto-detection doesn't work, configure:
+For production deployment, you can customize configuration by:
 
+1. **Environment Variables in MCP Config:**
 ```json
 "env": {
   "CDB_PATH": "C:\\path\\to\\your\\cdb.exe",
   "SYMBOL_CACHE": "C:\\your\\symbol\\cache",
-  "SYMBOL_PATH_EXTRA": "C:\\additional\\symbols"
+  "SYMBOL_PATH_EXTRA": "C:\\additional\\symbols",
+  "BACKGROUND_SERVICE_URL": "http://localhost:8080"
 }
 ```
+
+2. **Modifying appsettings.json after publishing:**
+   - Edit `publish/McpProxy/appsettings.json`
+   - Edit `publish/BackgroundService/appsettings.json`
+
+3. **Development appsettings:**
+   - Create `appsettings.Development.json` files for development-specific settings
 
 ### Visual Studio Code Integration
 
