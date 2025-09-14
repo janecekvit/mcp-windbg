@@ -47,7 +47,8 @@ public static class ConfigurationExtensions
         {
             CdbPath = configuration.GetValueWithEnvironmentFallback("Debugger:CdbPath", "CDB_PATH"),
             SymbolCache = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolCache", "SYMBOL_CACHE"),
-            SymbolPathExtra = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolPathExtra", "SYMBOL_PATH_EXTRA", string.Empty)!
+            SymbolPathExtra = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolPathExtra", "SYMBOL_PATH_EXTRA", string.Empty)!,
+            SymbolServers = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolServers", "SYMBOL_SERVERS")
         };
     }
 

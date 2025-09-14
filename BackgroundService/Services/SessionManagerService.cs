@@ -14,6 +14,7 @@ public sealed class SessionManagerService : ISessionManagerService
     private readonly string _cdbPath;
     private readonly string _symbolCache;
     private readonly string _symbolPathExtra;
+    private readonly string? _symbolServers;
 
     public SessionManagerService(ILogger<SessionManagerService> logger,
                                ILoggerFactory loggerFactory,
@@ -51,6 +52,7 @@ public sealed class SessionManagerService : ISessionManagerService
         _symbolCache = debuggerConfig.SymbolCache
                        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CdbMcpServer", "symbols");
         _symbolPathExtra = debuggerConfig.SymbolPathExtra;
+        _symbolServers = debuggerConfig.SymbolServers;
 
         _logger.LogInformation("CDB Configuration - Path: {CdbPath}, SymbolCache: {SymbolCache}, Extra: {Extra}",
                               _cdbPath, _symbolCache, _symbolPathExtra);
@@ -66,7 +68,7 @@ public sealed class SessionManagerService : ISessionManagerService
 
         var sessionId = Guid.NewGuid().ToString("N")[..Constants.Debugging.SessionIdLength];
         var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
-        var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra);
+        var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra, _symbolServers);
 
         // Add session to dictionary first to prevent race conditions
         _sessions[sessionId] = session;

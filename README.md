@@ -79,7 +79,43 @@ Create `BackgroundService/appsettings.json`:
   "Debugger": {
     "CdbPath": null,
     "SymbolCache": null,
-    "SymbolPathExtra": ""
+    "SymbolPathExtra": "",
+    "SymbolServers": null
+  }
+}
+```
+
+#### Symbol Configuration Examples
+
+**Example 1: Company with internal symbol server**
+```json
+{
+  "Debugger": {
+    "SymbolCache": "D:\\SymbolCache",
+    "SymbolPathExtra": "C:\\MyProject\\Debug",
+    "SymbolServers": "https://symbols.company.com"
+  }
+}
+```
+Results in symbol path:
+```
+C:\MyProject\Debug;srv*D:\SymbolCache*https://symbols.company.com;srv*D:\SymbolCache*https://msdl.microsoft.com/download/symbols
+```
+
+**Example 2: Mixed local and network symbols**
+```json
+{
+  "Debugger": {
+    "SymbolServers": "\\\\buildserver\\symbols;https://private-symbols.com"
+  }
+}
+```
+
+**Example 3: Local development only**
+```json
+{
+  "Debugger": {
+    "SymbolPathExtra": "C:\\MyPDBs;D:\\ThirdParty\\Symbols"
   }
 }
 ```
@@ -87,9 +123,40 @@ Create `BackgroundService/appsettings.json`:
 ### Environment Variables (Optional Fallback)
 
 - `CDB_PATH`: Custom path to cdb.exe/windbg.exe (overrides auto-detection)
-- `SYMBOL_CACHE`: Local cache for symbols (default: `%LOCALAPPDATA%\CdbMcpServer\symbols`)
-- `SYMBOL_PATH_EXTRA`: Additional symbol paths
 - `BACKGROUND_SERVICE_URL`: Background service endpoint (default: `http://localhost:8080`)
+
+#### Symbol Configuration Parameters
+
+Understanding the different symbol parameters:
+
+- **`SYMBOL_CACHE`**: 📦 **Local download directory**
+  - Where downloaded symbols are stored permanently
+  - Default: `%LOCALAPPDATA%\CdbMcpServer\symbols`
+  - Used by all `srv*cache*server` entries
+
+- **`SYMBOL_PATH_EXTRA`**: 📁 **Direct local paths**
+  - Raw file paths added directly to symbol path
+  - For local PDB directories: `C:\MyPDBs;D:\ProjectSymbols`
+  - No automatic formatting - added as-is
+
+- **`SYMBOL_SERVERS`**: 🌐 **Remote symbol servers**
+  - Smart formatting for URLs and network paths
+  - URLs become: `srv*{cache}*{url}`
+  - File paths become: direct paths
+  - Example: `https://symbols.company.com;\\server\symbols`
+
+#### Symbol Path Priority Order
+1. **SYMBOL_PATH_EXTRA** (highest priority - local PDBs)
+2. **SYMBOL_SERVERS** (custom remote servers)
+3. **Default Microsoft servers** (lowest priority)
+
+#### Quick Reference Table
+
+| Parameter | Purpose | Example | Result Format |
+|-----------|---------|---------|---------------|
+| `SYMBOL_CACHE` | Download storage | `D:\Symbols` | Used as cache in `srv*` entries |
+| `SYMBOL_PATH_EXTRA` | Local PDB folders | `C:\MyPDBs` | Added as-is: `C:\MyPDBs` |
+| `SYMBOL_SERVERS` | Remote servers | `https://srv.com` | Smart format: `srv*cache*https://srv.com` |
 
 ## MCP Tools
 
@@ -175,6 +242,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
         "env": {
           "CDB_PATH": "C:\\Program Files\\WindowsApps\\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\\amd64\\cdb.exe",
           "SYMBOL_CACHE": "C:\\Users\\YourUser\\AppData\\Local\\CdbMcpServer\\symbols",
+          "SYMBOL_SERVERS": "https://your-company.com/symbols;C:\\MyLocalSymbols",
           "BACKGROUND_SERVICE_URL": "http://localhost:8080"
         }
       }
@@ -228,6 +296,7 @@ For production deployment, you can customize configuration by:
   "CDB_PATH": "C:\\path\\to\\your\\cdb.exe",
   "SYMBOL_CACHE": "C:\\your\\symbol\\cache",
   "SYMBOL_PATH_EXTRA": "C:\\additional\\symbols",
+  "SYMBOL_SERVERS": "https://internal.company.com/symbols;\\\\fileserver\\symbols",
   "BACKGROUND_SERVICE_URL": "http://localhost:8080"
 }
 ```

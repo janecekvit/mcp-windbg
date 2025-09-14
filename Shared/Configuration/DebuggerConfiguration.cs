@@ -19,4 +19,10 @@ public class DebuggerConfiguration
     /// Additional symbol paths to include
     /// </summary>
     public string SymbolPathExtra { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Custom symbol servers (semicolon-separated URLs or file paths)
+    /// Example: "https://your-symbol-server.com/symbols;C:\MySymbols"
+    /// </summary>
+    public string? SymbolServers { get; set; }
 }
