@@ -180,7 +180,7 @@ jobs:
   diagnose:
     needs: build
     runs-on: windows-latest
-    if: github.ref == 'refs/heads/us/mcp-server-refactor-architecture'  # TEMPORARY: Only on test branch
+    if: github.ref == 'refs/heads/us/mcp-server-refactor-architecture' || github.event_name == 'workflow_dispatch'  # TEMPORARY: Test branch or manual trigger
     permissions:
       contents: write
       actions: read
@@ -235,7 +235,7 @@ jobs:
   release:
     needs: build
     runs-on: windows-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
       actions: read
