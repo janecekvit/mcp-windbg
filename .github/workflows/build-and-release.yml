@@ -51,9 +51,90 @@ jobs:
     - name: Build solution  
       run: dotnet build DumpAnalyzer.sln --no-restore --configuration ${{ env.BUILD_CONFIGURATION }}
 
-    - name: Run tests (if any)
-      run: dotnet test DumpAnalyzer.sln --no-build --configuration ${{ env.BUILD_CONFIGURATION }} --verbosity normal
-      continue-on-error: true
+    - name: Run tests
+      run: |
+        Write-Host "🧪 Running .NET tests..." -ForegroundColor Cyan
+
+        try {
+          dotnet test DumpAnalyzer.sln `
+            --no-build `
+            --configuration ${{ env.BUILD_CONFIGURATION }} `
+            --verbosity normal `
+            --logger trx `
+            --logger "console;verbosity=detailed" `
+            --results-directory TestResults `
+            --collect:"XPlat Code Coverage" `
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ All tests passed!" -ForegroundColor Green
+          } else {
+            Write-Host "❌ Some tests failed!" -ForegroundColor Red
+            exit $LASTEXITCODE
+          }
+        }
+        catch {
+          Write-Host "❌ Test execution failed: $($_.Exception.Message)" -ForegroundColor Red
+          throw
+        }
+      shell: pwsh
+
+    - name: Generate test summary
+      if: always()
+      shell: pwsh
+      run: |
+        Write-Host "📊 Generating test summary..." -ForegroundColor Cyan
+
+        # Count test results from TRX files
+        $trxFiles = Get-ChildItem -Path "TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
+        $totalTests = 0
+        $passedTests = 0
+        $failedTests = 0
+        $skippedTests = 0
+
+        foreach ($trxFile in $trxFiles) {
+          try {
+            [xml]$trx = Get-Content $trxFile.FullName
+            $counters = $trx.TestRun.ResultSummary.Counters
+            if ($counters) {
+              $totalTests += [int]$counters.total
+              $passedTests += [int]$counters.passed
+              $failedTests += [int]$counters.failed
+              $skippedTests += [int]$counters.inconclusive + [int]$counters.notExecuted + [int]$counters.notRunnable
+            }
+          }
+          catch {
+            Write-Warning "Could not parse $($trxFile.Name): $($_.Exception.Message)"
+          }
+        }
+
+        # Generate summary
+        Write-Host "🎯 Test Summary:" -ForegroundColor Yellow
+        Write-Host "  Total: $totalTests" -ForegroundColor White
+        Write-Host "  ✅ Passed: $passedTests" -ForegroundColor Green
+        Write-Host "  ❌ Failed: $failedTests" -ForegroundColor Red
+        Write-Host "  ⏭️ Skipped: $skippedTests" -ForegroundColor Yellow
+
+        # Set outputs for workflow summary
+        echo "total-tests=$totalTests" >> $env:GITHUB_OUTPUT
+        echo "passed-tests=$passedTests" >> $env:GITHUB_OUTPUT
+        echo "failed-tests=$failedTests" >> $env:GITHUB_OUTPUT
+        echo "skipped-tests=$skippedTests" >> $env:GITHUB_OUTPUT
+
+        # Create workflow summary
+        echo "## 🧪 Test Results" >> $env:GITHUB_STEP_SUMMARY
+        echo "| Metric | Count |" >> $env:GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $env:GITHUB_STEP_SUMMARY
+        echo "| Total | $totalTests |" >> $env:GITHUB_STEP_SUMMARY
+        echo "| ✅ Passed | $passedTests |" >> $env:GITHUB_STEP_SUMMARY
+        echo "| ❌ Failed | $failedTests |" >> $env:GITHUB_STEP_SUMMARY
+        echo "| ⏭️ Skipped | $skippedTests |" >> $env:GITHUB_STEP_SUMMARY
+
+        if ($failedTests -gt 0) {
+          echo "❌ **$failedTests test(s) failed!**" >> $env:GITHUB_STEP_SUMMARY
+        } else {
+          echo "✅ **All tests passed!**" >> $env:GITHUB_STEP_SUMMARY
+        }
 
     - name: Publish McpProxy
       run: |
@@ -166,6 +247,33 @@ jobs:
             exit 1
           }
         }
+
+    - name: Publish test results
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: .NET Tests
+        path: TestResults/*.trx
+        reporter: dotnet-trx
+        fail-on-error: true
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ steps.version.outputs.version }}
+        path: TestResults/
+        retention-days: 30
+
+    - name: Upload code coverage
+      uses: codecov/codecov-action@v4
+      if: always()
+      with:
+        directory: TestResults
+        fail_ci_if_error: false
+        verbose: true
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
