@@ -85,6 +85,11 @@ public static class Constants
         public const string ListAnalyses = "list_analyses";
         public const string DetectDebuggers = "detect_debuggers";
 
+        // Background task management tools
+        public const string GetTaskStatus = "get_task_status";
+        public const string ListBackgroundTasks = "list_background_tasks";
+        public const string CancelTask = "cancel_task";
+
         /// <summary>
         /// Gets all available MCP tool names
         /// </summary>
@@ -98,7 +103,10 @@ public static class Constants
         CloseSession,
         PredefinedAnalysis,
         ListAnalyses,
-        DetectDebuggers
+        DetectDebuggers,
+        GetTaskStatus,
+        ListBackgroundTasks,
+        CancelTask
     };
     }
 }

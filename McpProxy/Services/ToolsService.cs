@@ -23,6 +23,11 @@ public class ToolsService : IToolsService
                         {
                             type = "string",
                             description = "Path to the memory dump file (.dmp)"
+                        },
+                        async = new
+                        {
+                            type = "boolean",
+                            description = "Run the operation asynchronously (optional, default: false)"
                         }
                     },
                     required = new[] { "dump_file_path" }
@@ -46,6 +51,11 @@ public class ToolsService : IToolsService
                         {
                             type = "string",
                             description = "WinDbg/CDB command to execute (e.g., 'kb', '!analyze -v', 'dt')"
+                        },
+                        async = new
+                        {
+                            type = "boolean",
+                            description = "Run the operation asynchronously (optional, default: false)"
                         }
                     },
                     required = new[] { "session_id", "command" }
@@ -64,6 +74,11 @@ public class ToolsService : IToolsService
                         {
                             type = "string",
                             description = "ID of the debugging session"
+                        },
+                        async = new
+                        {
+                            type = "boolean",
+                            description = "Run the operation asynchronously (optional, default: false)"
                         }
                     },
                     required = new[] { "session_id" }
@@ -116,6 +131,11 @@ public class ToolsService : IToolsService
                             type = "string",
                             description = "Type of analysis to run",
                             @enum = AnalysisTypeExtensions.GetAllIdentifiers()
+                        },
+                        async = new
+                        {
+                            type = "boolean",
+                            description = "Run the operation asynchronously (optional, default: false)"
                         }
                     },
                     required = new[] { "session_id", "analysis_type" }
@@ -139,6 +159,52 @@ public class ToolsService : IToolsService
                 {
                     type = "object",
                     properties = new { }
+                }
+            },
+            new McpTool
+            {
+                Name = Constants.McpToolNames.GetTaskStatus,
+                Description = "Get the status of a background task",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        task_id = new
+                        {
+                            type = "string",
+                            description = "ID of the background task"
+                        }
+                    },
+                    required = new[] { "task_id" }
+                }
+            },
+            new McpTool
+            {
+                Name = Constants.McpToolNames.ListBackgroundTasks,
+                Description = "List all background tasks",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new { }
+                }
+            },
+            new McpTool
+            {
+                Name = Constants.McpToolNames.CancelTask,
+                Description = "Cancel a background task",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        task_id = new
+                        {
+                            type = "string",
+                            description = "ID of the background task to cancel"
+                        }
+                    },
+                    required = new[] { "task_id" }
                 }
             }
         };

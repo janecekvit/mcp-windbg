@@ -160,11 +160,21 @@ Understanding the different symbol parameters:
 
 ## MCP Tools
 
+All debugging tools support both **synchronous** and **asynchronous** execution modes:
+
+- **Synchronous mode** (default): Returns results immediately, may timeout on long operations
+- **Asynchronous mode**: Returns task ID immediately, allows monitoring via task management tools
+
+### Core Debugging Tools
+
 ### load_dump
 Loads a memory dump and creates a new debugging session.
 
 **Parameters:**
 - `dump_file_path`: Path to .dmp file
+- `async` (optional): Set to `true` for asynchronous execution
+
+**Asynchronous mode returns:** Task ID for monitoring progress
 
 ### execute_command
 Executes a WinDbg/CDB command in an existing session.
@@ -172,6 +182,9 @@ Executes a WinDbg/CDB command in an existing session.
 **Parameters:**
 - `session_id`: Debugging session ID
 - `command`: Command to execute (e.g., "kb", "!analyze -v")
+- `async` (optional): Set to `true` for asynchronous execution
+
+**Asynchronous mode returns:** Task ID for monitoring progress
 
 ### predefined_analysis
 Runs a predefined analysis.
@@ -179,27 +192,58 @@ Runs a predefined analysis.
 **Parameters:**
 - `session_id`: Debugging session ID
 - `analysis_type`: Analysis type (basic, exception, threads, heap, modules, handles, locks, memory, drivers, processes)
+- `async` (optional): Set to `true` for asynchronous execution
+
+**Asynchronous mode returns:** Task ID for monitoring progress
 
 ### basic_analysis
 Runs basic analysis (equivalent to PowerShell script).
 
 **Parameters:**
 - `session_id`: Debugging session ID
+- `async` (optional): Set to `true` for asynchronous execution
+
+**Asynchronous mode returns:** Task ID for monitoring progress
+
+### Session Management Tools
 
 ### list_sessions
 Lists all active debugging sessions.
-
-### list_analyses
-Lists all available predefined analyses with descriptions.
-
-### detect_debuggers
-Detects available CDB/WinDbg installations on the system.
 
 ### close_session
 Closes a debugging session and releases resources.
 
 **Parameters:**
 - `session_id`: ID of debugging session to close
+
+### Asynchronous Task Management Tools
+
+### get_task_status
+Gets the status and results of an asynchronous task.
+
+**Parameters:**
+- `task_id`: Asynchronous task ID
+
+**Returns:** Task status (Running, Completed, Failed, Cancelled), progress, and results
+
+### list_background_tasks
+Lists all asynchronous tasks with their current status.
+
+**Returns:** All asynchronous tasks with status, start time, completion time, and session info
+
+### cancel_task
+Cancels a running asynchronous task.
+
+**Parameters:**
+- `task_id`: Asynchronous task ID to cancel
+
+### System Information Tools
+
+### list_analyses
+Lists all available predefined analyses with descriptions.
+
+### detect_debuggers
+Detects available CDB/WinDbg installations on the system.
 
 ## Predefined Analyses
 
@@ -213,6 +257,47 @@ Closes a debugging session and releases resources.
 8. **memory** - Virtual memory and address space analysis
 9. **drivers** - Driver and device objects analysis
 10. **processes** - Process analysis and process tree
+
+## Asynchronous Task Workflow
+
+Asynchronous execution is ideal for long-running operations that might timeout in synchronous mode:
+
+### Starting an Asynchronous Task
+```json
+{
+  "dump_file_path": "C:\\dumps\\app.dmp",
+  "async": true
+}
+```
+**Returns:** `Task ID: abc12345`
+
+### Monitoring Progress
+Use the task ID to check status:
+```json
+{
+  "task_id": "abc12345"
+}
+```
+
+**Task Status Values:**
+- **Running**: Task is currently executing (logs progress every 30 seconds)
+- **Completed**: Task finished successfully, results available
+- **Failed**: Task encountered an error, error details available
+- **Cancelled**: Task was cancelled by user request
+
+### Asynchronous Task Features
+- **Persistent execution**: Tasks continue running even if MCP client disconnects
+- **Progress logging**: Automatic progress notifications every 30 seconds
+- **Concurrent execution**: Multiple asynchronous tasks can run simultaneously
+- **Task cancellation**: Active tasks can be cancelled at any time
+- **Result persistence**: Task results remain available until server restart
+
+### Example Workflow
+1. Start long-running analysis: `predefined_analysis` with `async: true`
+2. Get task ID: `df61ecd4`
+3. Monitor progress: `get_task_status` with `task_id: df61ecd4`
+4. Check completion: Task status changes to `Completed`
+5. View results: Results available in task status response
 
 ## IDE Integration
 

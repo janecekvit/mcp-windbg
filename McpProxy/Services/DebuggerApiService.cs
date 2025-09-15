@@ -62,23 +62,36 @@ public class DebuggerApiService : IDebuggerApiService
         var pathResult = args.GetRequiredString("dump_file_path");
         if (pathResult.IsFailure) return McpToolResult.Error(pathResult.Error);
 
+        var asyncResult = args.TryGetBool("async");
+        var useAsync = asyncResult.IsSuccess && asyncResult.Value;
+
         var dumpFilePath = pathResult.Value;
         var error = dumpFilePath.ValidateAsDumpFilePath();
         if (error != null) return McpToolResult.Error(error);
 
-        await SendProgress(progressToken, 0.1, "Loading dump file...", cancellationToken);
-        var request = new LoadDumpRequest(dumpFilePath!);
-
-        var response = await PostAsync<LoadDumpRequest, LoadDumpResponse>(ApiEndpoints.LoadDump, request, cancellationToken);
-
-        await SendProgress(progressToken, 1.0, "Dump loaded successfully!", cancellationToken);
-        return McpToolResult.Success($"Session created: {response.SessionId}\nDump: {dumpFilePath}\n\n{response.Message}");
+        if (useAsync)
+        {
+            var request = new LoadDumpRequest(dumpFilePath!);
+            var response = await PostAsync<LoadDumpRequest, BackgroundTaskResponse>(ApiEndpoints.AsyncLoadDump, request, cancellationToken);
+            return McpToolResult.Success($"Background task started: {response.TaskId}\n{response.Message}\n\nUse task ID to check progress.");
+        }
+        else
+        {
+            await SendProgress(progressToken, 0.1, "Loading dump file...", cancellationToken);
+            var request = new LoadDumpRequest(dumpFilePath!);
+            var response = await PostAsync<LoadDumpRequest, LoadDumpResponse>(ApiEndpoints.LoadDump, request, cancellationToken);
+            await SendProgress(progressToken, 1.0, "Dump loaded successfully!", cancellationToken);
+            return McpToolResult.Success($"Session created: {response.SessionId}\nDump: {dumpFilePath}\n\n{response.Message}");
+        }
     }
 
     public async Task<McpToolResult> ExecuteCommandAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
     {
         var paramsResult = args.GetRequiredStrings("session_id", "command");
         if (paramsResult.IsFailure) return McpToolResult.Error(paramsResult.Error);
+
+        var asyncResult = args.TryGetBool("async");
+        var useAsync = asyncResult.IsSuccess && asyncResult.Value;
 
         var (sessionId, command) = paramsResult.Value;
 
@@ -88,10 +101,18 @@ public class DebuggerApiService : IDebuggerApiService
         var cmdError = command.ValidateAsCommand();
         if (cmdError != null) return McpToolResult.Error(cmdError);
 
-        var request = new ExecuteCommandRequest(sessionId!, command!);
-        var response = await PostAsync<ExecuteCommandRequest, CommandExecutionResponse>(ApiEndpoints.ExecuteCommand, request, cancellationToken);
-
-        return McpToolResult.Success(response.Result);
+        if (useAsync)
+        {
+            var request = new ExecuteCommandRequest(sessionId!, command!);
+            var response = await PostAsync<ExecuteCommandRequest, BackgroundTaskResponse>(ApiEndpoints.AsyncExecuteCommand, request, cancellationToken);
+            return McpToolResult.Success($"Background task started: {response.TaskId}\n{response.Message}\n\nUse task ID to check progress.");
+        }
+        else
+        {
+            var request = new ExecuteCommandRequest(sessionId!, command!);
+            var response = await PostAsync<ExecuteCommandRequest, CommandExecutionResponse>(ApiEndpoints.ExecuteCommand, request, cancellationToken);
+            return McpToolResult.Success(response.Result);
+        }
     }
 
     public async Task<McpToolResult> BasicAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
@@ -99,17 +120,27 @@ public class DebuggerApiService : IDebuggerApiService
         var sessionResult = args.GetRequiredString("session_id");
         if (sessionResult.IsFailure) return McpToolResult.Error(sessionResult.Error);
 
+        var asyncResult = args.TryGetBool("async");
+        var useAsync = asyncResult.IsSuccess && asyncResult.Value;
+
         var sessionId = sessionResult.Value;
         var error = sessionId.ValidateAsSessionId();
         if (error != null) return McpToolResult.Error(error);
 
-        await SendProgress(progressToken, 0.1, "Running analysis...", cancellationToken);
-        var request = new BasicAnalysisRequest(sessionId!);
-
-        var response = await PostAsync<BasicAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.BasicAnalysis, request, cancellationToken);
-
-        await SendProgress(progressToken, 1.0, "Analysis completed!", cancellationToken);
-        return McpToolResult.Success(response.Result);
+        if (useAsync)
+        {
+            var request = new BasicAnalysisRequest(sessionId!);
+            var response = await PostAsync<BasicAnalysisRequest, BackgroundTaskResponse>(ApiEndpoints.AsyncBasicAnalysis, request, cancellationToken);
+            return McpToolResult.Success($"Background task started: {response.TaskId}\n{response.Message}\n\nUse task ID to check progress.");
+        }
+        else
+        {
+            await SendProgress(progressToken, 0.1, "Running analysis...", cancellationToken);
+            var request = new BasicAnalysisRequest(sessionId!);
+            var response = await PostAsync<BasicAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.BasicAnalysis, request, cancellationToken);
+            await SendProgress(progressToken, 1.0, "Analysis completed!", cancellationToken);
+            return McpToolResult.Success(response.Result);
+        }
     }
 
     public async Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
@@ -117,15 +148,26 @@ public class DebuggerApiService : IDebuggerApiService
         var paramsResult = args.GetRequiredStrings("session_id", "analysis_type");
         if (paramsResult.IsFailure) return McpToolResult.Error(paramsResult.Error);
 
+        var asyncResult = args.TryGetBool("async");
+        var useAsync = asyncResult.IsSuccess && asyncResult.Value;
+
         var (sessionId, analysisType) = paramsResult.Value;
 
         var sessionError = sessionId.ValidateAsSessionId();
         if (sessionError != null) return McpToolResult.Error(sessionError);
 
-        var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
-        var response = await PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.PredefinedAnalysis, request, cancellationToken);
-
-        return McpToolResult.Success(response.Result);
+        if (useAsync)
+        {
+            var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
+            var response = await PostAsync<PredefinedAnalysisRequest, BackgroundTaskResponse>(ApiEndpoints.AsyncPredefinedAnalysis, request, cancellationToken);
+            return McpToolResult.Success($"Background task started: {response.TaskId}\n{response.Message}\n\nUse task ID to check progress.");
+        }
+        else
+        {
+            var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
+            var response = await PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.PredefinedAnalysis, request, cancellationToken);
+            return McpToolResult.Success(response.Result);
+        }
     }
 
     public async Task<McpToolResult> ListSessionsAsync(CancellationToken cancellationToken = default)
@@ -191,6 +233,76 @@ public class DebuggerApiService : IDebuggerApiService
             output.AppendKeyValue(analysis.Name, analysis.Description);
 
         return output.ToMcpSuccess();
+    }
+
+    public async Task<McpToolResult> GetTaskStatusAsync(JsonElement args, CancellationToken cancellationToken = default)
+    {
+        var taskIdResult = args.GetRequiredString("task_id");
+        if (taskIdResult.IsFailure) return McpToolResult.Error(taskIdResult.Error);
+
+        var taskId = taskIdResult.Value;
+        if (string.IsNullOrWhiteSpace(taskId)) return McpToolResult.Error("Task ID is required");
+
+        var response = await GetAsync<BackgroundTaskInfo>($"{ApiEndpoints.AsyncTasks}/{taskId}", cancellationToken);
+
+        var output = new StringBuilder()
+            .AppendSection($"Task: {response.TaskId}")
+            .AppendKeyValue("Type", response.Type.ToString())
+            .AppendKeyValue("Status", response.Status.ToString())
+            .AppendKeyValue("Description", response.Description)
+            .AppendKeyValue("Started", response.StartedAt.ToString("yyyy-MM-dd HH:mm:ss"));
+
+        if (response.CompletedAt.HasValue)
+            output.AppendKeyValue("Completed", response.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm:ss"));
+
+        if (!string.IsNullOrEmpty(response.SessionId))
+            output.AppendKeyValue("Session", response.SessionId);
+
+        if (!string.IsNullOrEmpty(response.Error))
+            output.AppendKeyValue("Error", response.Error);
+
+        if (!string.IsNullOrEmpty(response.Result))
+        {
+            output.AppendSection("Result:");
+            output.AppendLine(response.Result);
+        }
+
+        return output.ToMcpSuccess();
+    }
+
+    public async Task<McpToolResult> ListBackgroundTasksAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await GetAsync<BackgroundTaskListResponse>(ApiEndpoints.AsyncTasks, cancellationToken);
+
+        var output = new StringBuilder()
+            .AppendSection("Background tasks:");
+
+        foreach (var task in response.Tasks)
+        {
+            output.AppendKeyValue("Task", task.TaskId)
+                  .AppendKeyValue("Type", task.Type.ToString())
+                  .AppendKeyValue("Status", task.Status.ToString())
+                  .AppendKeyValue("Started", task.StartedAt.ToString("yyyy-MM-dd HH:mm:ss"));
+
+            if (!string.IsNullOrEmpty(task.SessionId))
+                output.AppendKeyValue("Session", task.SessionId);
+
+            output.AppendLine();
+        }
+
+        return output.ToMcpSuccess();
+    }
+
+    public async Task<McpToolResult> CancelTaskAsync(JsonElement args, CancellationToken cancellationToken = default)
+    {
+        var taskIdResult = args.GetRequiredString("task_id");
+        if (taskIdResult.IsFailure) return McpToolResult.Error(taskIdResult.Error);
+
+        var taskId = taskIdResult.Value;
+        if (string.IsNullOrWhiteSpace(taskId)) return McpToolResult.Error("Task ID is required");
+
+        var response = await DeleteAsync<BackgroundTaskResponse>($"{ApiEndpoints.AsyncTasks}/{taskId}", cancellationToken);
+        return McpToolResult.Success(response.Message);
     }
 
     private async Task<TResponse> PostAsync<TRequest, TResponse>(string endpoint, TRequest request, CancellationToken cancellationToken = default)

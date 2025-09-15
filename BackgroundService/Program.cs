@@ -15,6 +15,7 @@ internal class Program
             builder.Services.AddSingleton<IPathDetectionService, PathDetectionService>();
             builder.Services.AddSingleton<IAnalysisService, AnalysisService>();
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
+            builder.Services.AddSingleton<IBackgroundTaskService, BackgroundTaskService>();
 
             // Configure controllers
             builder.Services.AddControllers();
