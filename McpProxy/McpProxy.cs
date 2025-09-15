@@ -39,6 +39,9 @@ public class McpProxy
                 "list_analyses" => await _debuggerApiService.ListAnalysesAsync(cancellationToken),
                 "detect_debuggers" => await _debuggerApiService.DetectDebuggersAsync(cancellationToken),
                 "close_session" => await _debuggerApiService.CloseSessionAsync(args, cancellationToken),
+                "get_task_status" => await _debuggerApiService.GetTaskStatusAsync(args, cancellationToken),
+                "list_background_tasks" => await _debuggerApiService.ListBackgroundTasksAsync(cancellationToken),
+                "cancel_task" => await _debuggerApiService.CancelTaskAsync(args, cancellationToken),
                 _ => McpToolResult.Error($"Unknown tool: {toolName}")
             };
         }

@@ -41,4 +41,24 @@ public static class JsonElementExtensions
 
         return OperationResult<(string, string)>.Success((firstResult.Value, secondResult.Value));
     }
+
+    /// <summary>
+    /// Tries to get an optional boolean property from JSON element
+    /// </summary>
+    /// <param name="element">The JSON element to parse</param>
+    /// <param name="propertyName">Name of the property to extract</param>
+    /// <returns>Result containing the boolean value if present, or failure if property doesn't exist</returns>
+    public static OperationResult<bool> TryGetBool(this JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var prop))
+            return OperationResult<bool>.Failure($"Property {propertyName} not found");
+
+        if (prop.ValueKind == JsonValueKind.True)
+            return OperationResult<bool>.Success(true);
+
+        if (prop.ValueKind == JsonValueKind.False)
+            return OperationResult<bool>.Success(false);
+
+        return OperationResult<bool>.Failure($"Property {propertyName} is not a boolean");
+    }
 }
