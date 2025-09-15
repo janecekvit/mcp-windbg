@@ -77,12 +77,14 @@ public class DebuggerApiService : IDebuggerApiService
         }
         else
         {
-            await SendProgress(progressToken, 0.1, "Loading dump file...", cancellationToken);
-            var request = new LoadDumpRequest(dumpFilePath!);
-            var response = await PostAsync<LoadDumpRequest, LoadDumpResponse>(ApiEndpoints.LoadDump, request, cancellationToken);
-            await SendProgress(progressToken, 1.0, "Dump loaded successfully!", cancellationToken);
-            return McpToolResult.Success($"Session created: {response.SessionId}\nDump: {dumpFilePath}\n\n{response.Message}");
-        }
+        await SendProgress(progressToken, 0.1, "Loading dump file...", cancellationToken);
+        var request = new LoadDumpRequest(dumpFilePath!);
+
+        var response = await PostAsync<LoadDumpRequest, LoadDumpResponse>(ApiEndpoints.LoadDump, request, cancellationToken);
+
+        await SendProgress(progressToken, 1.0, "Dump loaded successfully!", cancellationToken);
+        return McpToolResult.Success($"Session created: {response.SessionId}\nDump: {dumpFilePath}\n\n{response.Message}");
+    }
     }
 
     public async Task<McpToolResult> ExecuteCommandAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
@@ -103,16 +105,17 @@ public class DebuggerApiService : IDebuggerApiService
 
         if (useAsync)
         {
-            var request = new ExecuteCommandRequest(sessionId!, command!);
+        var request = new ExecuteCommandRequest(sessionId!, command!);
             var response = await PostAsync<ExecuteCommandRequest, BackgroundTaskResponse>(ApiEndpoints.AsyncExecuteCommand, request, cancellationToken);
             return McpToolResult.Success($"Background task started: {response.TaskId}\n{response.Message}\n\nUse task ID to check progress.");
         }
         else
         {
             var request = new ExecuteCommandRequest(sessionId!, command!);
-            var response = await PostAsync<ExecuteCommandRequest, CommandExecutionResponse>(ApiEndpoints.ExecuteCommand, request, cancellationToken);
-            return McpToolResult.Success(response.Result);
-        }
+        var response = await PostAsync<ExecuteCommandRequest, CommandExecutionResponse>(ApiEndpoints.ExecuteCommand, request, cancellationToken);
+
+        return McpToolResult.Success(response.Result);
+    }
     }
 
     public async Task<McpToolResult> BasicAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
@@ -135,12 +138,14 @@ public class DebuggerApiService : IDebuggerApiService
         }
         else
         {
-            await SendProgress(progressToken, 0.1, "Running analysis...", cancellationToken);
-            var request = new BasicAnalysisRequest(sessionId!);
-            var response = await PostAsync<BasicAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.BasicAnalysis, request, cancellationToken);
-            await SendProgress(progressToken, 1.0, "Analysis completed!", cancellationToken);
-            return McpToolResult.Success(response.Result);
-        }
+        await SendProgress(progressToken, 0.1, "Running analysis...", cancellationToken);
+        var request = new BasicAnalysisRequest(sessionId!);
+
+        var response = await PostAsync<BasicAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.BasicAnalysis, request, cancellationToken);
+
+        await SendProgress(progressToken, 1.0, "Analysis completed!", cancellationToken);
+        return McpToolResult.Success(response.Result);
+    }
     }
 
     public async Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
@@ -164,10 +169,11 @@ public class DebuggerApiService : IDebuggerApiService
         }
         else
         {
-            var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
-            var response = await PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.PredefinedAnalysis, request, cancellationToken);
-            return McpToolResult.Success(response.Result);
-        }
+        var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
+        var response = await PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.PredefinedAnalysis, request, cancellationToken);
+
+        return McpToolResult.Success(response.Result);
+    }
     }
 
     public async Task<McpToolResult> ListSessionsAsync(CancellationToken cancellationToken = default)

@@ -15,7 +15,10 @@ env:
 jobs:
   build:
     runs-on: windows-latest
-    
+    permissions:
+      contents: read
+      checks: write
+
     outputs:
       version: ${{ steps.version.outputs.version }}
     
