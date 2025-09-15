@@ -4,87 +4,105 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains both a legacy PowerShell script and a modern C# MCP (Model Context Protocol) server for interactive Windows memory dump analysis using Microsoft's Command Line Debugger (cdb.exe) or WinDbg.
+This repository contains a modern C# MCP (Model Context Protocol) server for interactive Windows memory dump analysis using Microsoft's Command Line Debugger (cdb.exe) or WinDbg. The system provides both an MCP-compatible interface and a background service for debugging session management.
 
-## Core Components
+## Build and Development Commands
 
-- **CdbMcpServer** (C# .NET 8): Modern MCP server for interactive debugging
-  - Persistent CDB sessions for each dump file
-  - Automatic debugger detection (Windows SDK, WinDbg Store App)
-  - 8 MCP tools for comprehensive dump analysis
-  - 10 predefined analysis types (basic, exception, threads, heap, etc.)
-  - Single-file executable deployment
-  
-- **cdb.ps1**: Legacy PowerShell script for batch dump analysis
-  - Configures symbol paths and caching
-  - Executes standardized debugging commands  
-  - Generates comprehensive analysis reports
-
-## Usage Commands
-
-### Building and Running the MCP Server
 ```powershell
-# Build single-file executable (recommended)
+# Build single-file executables (recommended for distribution)
 .\Scripts\Publish.ps1
 
-# Run the MCP server
-.\publish\McpProxy.exe
-
-# Development build
+# Development builds
 dotnet build
-dotnet run
+dotnet run --project McpProxy
+dotnet run --project BackgroundService
+
+# Run background service on specific port
+dotnet run --project BackgroundService 8080
 ```
 
-### MCP Tools Usage Examples
-```json
-// Detect available debuggers
-{"method": "tools/call", "params": {"name": "detect_debuggers", "arguments": {}}}
+## Architecture Overview
 
-// Load dump and create session
-{"method": "tools/call", "params": {"name": "load_dump", "arguments": {"dump_file_path": "C:\\dumps\\crash.dmp"}}}
+The project uses a **dual-service architecture** with clear separation of concerns:
 
-// Run basic analysis (equivalent to original PowerShell script)
-{"method": "tools/call", "params": {"name": "basic_analysis", "arguments": {"session_id": "abc12345"}}}
+### 1. McpProxy (MCP Protocol Layer)
+- **Entry Point**: `McpProxy.exe` - Main MCP server executable
+- **Responsibility**: Handles MCP protocol communication, tool registration, and client interactions
+- **Key Components**:
+  - `ICommunicationService`: Manages JSON-RPC communication over stdin/stdout
+  - `IToolsService`: Registers and routes MCP tool calls
+  - `IDebuggerApiService`: HTTP client for communicating with BackgroundService
+  - `INotificationService`: Sends progress notifications to MCP clients
 
-// Execute custom CDB command
-{"method": "tools/call", "params": {"name": "execute_command", "arguments": {"session_id": "abc12345", "command": "!heap -s"}}}
+### 2. BackgroundService (Debugging Engine)
+- **Entry Point**: `BackgroundService.exe` - HTTP API server for debugging operations
+- **Responsibility**: Manages CDB processes, debugging sessions, and analysis execution
+- **Key Components**:
+  - `ISessionManagerService`: Orchestrates debugging sessions and their lifecycle
+  - `ICdbSessionService`: Direct interface to individual CDB processes
+  - `IAnalysisService`: Provides predefined analysis commands and descriptions
+  - `IPathDetectionService`: Auto-detects available CDB/WinDbg installations
 
-// Run specialized analysis
-{"method": "tools/call", "params": {"name": "predefined_analysis", "arguments": {"session_id": "abc12345", "analysis_type": "heap"}}}
+### 3. Data Flow Architecture
+```
+MCP Client → McpProxy → HTTP API → BackgroundService → CDB Process
 ```
 
-## Architecture Notes
+**Exception-Based Error Handling**: The codebase uses modern exception-based error handling instead of boolean return patterns. Services throw specific exceptions (`ArgumentException`, `FileNotFoundException`, `InvalidOperationException`) which are caught and converted to appropriate HTTP responses or MCP errors.
 
-### Symbol Resolution Strategy
-- Primary: Microsoft public symbol server with local caching
-- Secondary: Optional custom symbol paths for private symbols
-- Automatic symbol cache management in configurable directory
+**Factory Patterns for Models**: MCP model classes (`McpResponse`, `McpToolResult`, `McpError`) use factory methods for clean object creation:
+- `McpToolResult.Success(text)` / `McpToolResult.Error(message)`
+- `McpResponse.Success(id, result)` / `McpResponse.NotInitialized(id)`
+- `McpError.ServerNotInitialized()` / `McpError.Custom(code, message)`
 
-### Analysis Workflow
-The script executes a standardized sequence of WinDbg commands:
-1. Symbol configuration and reload
-2. Basic process information extraction (!peb, version, threads)
-3. Exception context analysis (.ecxr)
-4. Automated crash analysis (!analyze -v)
-5. Complete thread stack analysis (~* kb)
+## Session Management
 
-### Output Management
-- Main analysis report written to specified output file
-- Separate error log file created if cdb.exe encounters issues
-- UTF-8 encoding for proper character support
+The system maintains **persistent CDB sessions** for each loaded dump file:
+- Each session gets a unique 8-character ID
+- Sessions run independent CDB processes with dedicated stdin/stdout
+- Automatic cleanup on disposal or application shutdown
+- Concurrent session support for multiple dump files
+
+## Symbol Resolution Strategy
+
+- **Primary**: Microsoft public symbol server with local caching
+- **Auto-detection**: Scans Windows SDK and Store App installations
+- **Configurable**: Environment variables override auto-detection
+- **Cache Management**: Automatic symbol cache directory creation
+
+## Environment Configuration
+
+```bash
+CDB_PATH         # Override auto-detected debugger path
+SYMBOL_CACHE     # Custom symbol cache location (default: %LOCALAPPDATA%\CdbMcpServer\symbols)
+SYMBOL_PATH_EXTRA # Additional symbol paths
+BACKGROUND_SERVICE_URL # McpProxy → BackgroundService communication (default: http://localhost:8080)
+```
+
+## Predefined Analysis Types
+
+The `AnalysisService` provides 10 predefined analysis types with corresponding WinDbg command sequences:
+- **basic**: Complete crash analysis (!analyze -v, stacks, exception context)
+- **exception**: Detailed exception record analysis
+- **threads**: Thread enumeration and stack traces
+- **heap**: Heap statistics and validation
+- **modules**: Loaded/unloaded module analysis
+- **handles**: Process handle enumeration
+- **locks**: Critical section and deadlock detection
+- **memory**: Virtual memory layout analysis
+- **drivers**: Device driver analysis
+- **processes**: Process tree and detailed process information
+
+## Error Handling Patterns
+
+When modifying services, follow the established exception-based patterns:
+- Use specific exception types (`ArgumentException`, `FileNotFoundException`, `InvalidOperationException`)
+- Log errors before throwing exceptions
+- HTTP endpoints catch exceptions and return appropriate status codes
+- MCP layer converts exceptions to `McpToolResult.Error()` responses
 
 ## Dependencies
 
-- Windows SDK Debuggers (cdb.exe) - typically at `C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe`
-- PowerShell 5.0+ with .NET System.Diagnostics.Process support
-- Internet connectivity for Microsoft symbol server access
-- Sufficient disk space for symbol caching
-
-## Development Considerations
-
-When modifying this tool:
-- Maintain backward compatibility with existing dump file formats
-- Test symbol resolution with both public and private symbol scenarios
-- Validate output encoding to preserve text in reports
-- Consider timeout mechanisms for long-running analyses
-- Ensure proper error handling for corrupted dump files
+- **.NET 8.0**: Runtime and development framework
+- **Windows SDK Debuggers**: CDB.exe for dump analysis
+- **Microsoft Symbol Server**: Internet connectivity for symbol downloads

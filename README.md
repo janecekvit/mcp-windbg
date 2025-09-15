@@ -1,6 +1,6 @@
-# CDB MCP Server
+# WinDbg MCP Server
 
-MCP (Model Context Protocol) server for interactive debugging of Windows memory dump files using Microsoft Command Line Debugger (cdb.exe).
+MCP (Model Context Protocol) server for interactive debugging of Windows memory dump files using Microsoft Command Line Debugger (cdb.exe) or WinDbg.
 
 ## Features
 
@@ -45,11 +45,118 @@ Use the `detect_debuggers` tool to discover available installations.
 
 ## Configuration
 
-Server is configured using environment variables (optional):
+The server supports multiple configuration methods with the following priority order:
+1. **appsettings.json** (recommended)
+2. **Environment variables** (fallback)
+3. **Default values**
+
+### Configuration Files
+
+#### McpProxy Configuration
+Create `McpProxy/appsettings.json`:
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  },
+  "BackgroundService": {
+    "BaseUrl": "http://localhost:8080"
+  }
+}
+```
+
+#### BackgroundService Configuration
+Create `BackgroundService/appsettings.json`:
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  },
+  "Debugger": {
+    "CdbPath": null,
+    "SymbolCache": null,
+    "SymbolPathExtra": "",
+    "SymbolServers": null
+  }
+}
+```
+
+#### Symbol Configuration Examples
+
+**Example 1: Company with internal symbol server**
+```json
+{
+  "Debugger": {
+    "SymbolCache": "D:\\SymbolCache",
+    "SymbolPathExtra": "C:\\MyProject\\Debug",
+    "SymbolServers": "https://symbols.company.com"
+  }
+}
+```
+Results in symbol path:
+```
+C:\MyProject\Debug;srv*D:\SymbolCache*https://symbols.company.com;srv*D:\SymbolCache*https://msdl.microsoft.com/download/symbols
+```
+
+**Example 2: Mixed local and network symbols**
+```json
+{
+  "Debugger": {
+    "SymbolServers": "\\\\buildserver\\symbols;https://private-symbols.com"
+  }
+}
+```
+
+**Example 3: Local development only**
+```json
+{
+  "Debugger": {
+    "SymbolPathExtra": "C:\\MyPDBs;D:\\ThirdParty\\Symbols"
+  }
+}
+```
+
+### Environment Variables (Optional Fallback)
 
 - `CDB_PATH`: Custom path to cdb.exe/windbg.exe (overrides auto-detection)
-- `SYMBOL_CACHE`: Local cache for symbols (default: `%LOCALAPPDATA%\CdbMcpServer\symbols`)
-- `SYMBOL_PATH_EXTRA`: Additional symbol paths
+- `BACKGROUND_SERVICE_URL`: Background service endpoint (default: `http://localhost:8080`)
+
+#### Symbol Configuration Parameters
+
+Understanding the different symbol parameters:
+
+- **`SYMBOL_CACHE`**: 📦 **Local download directory**
+  - Where downloaded symbols are stored permanently
+  - Default: `%LOCALAPPDATA%\CdbMcpServer\symbols`
+  - Used by all `srv*cache*server` entries
+
+- **`SYMBOL_PATH_EXTRA`**: 📁 **Direct local paths**
+  - Raw file paths added directly to symbol path
+  - For local PDB directories: `C:\MyPDBs;D:\ProjectSymbols`
+  - No automatic formatting - added as-is
+
+- **`SYMBOL_SERVERS`**: 🌐 **Remote symbol servers**
+  - Smart formatting for URLs and network paths
+  - URLs become: `srv*{cache}*{url}`
+  - File paths become: direct paths
+  - Example: `https://symbols.company.com;\\server\symbols`
+
+#### Symbol Path Priority Order
+1. **SYMBOL_PATH_EXTRA** (highest priority - local PDBs)
+2. **SYMBOL_SERVERS** (custom remote servers)
+3. **Default Microsoft servers** (lowest priority)
+
+#### Quick Reference Table
+
+| Parameter | Purpose | Example | Result Format |
+|-----------|---------|---------|---------------|
+| `SYMBOL_CACHE` | Download storage | `D:\Symbols` | Used as cache in `srv*` entries |
+| `SYMBOL_PATH_EXTRA` | Local PDB folders | `C:\MyPDBs` | Added as-is: `C:\MyPDBs` |
+| `SYMBOL_SERVERS` | Remote servers | `https://srv.com` | Smart format: `srv*cache*https://srv.com` |
 
 ## MCP Tools
 
@@ -129,12 +236,14 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 {
   "mcp": {
     "servers": {
-      "cdb-debugging": {
+      "windbg-debugging": {
         "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
         "args": [],
         "env": {
           "CDB_PATH": "C:\\Program Files\\WindowsApps\\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\\amd64\\cdb.exe",
-          "SYMBOL_CACHE": "C:\\Users\\YourUser\\AppData\\Local\\CdbMcpServer\\symbols"
+          "SYMBOL_CACHE": "C:\\Users\\YourUser\\AppData\\Local\\CdbMcpServer\\symbols",
+          "SYMBOL_SERVERS": "https://your-company.com/symbols;C:\\MyLocalSymbols",
+          "BACKGROUND_SERVICE_URL": "http://localhost:8080"
         }
       }
     }
@@ -142,7 +251,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 }
 ```
 
-**Method B: Project-specific Configuration**
+**Method B: Project-specific Configuration (Recommended)**
 
 Create `.claude/mcp_config.json` in your project root:
 
@@ -150,7 +259,7 @@ Create `.claude/mcp_config.json` in your project root:
 {
   "mcp": {
     "servers": {
-      "cdb-debugging": {
+      "windbg-debugging": {
         "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
         "args": []
       }
@@ -158,6 +267,8 @@ Create `.claude/mcp_config.json` in your project root:
   }
 }
 ```
+
+The server will automatically detect debugger installations and use default settings. For custom paths, use environment variables or modify the appsettings.json files in the published directory.
 
 #### 3. Usage in Claude Code
 
@@ -175,17 +286,27 @@ After restarting Claude Code, you can use:
 3. "Perform basic_analysis on session"
 4. "Run predefined_analysis of type heap"
 
-#### 4. Environment Variables (Optional)
+#### 4. Advanced Configuration
 
-If auto-detection doesn't work, configure:
+For production deployment, you can customize configuration by:
 
+1. **Environment Variables in MCP Config:**
 ```json
 "env": {
   "CDB_PATH": "C:\\path\\to\\your\\cdb.exe",
   "SYMBOL_CACHE": "C:\\your\\symbol\\cache",
-  "SYMBOL_PATH_EXTRA": "C:\\additional\\symbols"
+  "SYMBOL_PATH_EXTRA": "C:\\additional\\symbols",
+  "SYMBOL_SERVERS": "https://internal.company.com/symbols;\\\\fileserver\\symbols",
+  "BACKGROUND_SERVICE_URL": "http://localhost:8080"
 }
 ```
+
+2. **Modifying appsettings.json after publishing:**
+   - Edit `publish/McpProxy/appsettings.json`
+   - Edit `publish/BackgroundService/appsettings.json`
+
+3. **Development appsettings:**
+   - Create `appsettings.Development.json` files for development-specific settings
 
 ### Visual Studio Code Integration
 

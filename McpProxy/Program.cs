@@ -1,18 +1,23 @@
+using McpProxy.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace CdbMcpServer;
+namespace McpProxy;
 
-class Program
+internal class Program
 {
-    static async Task<int> Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         try
         {
             var host = Host.CreateDefaultBuilder(args)
                 .ConfigureServices((context, services) =>
                 {
+                    services.AddHttpClient();
+                    services.AddScoped<IDebuggerApiService, DebuggerApiService>();
+                    services.AddScoped<IToolsService, ToolsService>();
+                    services.AddScoped<ICommunicationService, CommunicationService>();
                     services.AddSingleton<McpProxy>();
                 })
                 .ConfigureLogging(logging =>
