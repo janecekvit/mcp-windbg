@@ -19,6 +19,12 @@ dotnet run --project BackgroundService
 
 # Run background service on specific port
 dotnet run --project BackgroundService 8080
+
+# Testing
+dotnet test                                    # Run all tests
+dotnet test McpProxy.Tests                     # Test MCP proxy layer
+dotnet test BackgroundService.Tests           # Test debugging engine
+dotnet test --logger trx --collect:"XPlat Code Coverage"  # With coverage
 ```
 
 ## Architecture Overview
@@ -106,14 +112,17 @@ The system includes comprehensive **asynchronous task support** to handle MCP's 
 
 ## Environment Configuration
 
+Configuration can be set via `appsettings.json` files or environment variables:
+
 ```bash
 CDB_PATH         # Override auto-detected debugger path
 SYMBOL_CACHE     # Custom symbol cache location (default: %LOCALAPPDATA%\CdbMcpServer\symbols)
 SYMBOL_PATH_EXTRA # Additional symbol paths
+SYMBOL_SERVERS   # Custom symbol servers (semicolon-separated URLs)
 BACKGROUND_SERVICE_URL # McpProxy → BackgroundService communication (default: http://localhost:8080)
 ```
 
-## MCP Tools and Background Support
+## MCP Tools and Asynchronous Support
 
 All core debugging MCP tools support both **synchronous** and **asynchronous** execution modes:
 
@@ -123,10 +132,18 @@ All core debugging MCP tools support both **synchronous** and **asynchronous** e
 - `basic_analysis` - Add `"async": true` parameter for asynchronous execution
 - `predefined_analysis` - Add `"async": true` parameter for asynchronous execution
 
+### Session Management Tools:
+- `list_sessions` - List all active debugging sessions
+- `close_session` - Close debugging session and free resources
+
 ### Asynchronous Task Management Tools:
 - `get_task_status` - Monitor asynchronous task progress and results
 - `list_background_tasks` - List all asynchronous tasks with status
 - `cancel_task` - Cancel running asynchronous tasks
+
+### System Information Tools:
+- `detect_debuggers` - Detect available CDB/WinDbg installations
+- `list_analyses` - List available predefined analysis types
 
 ### Usage Pattern:
 ```json
@@ -160,6 +177,30 @@ When modifying services, follow the established exception-based patterns:
 - Log errors before throwing exceptions
 - HTTP endpoints catch exceptions and return appropriate status codes
 - MCP layer converts exceptions to `McpToolResult.Error()` responses
+
+## Key Implementation Notes
+
+### Project Structure:
+- **Shared**: Common models, extensions, and configuration utilities used by both services
+- **McpProxy**: MCP protocol implementation and HTTP client for BackgroundService communication
+- **BackgroundService**: HTTP API server with debugging engine and task management
+- **Tests**: Separate test projects for each main component
+
+### Configuration System:
+- Uses `appsettings.json` with environment variable fallbacks
+- Configuration extensions in `Shared/Configuration/` provide strongly-typed access
+- Symbol server configuration supports multiple formats (URLs, file paths, srv* syntax)
+
+### Background Task Architecture:
+- Tasks use separate `CancellationTokenSource` for progress logging vs main operation
+- Progress logging runs independently and stops when main task completes
+- Task IDs are 8-character GUIDs for easy reference
+- Results persist until server restart
+
+### Important Constants:
+- API endpoints defined in `Shared/Models/ApiContracts.cs`
+- MCP tool names in `Shared/Constants.cs`
+- HTTP status codes and timeouts centralized in Constants classes
 
 ## Dependencies
 
