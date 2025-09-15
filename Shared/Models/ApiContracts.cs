@@ -14,6 +14,13 @@ public static class ApiEndpoints
     public const string Sessions = "/api/sessions";
     public const string DetectDebuggers = "/api/diagnostics/detect-debuggers";
     public const string Analyses = "/api/diagnostics/analyses";
+
+    // Asynchronous task endpoints
+    public const string AsyncLoadDump = "/api/tasks/load-dump";
+    public const string AsyncExecuteCommand = "/api/tasks/execute-command";
+    public const string AsyncBasicAnalysis = "/api/tasks/basic-analysis";
+    public const string AsyncPredefinedAnalysis = "/api/tasks/predefined-analysis";
+    public const string AsyncTasks = "/api/tasks";
 }
 
 // Shared Request Models
@@ -73,6 +80,41 @@ public record DebuggerDetectionResponse(
 public record CloseSessionResponse([property: JsonPropertyName("message")] string Message);
 
 public record ErrorResponse([property: JsonPropertyName("error")] string Error);
+
+// Background Task Models
+public enum BackgroundTaskType
+{
+    LoadDump,
+    BasicAnalysis,
+    PredefinedAnalysis,
+    ExecuteCommand
+}
+
+public enum BackgroundTaskStatus
+{
+    Running,
+    Completed,
+    Failed,
+    Cancelled
+}
+
+public record BackgroundTaskInfo(
+    [property: JsonPropertyName("taskId")] string TaskId,
+    [property: JsonPropertyName("type")] BackgroundTaskType Type,
+    [property: JsonPropertyName("description")] string Description,
+    [property: JsonPropertyName("status")] BackgroundTaskStatus Status,
+    [property: JsonPropertyName("startedAt")] DateTime StartedAt,
+    [property: JsonPropertyName("completedAt")] DateTime? CompletedAt,
+    [property: JsonPropertyName("result")] string? Result,
+    [property: JsonPropertyName("sessionId")] string? SessionId,
+    [property: JsonPropertyName("error")] string? Error = null);
+
+public record BackgroundTaskResponse(
+    [property: JsonPropertyName("taskId")] string TaskId,
+    [property: JsonPropertyName("message")] string Message);
+
+public record BackgroundTaskListResponse(
+    [property: JsonPropertyName("tasks")] IReadOnlyList<BackgroundTaskInfo> Tasks);
 
 // Extensions
 public static class StringValidationExtensions

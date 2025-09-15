@@ -76,4 +76,27 @@ public interface IDebuggerApiService
     /// <param name="cancellationToken">Token to cancel the operation</param>
     /// <returns>Result containing analysis types and their descriptions</returns>
     Task<McpToolResult> ListAnalysesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the status of a background task
+    /// </summary>
+    /// <param name="args">JSON arguments containing task_id</param>
+    /// <param name="cancellationToken">Token to cancel the operation</param>
+    /// <returns>Result containing task status information</returns>
+    Task<McpToolResult> GetTaskStatusAsync(JsonElement args, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists all background tasks
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the operation</param>
+    /// <returns>Result containing all background tasks information</returns>
+    Task<McpToolResult> ListBackgroundTasksAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cancels a background task
+    /// </summary>
+    /// <param name="args">JSON arguments containing task_id</param>
+    /// <param name="cancellationToken">Token to cancel the operation</param>
+    /// <returns>Result containing cancellation confirmation</returns>
+    Task<McpToolResult> CancelTaskAsync(JsonElement args, CancellationToken cancellationToken = default);
 }
