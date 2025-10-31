@@ -186,7 +186,15 @@ McpError.ServerNotInitialized()
 - UNC paths: Added directly → `\\server\symbols`
 - Local paths: Added directly → `C:\MySymbols`
 
-**Retry Logic** (CdbSessionService.cs:226): If `.reload /f` shows `WRONG_SYMBOLS` or `MISSING`, attempts alternative symbol loading strategies.
+**Symbol Caching & Performance**:
+- **Cache-Aware Loading**: Uses `.reload` (NOT `.reload /f`) to leverage cached symbols
+- **First dump load**: 10-30 minutes (downloads symbols from Microsoft Symbol Server)
+- **Subsequent loads**: 30-60 seconds (uses cached symbols from `SYMBOL_CACHE`)
+- **Default cache**: `%LOCALAPPDATA%\CdbMcpServer\symbols`
+- **Timeout**: 15 minutes (configurable via `Constants.Debugging.SymbolLoadingTimeoutMinutes`)
+- **Smart logging**: Detects cache hits vs downloads and logs appropriately
+
+**Retry Logic** (CdbSessionService.cs:239): If `.reload` shows `WRONG_SYMBOLS` or `MISSING`, attempts alternative symbol loading strategies with verbose output (`.reload /v`) for diagnostics.
 
 ## Configuration Strategy
 

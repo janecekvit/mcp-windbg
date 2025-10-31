@@ -20,6 +20,11 @@ public interface IJobManagerService
     Task UpdateProgressAsync(string jobId, double progress, string? message = null);
 
     /// <summary>
+    /// Updates the phase of a running job
+    /// </summary>
+    Task UpdatePhaseAsync(string jobId, JobPhase phase, string? message = null);
+
+    /// <summary>
     /// Marks a job as completed successfully
     /// </summary>
     Task CompleteJobAsync(string jobId, string result);

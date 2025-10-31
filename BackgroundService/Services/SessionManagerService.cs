@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Shared;
 using Shared.Extensions;
+using Shared.Models;
 
 namespace BackgroundService.Services;
 
@@ -65,7 +66,8 @@ public sealed class SessionManagerService : ISessionManagerService
     {
         try
         {
-            await _jobManager.UpdateProgressAsync(jobId, 0.1, "Validating dump file...");
+            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.ValidatingInput, "Validating dump file...");
+            await _jobManager.UpdateProgressAsync(jobId, 0.05, "Validating dump file...");
 
             if (!File.Exists(dumpFilePath))
             {
@@ -73,16 +75,16 @@ public sealed class SessionManagerService : ISessionManagerService
                 throw new FileNotFoundException($"Dump file not found: {dumpFilePath}", dumpFilePath);
             }
 
-            await _jobManager.UpdateProgressAsync(jobId, 0.2, "Creating CDB session...");
+            await _jobManager.UpdateProgressAsync(jobId, 0.1, "Creating CDB session...");
 
             var sessionId = Guid.NewGuid().ToString("N")[..Constants.Debugging.SessionIdLength];
             var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
 
-            // Create progress reporter for CDB session
-            var progressReporter = new Progress<string>(async message =>
+            // Create structured progress reporter for CDB session
+            var progressReporter = new Progress<ProgressUpdate>(async update =>
             {
-                // Extract progress percentage from message if possible, otherwise increment gradually
-                await _jobManager.UpdateProgressAsync(jobId, 0.5, message);
+                await _jobManager.UpdatePhaseAsync(jobId, update.Phase, update.Message);
+                await _jobManager.UpdateProgressAsync(jobId, update.Progress, update.Message);
             });
 
             var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra, _symbolServers);
@@ -91,9 +93,7 @@ public sealed class SessionManagerService : ISessionManagerService
             _sessions[sessionId] = session;
             _logger.LogInformation("Created new CDB session {SessionId}, loading dump: {DumpFile}", sessionId, dumpFilePath);
 
-            await _jobManager.UpdateProgressAsync(jobId, 0.3, $"Starting CDB process for session {sessionId}...");
-
-            await session.LoadDumpAsync(dumpFilePath, cancellationToken);
+            await session.LoadDumpAsync(dumpFilePath, progressReporter, cancellationToken);
 
             // Verify session is still active after loading
             if (!session.IsActive)
@@ -103,6 +103,7 @@ public sealed class SessionManagerService : ISessionManagerService
                 throw new InvalidOperationException($"CDB process failed to start or exited during dump loading for session {sessionId}");
             }
 
+            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.Completed, $"Session {sessionId} ready");
             await _jobManager.UpdateProgressAsync(jobId, 1.0, $"Session {sessionId} ready");
 
             _logger.LogInformation("Successfully loaded dump in session {SessionId}: {DumpFile}", sessionId, dumpFilePath);
@@ -133,16 +134,19 @@ public sealed class SessionManagerService : ISessionManagerService
 
         try
         {
+            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.ExecutingCommand, $"Executing command: {command}");
             await _jobManager.UpdateProgressAsync(jobId, 0.1, $"Executing command: {command}");
 
-            // Create progress reporter
-            var progressReporter = new Progress<string>(async message =>
+            // Create structured progress reporter
+            var progressReporter = new Progress<ProgressUpdate>(async update =>
             {
-                await _jobManager.UpdateProgressAsync(jobId, 0.5, message);
+                await _jobManager.UpdatePhaseAsync(jobId, update.Phase, update.Message);
+                await _jobManager.UpdateProgressAsync(jobId, update.Progress, update.Message);
             });
 
             var result = await session.ExecuteCommandAsync(command, progressReporter, cancellationToken);
 
+            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.Completed, "Command completed");
             await _jobManager.UpdateProgressAsync(jobId, 1.0, "Command completed");
 
             return result;
@@ -177,10 +181,19 @@ public sealed class SessionManagerService : ISessionManagerService
 
         try
         {
+            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.Analyzing, $"Starting {analysisName} analysis...");
             await _jobManager.UpdateProgressAsync(jobId, 0.1, $"Starting {analysisName} analysis...");
 
-            var result = await session.ExecutePredefinedAnalysisAsync(analysisName, cancellationToken);
+            // Create structured progress reporter
+            var progressReporter = new Progress<ProgressUpdate>(async update =>
+            {
+                await _jobManager.UpdatePhaseAsync(jobId, update.Phase, update.Message);
+                await _jobManager.UpdateProgressAsync(jobId, update.Progress, update.Message);
+            });
 
+            var result = await session.ExecutePredefinedAnalysisAsync(analysisName, progressReporter, cancellationToken);
+
+            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.Completed, "Analysis completed");
             await _jobManager.UpdateProgressAsync(jobId, 1.0, "Analysis completed");
 
             return result;
@@ -210,6 +223,29 @@ public sealed class SessionManagerService : ISessionManagerService
         {
             _logger.LogError(ex, "Error closing session {SessionId}", sessionId);
             throw new InvalidOperationException($"Error closing session: {ex.Message}", ex);
+        }
+    }
+
+    public async Task CancelSessionAsync(string sessionId)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+        {
+            var error = $"Session {sessionId} not found";
+            _logger.LogError(error);
+            throw new ArgumentException(error, nameof(sessionId));
+        }
+
+        try
+        {
+            await session.CancelAsync();
+            _sessions.TryRemove(sessionId, out _);
+            session.Dispose();
+            _logger.LogInformation("Cancelled and closed CDB session {SessionId}", sessionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cancelling session {SessionId}", sessionId);
+            throw new InvalidOperationException($"Error cancelling session: {ex.Message}", ex);
         }
     }
 

@@ -19,6 +19,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         public string? SessionId { get; set; }
         public JobOperationType Operation { get; init; }
         public JobState State { get; set; }
+        public JobPhase Phase { get; set; } = JobPhase.Queued;
         public double Progress { get; set; }
         public string? Message { get; set; }
         public DateTime CreatedAt { get; init; }
@@ -27,9 +28,47 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         public string? Result { get; set; }
         public string? Error { get; set; }
 
-        public JobStatus ToJobStatus() => new(
-            JobId, SessionId, Operation, State, Progress, Message,
-            CreatedAt, StartedAt, CompletedAt, Result, Error);
+        public JobStatus ToJobStatus()
+        {
+            var estimatedTime = EstimateTimeRemaining(Phase, Progress, StartedAt);
+            return new JobStatus(
+                JobId, SessionId, Operation, State, Phase, Progress, Message,
+                CreatedAt, StartedAt, CompletedAt, estimatedTime, Result, Error);
+        }
+
+        private static TimeSpan? EstimateTimeRemaining(JobPhase phase, double progress, DateTime? startedAt)
+        {
+            if (startedAt == null || progress >= 1.0)
+                return null;
+
+            var elapsed = DateTime.UtcNow - startedAt.Value;
+
+            // Phase-based estimation
+            TimeSpan? estimatedTotal = phase switch
+            {
+                JobPhase.Queued => TimeSpan.Zero,
+                JobPhase.ValidatingInput => TimeSpan.FromSeconds(2),
+                JobPhase.StartingCdb => TimeSpan.FromSeconds(5),
+                JobPhase.LoadingDump => TimeSpan.FromSeconds(10),
+                JobPhase.ConfiguringSymbols => TimeSpan.FromSeconds(5),
+                JobPhase.ResolvingSymbols => progress < 0.5
+                    ? TimeSpan.FromMinutes(10)  // Downloading symbols
+                    : TimeSpan.FromMinutes(1),   // Using cache
+                JobPhase.DownloadingSymbols => TimeSpan.FromMinutes(8),
+                JobPhase.VerifyingSymbols => TimeSpan.FromSeconds(30),
+                JobPhase.ExecutingCommand => TimeSpan.FromSeconds(30),
+                JobPhase.Analyzing => TimeSpan.FromMinutes(2),
+                JobPhase.Completed => TimeSpan.Zero,
+                _ => (TimeSpan?)null
+            };
+
+            if (estimatedTotal == null || progress <= 0)
+                return null;
+
+            // Calculate remaining based on progress
+            var remaining = estimatedTotal.Value - elapsed;
+            return remaining > TimeSpan.Zero ? remaining : TimeSpan.FromSeconds(5);
+        }
     }
 
     public JobManagerService(
@@ -102,6 +141,33 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
             jobId,
             job.Progress,
             message,
+            DateTime.UtcNow);
+
+        await _hubContext.Clients.Group(jobId).SendAsync("Progress", notification);
+    }
+
+    public async Task UpdatePhaseAsync(string jobId, JobPhase phase, string? message = null)
+    {
+        if (!_jobs.TryGetValue(jobId, out var job))
+        {
+            _logger.LogWarning("Attempted to update phase for non-existent job: {JobId}", jobId);
+            return;
+        }
+
+        job.Phase = phase;
+        if (message != null)
+        {
+            job.Message = message;
+        }
+
+        _logger.LogDebug("Job {JobId} phase: {Phase} - {Message}",
+            jobId, phase, message ?? "(no message)");
+
+        // Send SignalR notification with updated phase
+        var notification = new ProgressNotification(
+            jobId,
+            job.Progress,
+            message ?? $"Phase: {phase}",
             DateTime.UtcNow);
 
         await _hubContext.Clients.Group(jobId).SendAsync("Progress", notification);

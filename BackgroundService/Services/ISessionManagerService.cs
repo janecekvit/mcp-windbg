@@ -49,6 +49,12 @@ public interface ISessionManagerService : IDisposable
     void CloseSession(string sessionId);
 
     /// <summary>
+    /// Cancels a running session and terminates its CDB process
+    /// </summary>
+    /// <param name="sessionId">ID of the session to cancel</param>
+    Task CancelSessionAsync(string sessionId);
+
+    /// <summary>
     /// Gets information about all currently active debugging sessions
     /// </summary>
     /// <returns>Enumerable of session information objects</returns>

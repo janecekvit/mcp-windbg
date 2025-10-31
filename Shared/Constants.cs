@@ -53,6 +53,7 @@ public static class Constants
     {
         public const int SessionIdLength = 8;
         public const int CommandTimeout = 30000; // 30 seconds
+        public const int SymbolLoadingTimeoutMinutes = 15; // 15 minutes for symbol loading (cache-aware)
         public const int ProcessWaitTimeout = 5000; // 5 seconds
         public const int InitializationDelay = 500; // 0.5 seconds
         public const int ReadBufferSize = 4096;

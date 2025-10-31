@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using Shared;
 using Shared.Extensions;
+using Shared.Models;
 
 namespace BackgroundService.Services;
 
@@ -39,7 +40,7 @@ public sealed class CdbSessionService : ICdbSessionService
         _symbolServers = symbolServers;
     }
 
-    public async Task LoadDumpAsync(string dumpFilePath, CancellationToken cancellationToken = default)
+    public async Task LoadDumpAsync(string dumpFilePath, IProgress<ProgressUpdate>? progress = null, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(dumpFilePath))
         {
@@ -52,6 +53,8 @@ public sealed class CdbSessionService : ICdbSessionService
             _logger.LogError("CDB not found at: {CdbPath}", _cdbPath);
             throw new FileNotFoundException($"CDB not found at: {_cdbPath}", _cdbPath);
         }
+
+        progress?.Report(ProgressUpdate.StartingCdb());
 
         lock (_lock)
         {
@@ -145,16 +148,38 @@ public sealed class CdbSessionService : ICdbSessionService
         }
 
         // Wait for initialization and set symbols
-        await InitializeSessionAsync(cancellationToken);
+        progress?.Report(ProgressUpdate.LoadingDump("CDB process started, initializing session..."));
+        await InitializeSessionAsync(progress, cancellationToken);
 
         _logger.LogInformation("CDB session {SessionId} loaded dump: {DumpFile}", SessionId, dumpFilePath);
     }
 
-    private async Task InitializeSessionAsync(CancellationToken cancellationToken = default)
+    public async Task CancelAsync()
+    {
+        _logger.LogWarning("Cancelling CDB session {SessionId}", SessionId);
+
+        if (_cdbProcess != null && !_cdbProcess.HasExited)
+        {
+            try
+            {
+                _cdbProcess.Kill(entireProcessTree: true);
+                await _cdbProcess.WaitForExitAsync();
+                _logger.LogInformation("CDB process killed for session {SessionId}", SessionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error killing CDB process for session {SessionId}", SessionId);
+                throw;
+            }
+        }
+    }
+
+    private async Task InitializeSessionAsync(IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default)
     {
         if (_isInitialized) return;
 
         _logger.LogInformation("Initializing CDB session {SessionId}", SessionId);
+        progress?.Report(ProgressUpdate.ConfiguringSymbols());
 
         var initCommands = new List<string>
         {
@@ -190,29 +215,60 @@ public sealed class CdbSessionService : ICdbSessionService
             $".sympath+ srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols",
             $".sympath+ srv*{_symbolCache}*https://symbols.nuget.org/download/symbols",
 
-            // Reload symbols with enhanced output - with retry logic
-            ".reload /f",
+            // Reload symbols - uses cache if available, downloads only if needed
+            ".reload",
 
             // Wait for symbol loading to complete
             ".echo Waiting for symbol loading to complete...",
 
-            // Verify symbol loading with retry
+            // Verify symbol loading
             ".echo === Symbol Loading Status ===",
             "lm",
             ".echo === Session initialized successfully ===",
             ".echo"
         });
 
+        progress?.Report(ProgressUpdate.SettingSymbolPaths());
+        var commandIndex = 0;
+        var totalCommands = initCommands.Count;
+
         foreach (var command in initCommands)
         {
+            commandIndex++;
+
+            // Report progress for key commands with structured updates
+            if (command.Contains(".reload"))
+            {
+                progress?.Report(ProgressUpdate.ResolvingSymbols("Loading symbols (this may take several minutes)..."));
+            }
+            else if (command == "lm")
+            {
+                progress?.Report(ProgressUpdate.VerifyingSymbols());
+            }
+
             _logger.LogDebug("Executing init command for session {SessionId}: {Command}", SessionId, command);
-            var result = await ExecuteCommandInternalAsync(command, null, cancellationToken);
+            var result = await ExecuteCommandInternalAsync(command, cancellationToken);
 
             // Check for symbol loading issues and retry if needed
-            if (command == ".reload /f" && (result.Contains("WRONG_SYMBOLS") || result.Contains("MISSING")))
+            if (command == ".reload" && (result.Contains("WRONG_SYMBOLS") || result.Contains("MISSING")))
             {
                 _logger.LogWarning("Symbol loading issues detected, attempting retry for session {SessionId}", SessionId);
                 await RetrySymbolLoadingAsync(cancellationToken);
+            }
+
+            // Log cache usage for symbol loading and report structured progress
+            if (command == ".reload")
+            {
+                if (result.Contains("from cache") || result.Contains("cached"))
+                {
+                    _logger.LogInformation("Session {SessionId}: Symbols loaded from cache", SessionId);
+                    progress?.Report(ProgressUpdate.LoadingFromCache());
+                }
+                else if (result.Contains("download") || result.Contains("SYMSRV"))
+                {
+                    _logger.LogInformation("Session {SessionId}: Symbols downloaded from symbol server", SessionId);
+                    progress?.Report(ProgressUpdate.DownloadingSymbols());
+                }
             }
 
             _logger.LogDebug("Init command result for session {SessionId}: {Result}", SessionId, result?.Length > Constants.Debugging.LogTruncateLength ? result[..Constants.Debugging.LogTruncateLength] + "..." : result);
@@ -229,16 +285,16 @@ public sealed class CdbSessionService : ICdbSessionService
 
         var retryCommands = new[]
         {
-            // Clear symbol cache and try alternative servers
+            // Retry with verbose output to diagnose issues
             ".symfix",
-            ".reload /f",
-            ".echo Retrying with alternative symbol servers...",
-
-            // Try loading with different approach
-            $".sympath srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols",
             ".reload /v",  // Verbose reload to see what's happening
+            ".echo Retrying symbol loading...",
 
-            // Alternative: Load PDB specifically if available
+            // Verify symbol path is correct
+            $".sympath srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols",
+            ".reload",  // Try reload again with fresh symbol path
+
+            // Check symbol status
             ".echo === Symbol Retry Status ===",
             "lm v",  // Verbose module list to check symbols
         };
@@ -248,7 +304,7 @@ public sealed class CdbSessionService : ICdbSessionService
             try
             {
                 _logger.LogDebug("Executing retry command for session {SessionId}: {Command}", SessionId, command);
-                var result = await ExecuteCommandInternalAsync(command, null, cancellationToken);
+                var result = await ExecuteCommandInternalAsync(command, cancellationToken);
                 _logger.LogDebug("Retry command result for session {SessionId}: {Result}", SessionId, result?.Length > Constants.Debugging.LogTruncateLength ? result[..Constants.Debugging.LogTruncateLength] + "..." : result);
                 await Task.Delay(Constants.Debugging.InitializationDelay * 2, cancellationToken); // Longer pause for retries
             }
@@ -265,7 +321,7 @@ public sealed class CdbSessionService : ICdbSessionService
         return await ExecuteCommandAsync(command, null, cancellationToken);
     }
 
-    public async Task<string> ExecuteCommandAsync(string command, IProgress<string>? progress, CancellationToken cancellationToken = default)
+    public async Task<string> ExecuteCommandAsync(string command, IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default)
     {
         if (_cdbProcess?.HasExited != false)
         {
@@ -285,8 +341,8 @@ public sealed class CdbSessionService : ICdbSessionService
         try
         {
             _logger.LogInformation("Executing command in session {SessionId}: {Command}", SessionId, command);
-            progress?.Report($"Executing command: {command}");
-            return await ExecuteCommandInternalAsync(command, progress, cancellationToken);
+            progress?.Report(ProgressUpdate.ExecutingCommand(command, 0.1));
+            return await ExecuteCommandInternalAsync(command, cancellationToken);
         }
         finally
         {
@@ -294,7 +350,7 @@ public sealed class CdbSessionService : ICdbSessionService
         }
     }
 
-    private async Task<string> ExecuteCommandInternalAsync(string command, IProgress<string>? progress, CancellationToken cancellationToken = default)
+    private async Task<string> ExecuteCommandInternalAsync(string command, CancellationToken cancellationToken = default)
     {
         if (_stdin == null || _cdbProcess?.HasExited != false)
         {
@@ -320,11 +376,8 @@ public sealed class CdbSessionService : ICdbSessionService
             var buffer = new char[Constants.Debugging.ReadBufferSize];
             var result = new StringBuilder();
 
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5)); // Increased timeout for symbol loading
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(Constants.Debugging.SymbolLoadingTimeoutMinutes));
             using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-
-            var lastProgressUpdate = DateTime.UtcNow;
-            var progressInterval = TimeSpan.FromSeconds(2);
 
             while (!_cdbProcess.HasExited && !combinedCts.Token.IsCancellationRequested)
             {
@@ -339,21 +392,11 @@ public sealed class CdbSessionService : ICdbSessionService
                     var chunk = buffer.AsSpan(0, bytesRead).ToString();
                     result.Append(chunk);
 
-                    // Progress reporting for long-running commands
-                    if (progress != null && DateTime.UtcNow - lastProgressUpdate > progressInterval)
-                    {
-                        var outputLength = result.Length;
-                        var elapsed = DateTime.UtcNow - lastProgressUpdate;
-                        progress.Report($"Command '{command}' running... ({outputLength} chars received, {elapsed:mm\\:ss} elapsed)");
-                        lastProgressUpdate = DateTime.UtcNow;
-                    }
-
                     // Check for marker
                     var currentOutput = result.ToString();
                     if (currentOutput.Contains(marker))
                     {
                         var markerIndex = currentOutput.LastIndexOf(marker);
-                        progress?.Report($"Command '{command}' completed successfully");
                         return currentOutput[..markerIndex].Trim();
                     }
                 }
@@ -362,11 +405,9 @@ public sealed class CdbSessionService : ICdbSessionService
                     if (cancellationToken.IsCancellationRequested)
                     {
                         _logger.LogInformation("Command execution cancelled by user for: {Command}", command);
-                        progress?.Report($"Command '{command}' was cancelled by user");
                         throw new OperationCanceledException("Command execution was cancelled by user", cancellationToken);
                     }
                     _logger.LogWarning("Command execution timeout for: {Command} (exceeded 5 minutes)", command);
-                    progress?.Report($"Command '{command}' timed out after 5 minutes");
                     throw new TimeoutException($"Command '{command}' execution timeout (exceeded 5 minutes)");
                 }
                 catch (InvalidOperationException ex) when (ex.Message.Contains("currently in use"))
@@ -382,11 +423,9 @@ public sealed class CdbSessionService : ICdbSessionService
                 if (cancellationToken.IsCancellationRequested)
                 {
                     _logger.LogInformation("Command execution cancelled by user for: {Command}", command);
-                    progress?.Report($"Command '{command}' was cancelled by user");
                     throw new OperationCanceledException("Command execution was cancelled by user", cancellationToken);
                 }
                 _logger.LogWarning("Command execution timeout for: {Command} (exceeded 5 minutes)", command);
-                progress?.Report($"Command '{command}' timed out after 5 minutes");
                 throw new TimeoutException($"Command '{command}' execution timeout (exceeded 5 minutes)");
             }
 
@@ -406,6 +445,13 @@ public sealed class CdbSessionService : ICdbSessionService
 
     public async Task<string> ExecutePredefinedAnalysisAsync(string analysisName, CancellationToken cancellationToken = default)
     {
+        return await ExecutePredefinedAnalysisAsync(analysisName, null, cancellationToken);
+    }
+
+    public async Task<string> ExecutePredefinedAnalysisAsync(string analysisName, IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default)
+    {
+        progress?.Report(ProgressUpdate.Analyzing(analysisName, 0.1));
+
         var commands = _analysisService.GetAnalysisCommands(analysisName);
         if (commands.Count == 0)
         {
@@ -418,8 +464,15 @@ public sealed class CdbSessionService : ICdbSessionService
             .AppendSection($"Executing {analysisName} analysis:")
             .AppendKeyValue("Description", _analysisService.GetAnalysisDescription(analysisName));
 
+        var totalCommands = commands.Count;
+        var currentCommand = 0;
+
         foreach (var command in commands)
         {
+            currentCommand++;
+            var progressPercent = 0.1 + (0.8 * currentCommand / totalCommands); // 10% - 90%
+            progress?.Report(ProgressUpdate.Analyzing($"{analysisName} ({currentCommand}/{totalCommands})", progressPercent));
+
             var result = await ExecuteCommandAsync(command, cancellationToken);
             results.AppendLine(result);
             results.AppendLine();

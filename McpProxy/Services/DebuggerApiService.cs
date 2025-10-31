@@ -104,37 +104,20 @@ public class DebuggerApiService : IDebuggerApiService
     }
 
     /// <summary>
-    /// Waits for a job to complete by polling its status
+    /// Waits for a job to complete via SignalR completion notification
     /// </summary>
     private async Task<JobStatus> WaitForJobCompletionAsync(string jobId, CancellationToken cancellationToken = default)
     {
-        var pollIntervalMs = Shared.Constants.Jobs.DefaultPollIntervalMs;
-        var maxWaitTimeMs = Shared.Constants.Jobs.DefaultMaxWaitTimeMs;
+        var timeout = TimeSpan.FromMilliseconds(Shared.Constants.Jobs.DefaultMaxWaitTimeMs);
 
-        var startTime = DateTime.UtcNow;
+        // Wait for SignalR completion notification (no polling)
+        var completionNotification = await _signalRClient.WaitForJobCompletionAsync(jobId, timeout, cancellationToken);
 
-        while ((DateTime.UtcNow - startTime).TotalMilliseconds < maxWaitTimeMs)
-        {
-            try
-            {
-                var status = await GetAsync<JobStatus>(jobId.ToJobEndpoint(), cancellationToken);
+        // Get final job status with result/error details
+        var status = await GetAsync<JobStatus>(jobId.ToJobEndpoint(), cancellationToken);
+        _logger.LogInformation("Job {JobId} finished with state {State}", jobId, status.State);
 
-                if (status.State == JobState.Completed || status.State == JobState.Failed || status.State == JobState.Cancelled)
-                {
-                    _logger.LogInformation("Job {JobId} finished with state {State}", jobId, status.State);
-                    return status;
-                }
-
-                await Task.Delay(pollIntervalMs, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error polling job status for {JobId}", jobId);
-                await Task.Delay(pollIntervalMs, cancellationToken);
-            }
-        }
-
-        throw new TimeoutException($"Job {jobId} did not complete within {maxWaitTimeMs / 1000} seconds");
+        return status;
     }
 
     public async Task<McpToolResult> ExecuteCommandAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)

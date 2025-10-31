@@ -58,7 +58,7 @@ public class JobsController : ControllerBase
     }
 
     /// <summary>
-    /// Cancels a running job
+    /// Cancels a running job and terminates associated CDB process
     /// </summary>
     [HttpPost("{jobId}/cancel")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -67,6 +67,23 @@ public class JobsController : ControllerBase
     {
         try
         {
+            var status = _jobManager.GetJobStatus(jobId);
+
+            // If job has an associated session, cancel the CDB process
+            if (status.SessionId != null)
+            {
+                try
+                {
+                    await _sessionManager.CancelSessionAsync(status.SessionId);
+                    _logger.LogInformation("Cancelled CDB session {SessionId} for job {JobId}", status.SessionId, jobId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to cancel session {SessionId} for job {JobId}", status.SessionId, jobId);
+                    // Continue with job cancellation even if session cancel fails
+                }
+            }
+
             await _jobManager.CancelJobAsync(jobId);
             return Ok(new { message = $"Job {jobId} cancelled" });
         }
