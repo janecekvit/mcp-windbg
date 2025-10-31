@@ -12,6 +12,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
 {
     private readonly Mock<ILogger<DebuggerApiService>> _mockLogger;
     private readonly Mock<ICommunicationService> _mockCommunicationService;
+    private readonly Mock<ISignalRClientService> _mockSignalRClient;
     private readonly Mock<IConfiguration> _mockConfiguration;
     private readonly Mock<HttpMessageHandler> _mockHttpMessageHandler;
     private readonly HttpClient _httpClient;
@@ -21,6 +22,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
     {
         _mockLogger = new Mock<ILogger<DebuggerApiService>>();
         _mockCommunicationService = new Mock<ICommunicationService>();
+        _mockSignalRClient = new Mock<ISignalRClientService>();
         _mockConfiguration = new Mock<IConfiguration>();
         _mockHttpMessageHandler = new Mock<HttpMessageHandler>();
 
@@ -39,7 +41,12 @@ public sealed class DebuggerApiServiceTests : IDisposable
 
         _httpClient = new HttpClient(_mockHttpMessageHandler.Object);
 
-        _debuggerApiService = new DebuggerApiService(_mockLogger.Object, _httpClient, _mockCommunicationService.Object, _mockConfiguration.Object);
+        _debuggerApiService = new DebuggerApiService(
+            _mockLogger.Object,
+            _httpClient,
+            _mockCommunicationService.Object,
+            _mockSignalRClient.Object,
+            _mockConfiguration.Object);
     }
 
     [Fact]

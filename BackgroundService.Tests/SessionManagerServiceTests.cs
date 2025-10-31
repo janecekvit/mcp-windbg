@@ -11,6 +11,7 @@ public sealed class SessionManagerServiceTests : IDisposable
     private readonly Mock<ILoggerFactory> _mockLoggerFactory;
     private readonly Mock<IPathDetectionService> _mockPathDetection;
     private readonly Mock<IAnalysisService> _mockAnalysisService;
+    private readonly Mock<IJobManagerService> _mockJobManager;
     private readonly Mock<IConfiguration> _mockConfiguration;
     private readonly SessionManagerService _sessionManager;
 
@@ -20,6 +21,7 @@ public sealed class SessionManagerServiceTests : IDisposable
         _mockLoggerFactory = new Mock<ILoggerFactory>();
         _mockPathDetection = new Mock<IPathDetectionService>();
         _mockAnalysisService = new Mock<IAnalysisService>();
+        _mockJobManager = new Mock<IJobManagerService>();
         _mockConfiguration = new Mock<IConfiguration>();
 
         // Setup configuration mock
@@ -42,6 +44,7 @@ public sealed class SessionManagerServiceTests : IDisposable
             _mockLoggerFactory.Object,
             _mockPathDetection.Object,
             _mockAnalysisService.Object,
+            _mockJobManager.Object,
             _mockConfiguration.Object);
     }
 
@@ -55,22 +58,24 @@ public sealed class SessionManagerServiceTests : IDisposable
     public async Task CreateSessionWithDumpAsync_NonExistentFile_ThrowsFileNotFoundException()
     {
         // Arrange
+        var jobId = "test-job-1";
         var dumpPath = @"C:\nonexistent.dmp";
 
         // Act & Assert
         await Assert.ThrowsAsync<FileNotFoundException>(
-            () => _sessionManager.CreateSessionWithDumpAsync(dumpPath));
+            () => _sessionManager.CreateSessionWithDumpAsync(jobId, dumpPath));
     }
 
     [Fact]
     public async Task CreateSessionWithDumpAsync_EmptyPath_ThrowsFileNotFoundException()
     {
         // Arrange
+        var jobId = "test-job-2";
         var invalidPath = "";
 
         // Act & Assert
         await Assert.ThrowsAsync<FileNotFoundException>(
-            () => _sessionManager.CreateSessionWithDumpAsync(invalidPath));
+            () => _sessionManager.CreateSessionWithDumpAsync(jobId, invalidPath));
     }
 
     [Fact]
@@ -87,35 +92,38 @@ public sealed class SessionManagerServiceTests : IDisposable
     public async Task ExecuteCommandAsync_InvalidSessionId_ThrowsArgumentException()
     {
         // Arrange
+        var jobId = "test-job-3";
         var invalidSessionId = "nonexistent";
         var command = "kb";
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(
-            () => _sessionManager.ExecuteCommandAsync(invalidSessionId, command));
+            () => _sessionManager.ExecuteCommandAsync(jobId, invalidSessionId, command));
     }
 
     [Fact]
     public async Task ExecuteBasicAnalysisAsync_InvalidSessionId_ThrowsArgumentException()
     {
         // Arrange
+        var jobId = "test-job-4";
         var invalidSessionId = "nonexistent";
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(
-            () => _sessionManager.ExecuteBasicAnalysisAsync(invalidSessionId));
+            () => _sessionManager.ExecuteBasicAnalysisAsync(jobId, invalidSessionId));
     }
 
     [Fact]
     public async Task ExecutePredefinedAnalysisAsync_InvalidSessionId_ThrowsArgumentException()
     {
         // Arrange
+        var jobId = "test-job-5";
         var invalidSessionId = "nonexistent";
         var analysisType = "basic";
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(
-            () => _sessionManager.ExecutePredefinedAnalysisAsync(invalidSessionId, analysisType));
+            () => _sessionManager.ExecutePredefinedAnalysisAsync(jobId, invalidSessionId, analysisType));
     }
 
     [Fact]

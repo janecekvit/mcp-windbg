@@ -29,19 +29,29 @@ dotnet run --project McpProxy
 dotnet run --project BackgroundService -- 8080
 ```
 
-## Architecture Overview - Why Dual Process?
+## Architecture Overview - Why Dual Process + Job-Based System?
 
 **Problem**: CDB dump loading and symbol resolution can take **several minutes**. MCP clients expect immediate responses and need progress updates.
 
-**Solution**: Two separate processes communicating via HTTP:
+**Solution**: Two separate processes communicating via HTTP + Job-based async operations with SignalR for real-time progress:
 
 ```
 ┌─────────────┐           ┌──────────────┐           ┌─────────────────┐
 │ MCP Client  │◄─────────►│  McpProxy    │◄─ HTTP ──►│BackgroundService│
 │  (Claude)   │  JSON-RPC │ (stdin/MCP)  │           │  (ASP.NET API)  │
 └─────────────┘           └──────────────┘           └─────────────────┘
-                          Progress notifications              │
-                          over stdout                         ▼
+                                │                             │
+                                │    WebSocket (SignalR)      │
+                                │◄────────────────────────────┤
+                                │  Real-time Progress Updates │
+                                                              │
+                                                              ▼
+                                                      ┌─────────────────┐
+                                                      │ JobManager      │
+                                                      │ + ProgressHub   │
+                                                      └────────┬────────┘
+                                                              │
+                                                              ▼
                                                        ┌─────────────┐
                                                        │ CDB Process │
                                                        │  (per dump) │
@@ -50,31 +60,38 @@ dotnet run --project BackgroundService -- 8080
 
 ### 1. McpProxy (MCP Protocol Layer)
 **Entry Point**: `McpProxy/Program.cs` → `McpProxy.cs:23`
-**Communication**: stdin/stdout JSON-RPC ↔ HTTP client to BackgroundService
+**Communication**: stdin/stdout JSON-RPC ↔ HTTP + SignalR to BackgroundService
 
 **Key Services**:
 - `CommunicationService`: Handles MCP JSON-RPC protocol over stdio
-- `DebuggerApiService`: HTTP client that calls BackgroundService endpoints
+- `DebuggerApiService`: HTTP client that calls BackgroundService job-based endpoints
+- `SignalRClientService`: WebSocket client for real-time progress notifications
 - `ToolsService`: Registers 8 MCP tools (load_dump, execute_command, etc.)
 
-**Why HTTP instead of direct CDB access?**
-- Decouples MCP protocol from slow CDB operations
-- Allows async/await for long-running commands
+**Why Job-Based + SignalR?**
+- **Non-blocking**: Operations return jobId immediately, no hanging
+- **Real-time progress**: SignalR pushes updates (0-100%) to MCP client
+- **Polling fallback**: If SignalR fails, falls back to HTTP polling every 1 second
+- **Timeout handling**: Configurable timeout (default 10 minutes) via `Constants.Jobs`
 - BackgroundService can run independently for debugging
-- Progress reporting via MCP notifications while waiting
 
-### 2. BackgroundService (Debugging Engine)
+### 2. BackgroundService (Debugging Engine + Job Management)
 **Entry Point**: `BackgroundService/Program.cs` - ASP.NET Core Web API
 **Default Port**: 8080 (configurable via args or env var)
 
 **Key Services**:
-- `SessionManagerService`: Thread-safe session orchestration using `ConcurrentDictionary<string, ICdbSessionService>`
+- `SessionManagerService`: Thread-safe session orchestration using `ConcurrentDictionary<string, ICdbSessionService>` - **All methods require jobId for progress tracking**
+- `JobManagerService`: Thread-safe job tracking using `ConcurrentDictionary<string, JobStatus>` with auto-cleanup (every 10 min)
 - `CdbSessionService`: **One CDB process per session** - manages stdin/stdout communication
 - `AnalysisService`: Predefined WinDbg command sequences (basic, heap, threads, etc.)
 - `PathDetectionService`: Auto-detects CDB.exe from Windows SDK/WinDbg installations
 
+**SignalR Hub**:
+- `ProgressHub`: WebSocket hub at `/hubs/progress` for real-time progress notifications
+
 **Controllers**:
-- `SessionsController`: REST endpoints at `/api/sessions/*`
+- `JobsController`: **Job-based async API** at `/api/jobs/*` (primary API)
+- `SessionsController`: Utility endpoints - GET `/api/sessions` (list), DELETE `/api/sessions/{id}` (close)
 - `DiagnosticsController`: Health checks and debugger detection
 
 ### 3. Shared Library
@@ -225,15 +242,46 @@ BACKGROUND_SERVICE_URL # Default: http://localhost:8080
 - **drivers**: Device driver and kernel analysis
 - **processes**: Process tree and details
 
+## API Architecture - Job-Based Only
+
+**All operations are asynchronous and job-based**. There is NO blocking/synchronous API.
+
+### Job-Based Endpoints (JobsController)
+```
+POST /api/jobs/load-dump          → 202 Accepted, returns { jobId, statusEndpoint }
+POST /api/jobs/execute-command    → 202 Accepted, returns { jobId, statusEndpoint }
+POST /api/jobs/basic-analysis     → 202 Accepted, returns { jobId, statusEndpoint }
+POST /api/jobs/predefined-analysis → 202 Accepted, returns { jobId, statusEndpoint }
+GET  /api/jobs/{jobId}            → Job status with progress
+GET  /api/jobs?state=Running      → List all jobs (with optional state filter)
+POST /api/jobs/{jobId}/cancel     → Cancel running job
+```
+
+### Flow:
+1. Client calls POST endpoint → receives `jobId` immediately (202 Accepted)
+2. McpProxy subscribes to SignalR `ProgressHub` for that `jobId`
+3. BackgroundService starts operation in `Task.Run()`, sends progress via SignalR
+4. SignalRClientService receives progress, forwards to MCP client via notifications
+5. McpProxy also polls `GET /api/jobs/{jobId}` every 1 second as fallback
+6. When complete, SignalR sends `Completed` notification
+7. McpProxy unsubscribes and returns final result to MCP client
+
+### Timeout Configuration
+- Default: 10 minutes (`Constants.Jobs.DefaultMaxWaitTimeMs`)
+- Poll interval: 1 second (`Constants.Jobs.DefaultPollIntervalMs`)
+- Configurable in `Shared/Constants.cs`
+
 ## Common Patterns When Modifying Code
 
 **Adding a new MCP tool**:
-1. Add endpoint to `SessionsController` or `DiagnosticsController`
-2. Add method to `IDebuggerApiService` interface
-3. Implement HTTP call in `DebuggerApiService`
-4. Add tool registration in `ToolsService`
-5. Add switch case in `McpProxy.HandleToolCallAsync()`
-6. Add constant to `Constants.McpToolNames`
+1. Add job-based endpoint to `JobsController` (returns 202 + jobId)
+2. Create background Task.Run() that calls `SessionManager` with jobId
+3. Add method to `IDebuggerApiService` interface
+4. Implement HTTP call + SignalR subscription in `DebuggerApiService`
+5. Add tool registration in `ToolsService`
+6. Add switch case in `McpProxy.HandleToolCallAsync()`
+7. Add constant to `Constants.McpToolNames`
+8. Add `JobOperationType` enum value if needed
 
 **Adding a new analysis type**:
 1. Add entry to `AnalysisType` enum (Shared/Models/AnalysisType.cs)

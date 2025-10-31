@@ -31,7 +31,16 @@ public interface ICdbSessionService : IDisposable
     /// <param name="cancellationToken">Token to cancel the operation</param>
     /// <returns>Output from the debugger command</returns>
     Task<string> ExecuteCommandAsync(string command, CancellationToken cancellationToken = default);
-    
+
+    /// <summary>
+    /// Executes a single WinDbg/CDB command in this session with progress reporting
+    /// </summary>
+    /// <param name="command">The debugger command to execute</param>
+    /// <param name="progress">Progress reporter for long-running commands</param>
+    /// <param name="cancellationToken">Token to cancel the operation</param>
+    /// <returns>Output from the debugger command</returns>
+    Task<string> ExecuteCommandAsync(string command, IProgress<string>? progress, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Executes a comprehensive basic analysis of the loaded dump
     /// </summary>

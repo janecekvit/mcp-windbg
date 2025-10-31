@@ -14,6 +14,7 @@ public class DebuggerApiService : IDebuggerApiService
     private readonly ILogger<DebuggerApiService> _logger;
     private readonly HttpClient _httpClient;
     private readonly ICommunicationService _communicationService;
+    private readonly ISignalRClientService _signalRClient;
     private readonly string _baseUrl;
 
     private readonly JsonSerializerOptions _jsonOptions = new()
@@ -25,11 +26,13 @@ public class DebuggerApiService : IDebuggerApiService
         ILogger<DebuggerApiService> logger,
         HttpClient httpClient,
         ICommunicationService communicationService,
+        ISignalRClientService signalRClient,
         IConfiguration configuration)
     {
         _logger = logger;
         _httpClient = httpClient;
         _communicationService = communicationService;
+        _signalRClient = signalRClient;
 
         var backgroundServiceConfig = configuration.GetBackgroundServiceConfiguration();
         _baseUrl = backgroundServiceConfig.BaseUrl;
@@ -66,13 +69,72 @@ public class DebuggerApiService : IDebuggerApiService
         var error = dumpFilePath.ValidateAsDumpFilePath();
         if (error != null) return McpToolResult.Error(error);
 
-        await SendProgress(progressToken, 0.1, "Loading dump file...", cancellationToken);
-        var request = new LoadDumpRequest(dumpFilePath!);
+        try
+        {
+            var request = new LoadDumpRequest(dumpFilePath!);
 
-        var response = await PostAsync<LoadDumpRequest, LoadDumpResponse>(ApiEndpoints.LoadDump, request, cancellationToken);
+            // Create job and subscribe to progress
+            var jobResponse = await PostAsync<LoadDumpRequest, JobCreatedResponse>(ApiEndpoints.LoadDumpAsync, request, cancellationToken);
+            _logger.LogInformation("Created job {JobId} for loading dump", jobResponse.JobId);
 
-        await SendProgress(progressToken, 1.0, "Dump loaded successfully!", cancellationToken);
-        return McpToolResult.Success($"Session created: {response.SessionId}\nDump: {dumpFilePath}\n\n{response.Message}");
+            // Subscribe to SignalR progress updates (they will be automatically forwarded to Claude via progressToken)
+            await _signalRClient.SubscribeToJobAsync(jobResponse.JobId, cancellationToken);
+
+            // Wait for job completion by polling status
+            var result = await WaitForJobCompletionAsync(jobResponse.JobId, cancellationToken);
+
+            // Unsubscribe from progress updates
+            await _signalRClient.UnsubscribeFromJobAsync(jobResponse.JobId, cancellationToken);
+
+            if (result.State == JobState.Completed)
+            {
+                var sessionId = result.Result;
+                return McpToolResult.Success($"Session created: {sessionId}\nDump: {dumpFilePath}\n\nSession is ready for commands.");
+            }
+            else
+            {
+                return McpToolResult.Error($"Failed to load dump: {result.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading dump file");
+            return McpToolResult.Error($"Error loading dump: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Waits for a job to complete by polling its status
+    /// </summary>
+    private async Task<JobStatus> WaitForJobCompletionAsync(string jobId, CancellationToken cancellationToken = default)
+    {
+        var pollIntervalMs = Shared.Constants.Jobs.DefaultPollIntervalMs;
+        var maxWaitTimeMs = Shared.Constants.Jobs.DefaultMaxWaitTimeMs;
+
+        var startTime = DateTime.UtcNow;
+
+        while ((DateTime.UtcNow - startTime).TotalMilliseconds < maxWaitTimeMs)
+        {
+            try
+            {
+                var status = await GetAsync<JobStatus>(jobId.ToJobEndpoint(), cancellationToken);
+
+                if (status.State == JobState.Completed || status.State == JobState.Failed || status.State == JobState.Cancelled)
+                {
+                    _logger.LogInformation("Job {JobId} finished with state {State}", jobId, status.State);
+                    return status;
+                }
+
+                await Task.Delay(pollIntervalMs, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error polling job status for {JobId}", jobId);
+                await Task.Delay(pollIntervalMs, cancellationToken);
+            }
+        }
+
+        throw new TimeoutException($"Job {jobId} did not complete within {maxWaitTimeMs / 1000} seconds");
     }
 
     public async Task<McpToolResult> ExecuteCommandAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
@@ -88,10 +150,37 @@ public class DebuggerApiService : IDebuggerApiService
         var cmdError = command.ValidateAsCommand();
         if (cmdError != null) return McpToolResult.Error(cmdError);
 
-        var request = new ExecuteCommandRequest(sessionId!, command!);
-        var response = await PostAsync<ExecuteCommandRequest, CommandExecutionResponse>(ApiEndpoints.ExecuteCommand, request, cancellationToken);
+        try
+        {
+            var request = new ExecuteCommandRequest(sessionId!, command!);
 
-        return McpToolResult.Success(response.Result);
+            // Create job and subscribe to progress
+            var jobResponse = await PostAsync<ExecuteCommandRequest, JobCreatedResponse>(ApiEndpoints.ExecuteCommandAsync, request, cancellationToken);
+            _logger.LogInformation("Created job {JobId} for executing command", jobResponse.JobId);
+
+            // Subscribe to SignalR progress updates
+            await _signalRClient.SubscribeToJobAsync(jobResponse.JobId, cancellationToken);
+
+            // Wait for job completion
+            var result = await WaitForJobCompletionAsync(jobResponse.JobId, cancellationToken);
+
+            // Unsubscribe from progress updates
+            await _signalRClient.UnsubscribeFromJobAsync(jobResponse.JobId, cancellationToken);
+
+            if (result.State == JobState.Completed)
+            {
+                return McpToolResult.Success(result.Result ?? "Command completed successfully");
+            }
+            else
+            {
+                return McpToolResult.Error($"Command failed: {result.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error executing command");
+            return McpToolResult.Error($"Error executing command: {ex.Message}");
+        }
     }
 
     public async Task<McpToolResult> BasicAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
@@ -103,13 +192,37 @@ public class DebuggerApiService : IDebuggerApiService
         var error = sessionId.ValidateAsSessionId();
         if (error != null) return McpToolResult.Error(error);
 
-        await SendProgress(progressToken, 0.1, "Running analysis...", cancellationToken);
-        var request = new BasicAnalysisRequest(sessionId!);
+        try
+        {
+            var request = new BasicAnalysisRequest(sessionId!);
 
-        var response = await PostAsync<BasicAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.BasicAnalysis, request, cancellationToken);
+            // Create job and subscribe to progress
+            var jobResponse = await PostAsync<BasicAnalysisRequest, JobCreatedResponse>(ApiEndpoints.BasicAnalysisAsync, request, cancellationToken);
+            _logger.LogInformation("Created job {JobId} for basic analysis", jobResponse.JobId);
 
-        await SendProgress(progressToken, 1.0, "Analysis completed!", cancellationToken);
-        return McpToolResult.Success(response.Result);
+            // Subscribe to SignalR progress updates
+            await _signalRClient.SubscribeToJobAsync(jobResponse.JobId, cancellationToken);
+
+            // Wait for job completion
+            var result = await WaitForJobCompletionAsync(jobResponse.JobId, cancellationToken);
+
+            // Unsubscribe from progress updates
+            await _signalRClient.UnsubscribeFromJobAsync(jobResponse.JobId, cancellationToken);
+
+            if (result.State == JobState.Completed)
+            {
+                return McpToolResult.Success(result.Result ?? "Analysis completed successfully");
+            }
+            else
+            {
+                return McpToolResult.Error($"Analysis failed: {result.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running basic analysis");
+            return McpToolResult.Error($"Error running analysis: {ex.Message}");
+        }
     }
 
     public async Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default)
@@ -122,10 +235,37 @@ public class DebuggerApiService : IDebuggerApiService
         var sessionError = sessionId.ValidateAsSessionId();
         if (sessionError != null) return McpToolResult.Error(sessionError);
 
-        var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
-        var response = await PostAsync<PredefinedAnalysisRequest, CommandExecutionResponse>(ApiEndpoints.PredefinedAnalysis, request, cancellationToken);
+        try
+        {
+            var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
 
-        return McpToolResult.Success(response.Result);
+            // Create job and subscribe to progress
+            var jobResponse = await PostAsync<PredefinedAnalysisRequest, JobCreatedResponse>(ApiEndpoints.PredefinedAnalysisAsync, request, cancellationToken);
+            _logger.LogInformation("Created job {JobId} for predefined analysis", jobResponse.JobId);
+
+            // Subscribe to SignalR progress updates
+            await _signalRClient.SubscribeToJobAsync(jobResponse.JobId, cancellationToken);
+
+            // Wait for job completion
+            var result = await WaitForJobCompletionAsync(jobResponse.JobId, cancellationToken);
+
+            // Unsubscribe from progress updates
+            await _signalRClient.UnsubscribeFromJobAsync(jobResponse.JobId, cancellationToken);
+
+            if (result.State == JobState.Completed)
+            {
+                return McpToolResult.Success(result.Result ?? "Analysis completed successfully");
+            }
+            else
+            {
+                return McpToolResult.Error($"Analysis failed: {result.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running predefined analysis");
+            return McpToolResult.Error($"Error running analysis: {ex.Message}");
+        }
     }
 
     public async Task<McpToolResult> ListSessionsAsync(CancellationToken cancellationToken = default)

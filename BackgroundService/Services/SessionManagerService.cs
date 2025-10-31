@@ -10,6 +10,7 @@ public sealed class SessionManagerService : ISessionManagerService
     private readonly ILoggerFactory _loggerFactory;
     private readonly IPathDetectionService _pathDetectionService;
     private readonly IAnalysisService _analysisService;
+    private readonly IJobManagerService _jobManager;
     private readonly ConcurrentDictionary<string, ICdbSessionService> _sessions = new();
     private readonly string _cdbPath;
     private readonly string _symbolCache;
@@ -20,12 +21,14 @@ public sealed class SessionManagerService : ISessionManagerService
                                ILoggerFactory loggerFactory,
                                IPathDetectionService pathDetectionService,
                                IAnalysisService analysisService,
+                               IJobManagerService jobManager,
                                IConfiguration configuration)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;
         _pathDetectionService = pathDetectionService;
         _analysisService = analysisService;
+        _jobManager = jobManager;
 
         var debuggerConfig = configuration.GetDebuggerConfiguration();
 
@@ -58,24 +61,38 @@ public sealed class SessionManagerService : ISessionManagerService
                               _cdbPath, _symbolCache, _symbolPathExtra);
     }
 
-    public async Task<string> CreateSessionWithDumpAsync(string dumpFilePath, CancellationToken cancellationToken = default)
+    public async Task<string> CreateSessionWithDumpAsync(string jobId, string dumpFilePath, CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(dumpFilePath))
-        {
-            _logger.LogError("Dump file not found: {DumpFile}", dumpFilePath);
-            throw new FileNotFoundException($"Dump file not found: {dumpFilePath}", dumpFilePath);
-        }
-
-        var sessionId = Guid.NewGuid().ToString("N")[..Constants.Debugging.SessionIdLength];
-        var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
-        var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra, _symbolServers);
-
-        // Add session to dictionary first to prevent race conditions
-        _sessions[sessionId] = session;
-        _logger.LogInformation("Created new CDB session {SessionId}, loading dump: {DumpFile}", sessionId, dumpFilePath);
-
         try
         {
+            await _jobManager.UpdateProgressAsync(jobId, 0.1, "Validating dump file...");
+
+            if (!File.Exists(dumpFilePath))
+            {
+                _logger.LogError("Dump file not found: {DumpFile}", dumpFilePath);
+                throw new FileNotFoundException($"Dump file not found: {dumpFilePath}", dumpFilePath);
+            }
+
+            await _jobManager.UpdateProgressAsync(jobId, 0.2, "Creating CDB session...");
+
+            var sessionId = Guid.NewGuid().ToString("N")[..Constants.Debugging.SessionIdLength];
+            var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
+
+            // Create progress reporter for CDB session
+            var progressReporter = new Progress<string>(async message =>
+            {
+                // Extract progress percentage from message if possible, otherwise increment gradually
+                await _jobManager.UpdateProgressAsync(jobId, 0.5, message);
+            });
+
+            var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra, _symbolServers);
+
+            // Add session to dictionary first to prevent race conditions
+            _sessions[sessionId] = session;
+            _logger.LogInformation("Created new CDB session {SessionId}, loading dump: {DumpFile}", sessionId, dumpFilePath);
+
+            await _jobManager.UpdateProgressAsync(jobId, 0.3, $"Starting CDB process for session {sessionId}...");
+
             await session.LoadDumpAsync(dumpFilePath, cancellationToken);
 
             // Verify session is still active after loading
@@ -86,19 +103,19 @@ public sealed class SessionManagerService : ISessionManagerService
                 throw new InvalidOperationException($"CDB process failed to start or exited during dump loading for session {sessionId}");
             }
 
+            await _jobManager.UpdateProgressAsync(jobId, 1.0, $"Session {sessionId} ready");
+
             _logger.LogInformation("Successfully loaded dump in session {SessionId}: {DumpFile}", sessionId, dumpFilePath);
             return sessionId;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load dump in session {SessionId}: {DumpFile}", sessionId, dumpFilePath);
-            _sessions.TryRemove(sessionId, out _);
-            session.Dispose();
+            _logger.LogError(ex, "Failed to load dump: {DumpFile}", dumpFilePath);
             throw;
         }
     }
 
-    public async Task<string> ExecuteCommandAsync(string sessionId, string command, CancellationToken cancellationToken = default)
+    public async Task<string> ExecuteCommandAsync(string jobId, string sessionId, string command, CancellationToken cancellationToken = default)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
@@ -116,7 +133,19 @@ public sealed class SessionManagerService : ISessionManagerService
 
         try
         {
-            return await session.ExecuteCommandAsync(command, cancellationToken);
+            await _jobManager.UpdateProgressAsync(jobId, 0.1, $"Executing command: {command}");
+
+            // Create progress reporter
+            var progressReporter = new Progress<string>(async message =>
+            {
+                await _jobManager.UpdateProgressAsync(jobId, 0.5, message);
+            });
+
+            var result = await session.ExecuteCommandAsync(command, progressReporter, cancellationToken);
+
+            await _jobManager.UpdateProgressAsync(jobId, 1.0, "Command completed");
+
+            return result;
         }
         catch (Exception ex)
         {
@@ -125,12 +154,12 @@ public sealed class SessionManagerService : ISessionManagerService
         }
     }
 
-    public async Task<string> ExecuteBasicAnalysisAsync(string sessionId, CancellationToken cancellationToken = default)
+    public async Task<string> ExecuteBasicAnalysisAsync(string jobId, string sessionId, CancellationToken cancellationToken = default)
     {
-        return await ExecutePredefinedAnalysisAsync(sessionId, "basic", cancellationToken);
+        return await ExecutePredefinedAnalysisAsync(jobId, sessionId, "basic", cancellationToken);
     }
 
-    public async Task<string> ExecutePredefinedAnalysisAsync(string sessionId, string analysisName, CancellationToken cancellationToken = default)
+    public async Task<string> ExecutePredefinedAnalysisAsync(string jobId, string sessionId, string analysisName, CancellationToken cancellationToken = default)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
@@ -148,7 +177,13 @@ public sealed class SessionManagerService : ISessionManagerService
 
         try
         {
-            return await session.ExecutePredefinedAnalysisAsync(analysisName, cancellationToken);
+            await _jobManager.UpdateProgressAsync(jobId, 0.1, $"Starting {analysisName} analysis...");
+
+            var result = await session.ExecutePredefinedAnalysisAsync(analysisName, cancellationToken);
+
+            await _jobManager.UpdateProgressAsync(jobId, 1.0, "Analysis completed");
+
+            return result;
         }
         catch (Exception ex)
         {

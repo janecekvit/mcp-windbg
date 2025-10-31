@@ -15,6 +15,15 @@ public static class Constants
     }
 
     /// <summary>
+    /// Job execution timeouts and polling intervals
+    /// </summary>
+    public static class Jobs
+    {
+        public const int DefaultMaxWaitTimeMs = 600000; // 10 minutes default timeout
+        public const int DefaultPollIntervalMs = 1000; // Poll every second
+    }
+
+    /// <summary>
     /// HTTP status codes used throughout the application
     /// </summary>
     public static class Http

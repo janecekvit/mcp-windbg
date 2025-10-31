@@ -15,5 +15,8 @@
 		<StartupObject>BackgroundService.Program</StartupObject>
 	</PropertyGroup>
 
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.1.0" />
+	</ItemGroup>
 
 </Project>

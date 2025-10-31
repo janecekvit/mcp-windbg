@@ -6,14 +6,21 @@ namespace Shared.Models;
 // API Endpoints (for ASP.NET Core Controllers)
 public static class ApiEndpoints
 {
+    // Diagnostic endpoints
     public const string Health = "/api/diagnostics/health";
-    public const string LoadDump = "/api/sessions/load-dump";
-    public const string ExecuteCommand = "/api/sessions/execute-command";
-    public const string BasicAnalysis = "/api/sessions/basic-analysis";
-    public const string PredefinedAnalysis = "/api/sessions/predefined-analysis";
-    public const string Sessions = "/api/sessions";
     public const string DetectDebuggers = "/api/diagnostics/detect-debuggers";
     public const string Analyses = "/api/diagnostics/analyses";
+
+    // Session management endpoints
+    public const string Sessions = "/api/sessions";
+
+    // Job management endpoints (async with progress reporting via SignalR)
+    public const string Jobs = "/api/jobs";
+    public const string JobStatus = "/api/jobs/{jobId}";
+    public const string LoadDumpAsync = "/api/jobs/load-dump";
+    public const string ExecuteCommandAsync = "/api/jobs/execute-command";
+    public const string BasicAnalysisAsync = "/api/jobs/basic-analysis";
+    public const string PredefinedAnalysisAsync = "/api/jobs/predefined-analysis";
 }
 
 // Shared Request Models
@@ -95,4 +102,11 @@ public static class ApiEndpointExtensions
     /// <param name="sessionId">The session ID</param>
     /// <returns>API endpoint path for the session</returns>
     public static string ToSessionEndpoint(this string sessionId) => $"/api/sessions/{sessionId}";
+
+    /// <summary>
+    /// Creates an API endpoint path for a specific job
+    /// </summary>
+    /// <param name="jobId">The job ID</param>
+    /// <returns>API endpoint path for the job</returns>
+    public static string ToJobEndpoint(this string jobId) => $"/api/jobs/{jobId}";
 }
