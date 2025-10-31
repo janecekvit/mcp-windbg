@@ -17,6 +17,8 @@ public class McpProxy
         _debuggerApiService = debuggerApiService;
         _communicationService = communicationService;
     }
+    
+
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
