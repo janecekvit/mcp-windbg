@@ -1,4 +1,5 @@
 using System.Reflection;
+using BackgroundService.Infrastructure.Detection;
 using BackgroundService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Shared;

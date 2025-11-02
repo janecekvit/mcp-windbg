@@ -1,4 +1,4 @@
-using BackgroundService.Services;
+using BackgroundService.Infrastructure.Detection;
 using Microsoft.Extensions.Logging;
 using Moq;
 

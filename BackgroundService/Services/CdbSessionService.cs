@@ -1,43 +1,44 @@
-using System.Diagnostics;
 using System.Text;
+using BackgroundService.Infrastructure.Debugger;
 using Shared;
 using Shared.Extensions;
 using Shared.Models;
 
 namespace BackgroundService.Services;
 
+/// <summary>
+/// Service for managing CDB debugging sessions.
+/// Orchestrates debugger operations, command execution, and analysis workflows.
+/// Uses infrastructure services for process management and symbol configuration.
+/// </summary>
 public sealed class CdbSessionService : ICdbSessionService
 {
     private readonly ILogger<CdbSessionService> _logger;
     private readonly IAnalysisService _analysisService;
+    private readonly ICdbProcessManager _processManager;
+    private readonly SymbolPathBuilder _symbolPathBuilder;
     private readonly string _cdbPath;
-    private readonly string _symbolCache;
-    private readonly string _symbolPathExtra;
-    private readonly string? _symbolServers;
-    private Process? _cdbProcess;
-    private StreamWriter? _stdin;
     private bool _isInitialized;
-    private readonly object _lock = new();
     private readonly SemaphoreSlim _commandSemaphore = new(1, 1);
 
     public string SessionId { get; }
     public string? CurrentDumpFile { get; private set; }
-    public bool IsActive => _cdbProcess?.HasExited == false;
+    public bool IsActive => _processManager.IsActive;
 
-    public CdbSessionService(string sessionId, ILogger<CdbSessionService> logger,
-                            IAnalysisService analysisService,
-                            string cdbPath = @"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe",
-                            string symbolCache = @"C:\symbols",
-                            string symbolPathExtra = "",
-                            string? symbolServers = null)
+    public CdbSessionService(
+        string sessionId,
+        ILogger<CdbSessionService> logger,
+        IAnalysisService analysisService,
+        ICdbProcessManager processManager,
+        SymbolPathBuilder symbolPathBuilder,
+        string cdbPath)
     {
         SessionId = sessionId;
         _logger = logger;
         _analysisService = analysisService;
+        _processManager = processManager;
+        _symbolPathBuilder = symbolPathBuilder;
         _cdbPath = cdbPath;
-        _symbolCache = symbolCache;
-        _symbolPathExtra = symbolPathExtra;
-        _symbolServers = symbolServers;
     }
 
     public async Task LoadDumpAsync(string dumpFilePath, IProgress<ProgressUpdate>? progress = null, CancellationToken cancellationToken = default)
@@ -48,106 +49,31 @@ public sealed class CdbSessionService : ICdbSessionService
             throw new FileNotFoundException($"Dump file not found: {dumpFilePath}", dumpFilePath);
         }
 
+        progress?.Report(ProgressUpdate.StartingCdb());
+        CurrentDumpFile = dumpFilePath;
+
+        // Build symbol path using infrastructure service
+        var symbolPath = _symbolPathBuilder.BuildSymbolPath();
+
         if (!File.Exists(_cdbPath))
         {
             _logger.LogError("CDB not found at: {CdbPath}", _cdbPath);
             throw new FileNotFoundException($"CDB not found at: {_cdbPath}", _cdbPath);
         }
 
-        progress?.Report(ProgressUpdate.StartingCdb());
+        // Start CDB process using infrastructure manager
+        progress?.Report(ProgressUpdate.LoadingDump("Starting CDB process..."));
+        var started = await _processManager.StartProcessAsync(_cdbPath, dumpFilePath, symbolPath);
 
-        lock (_lock)
+        if (!started)
         {
-            // Close existing session if running
-            if (_cdbProcess != null && !_cdbProcess.HasExited)
-            {
-                _cdbProcess.Kill();
-                _cdbProcess.Dispose();
-            }
-
-            CurrentDumpFile = dumpFilePath;
-
-            // Prepare symbol cache
-            Directory.CreateDirectory(_symbolCache);
-
-            // Build comprehensive symbol path
-            var localSymbols = _symbolCache;
-            var symbolPathParts = new List<string>();
-
-            // Add extra symbol paths first (highest priority)
-            if (!string.IsNullOrWhiteSpace(_symbolPathExtra))
-            {
-                symbolPathParts.AddRange(_symbolPathExtra.Split(';', StringSplitOptions.RemoveEmptyEntries));
-            }
-
-            // Add custom symbol servers if specified
-            if (!string.IsNullOrWhiteSpace(_symbolServers))
-            {
-                foreach (var server in _symbolServers.Split(';', StringSplitOptions.RemoveEmptyEntries))
-                {
-                    var trimmedServer = server.Trim();
-                    if (trimmedServer.StartsWith("http://") || trimmedServer.StartsWith("https://"))
-                    {
-                        // It's a URL - add as srv*cache*url
-                        symbolPathParts.Add($"srv*{localSymbols}*{trimmedServer}");
-                    }
-                    else
-                    {
-                        // It's a file path - add directly
-                        symbolPathParts.Add(trimmedServer);
-                    }
-                }
-                _logger.LogInformation("Using custom symbol servers for session {SessionId}: {SymbolServers}", SessionId, _symbolServers);
-            }
-
-            // Add default Microsoft symbol servers (lower priority)
-            var defaultServers = new[]
-            {
-                $"srv*{localSymbols}*https://msdl.microsoft.com/download/symbols",
-                $"srv*{localSymbols}*https://symbols.nuget.org/download/symbols",
-                $"srv*{localSymbols}*https://download.microsoft.com/download/symbols"
-            };
-            symbolPathParts.AddRange(defaultServers);
-
-            var symbolPath = string.Join(";", symbolPathParts.Where(p => !string.IsNullOrWhiteSpace(p)));
-
-            // Start CDB process
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = _cdbPath,
-                Arguments = $"-z \"{dumpFilePath}\" -y \"{symbolPath}\"",
-                UseShellExecute = false,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8
-            };
-
-            _logger.LogInformation("Starting CDB process for session {SessionId}: {CdbPath} {Arguments}", SessionId, _cdbPath, startInfo.Arguments);
-            _cdbProcess = Process.Start(startInfo);
-
-            if (_cdbProcess == null)
-            {
-                _logger.LogError("Failed to start CDB process for session {SessionId}", SessionId);
-                throw new InvalidOperationException("Failed to start CDB process");
-            }
-
-            _logger.LogInformation("CDB process started for session {SessionId}, PID: {ProcessId}", SessionId, _cdbProcess.Id);
-            _stdin = _cdbProcess.StandardInput;
-            _isInitialized = false;
-
-            // Check if process exited immediately
-            if (_cdbProcess.HasExited)
-            {
-                var exitCode = _cdbProcess.ExitCode;
-                _logger.LogError("CDB process exited immediately for session {SessionId} with exit code: {ExitCode}", SessionId, exitCode);
-                throw new InvalidOperationException($"CDB process exited immediately with exit code: {exitCode}");
-            }
+            _logger.LogError("Failed to start CDB process for session {SessionId}", SessionId);
+            throw new InvalidOperationException("Failed to start CDB process");
         }
 
-        // Wait for initialization and set symbols
+        _logger.LogInformation("CDB process started for session {SessionId}, PID: {ProcessId}", SessionId, _processManager.ProcessId);
+
+        // Initialize session with symbol configuration
         progress?.Report(ProgressUpdate.LoadingDump("CDB process started, initializing session..."));
         await InitializeSessionAsync(progress, cancellationToken);
 
@@ -157,21 +83,7 @@ public sealed class CdbSessionService : ICdbSessionService
     public async Task CancelAsync()
     {
         _logger.LogWarning("Cancelling CDB session {SessionId}", SessionId);
-
-        if (_cdbProcess != null && !_cdbProcess.HasExited)
-        {
-            try
-            {
-                _cdbProcess.Kill(entireProcessTree: true);
-                await _cdbProcess.WaitForExitAsync();
-                _logger.LogInformation("CDB process killed for session {SessionId}", SessionId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error killing CDB process for session {SessionId}", SessionId);
-                throw;
-            }
-        }
+        await _processManager.KillProcessAsync();
     }
 
     private async Task InitializeSessionAsync(IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default)
@@ -181,62 +93,17 @@ public sealed class CdbSessionService : ICdbSessionService
         _logger.LogInformation("Initializing CDB session {SessionId}", SessionId);
         progress?.Report(ProgressUpdate.ConfiguringSymbols());
 
-        var initCommands = new List<string>
-        {
-            // Set symbol options for better debugging
-            ".symopt+ 0x40",          // SYMOPT_DEFERRED_LOADS
-            ".symopt+ 0x400",         // SYMOPT_NO_PROMPTS
-            ".symopt+ 0x800",         // SYMOPT_FAIL_CRITICAL_ERRORS
-            ".symopt- 0x2",           // SYMOPT_UNDNAME (disable for cleaner output)
-
-            // Force symbol path setup - add custom servers first if available
-        };
-
-        // Add custom symbol servers to init commands
-        if (!string.IsNullOrWhiteSpace(_symbolServers))
-        {
-            foreach (var server in _symbolServers.Split(';', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var trimmedServer = server.Trim();
-                if (trimmedServer.StartsWith("http://") || trimmedServer.StartsWith("https://"))
-                {
-                    initCommands.Add($".sympath+ srv*{_symbolCache}*{trimmedServer}");
-                }
-                else
-                {
-                    initCommands.Add($".sympath+ {trimmedServer}");
-                }
-            }
-        }
-
-        // Add default Microsoft symbol servers
-        initCommands.AddRange(new[]
-        {
-            $".sympath+ srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols",
-            $".sympath+ srv*{_symbolCache}*https://symbols.nuget.org/download/symbols",
-
-            // Reload symbols - uses cache if available, downloads only if needed
-            ".reload",
-
-            // Wait for symbol loading to complete
-            ".echo Waiting for symbol loading to complete...",
-
-            // Verify symbol loading
-            ".echo === Symbol Loading Status ===",
-            "lm",
-            ".echo === Session initialized successfully ===",
-            ".echo"
-        });
+        // Get initialization commands from infrastructure service
+        var initCommands = _symbolPathBuilder.GetSymbolInitializationCommands();
 
         progress?.Report(ProgressUpdate.SettingSymbolPaths());
         var commandIndex = 0;
-        var totalCommands = initCommands.Count;
 
         foreach (var command in initCommands)
         {
             commandIndex++;
 
-            // Report progress for key commands with structured updates
+            // Report progress for key commands
             if (command.Contains(".reload"))
             {
                 progress?.Report(ProgressUpdate.ResolvingSymbols("Loading symbols (this may take several minutes)..."));
@@ -247,6 +114,7 @@ public sealed class CdbSessionService : ICdbSessionService
             }
 
             _logger.LogDebug("Executing init command for session {SessionId}: {Command}", SessionId, command);
+
             var result = await ExecuteCommandInternalAsync(command, cancellationToken);
 
             // Check for symbol loading issues and retry if needed
@@ -256,7 +124,7 @@ public sealed class CdbSessionService : ICdbSessionService
                 await RetrySymbolLoadingAsync(cancellationToken);
             }
 
-            // Log cache usage for symbol loading and report structured progress
+            // Log cache usage for symbol loading
             if (command == ".reload")
             {
                 if (result.Contains("from cache") || result.Contains("cached"))
@@ -271,8 +139,10 @@ public sealed class CdbSessionService : ICdbSessionService
                 }
             }
 
-            _logger.LogDebug("Init command result for session {SessionId}: {Result}", SessionId, result?.Length > Constants.Debugging.LogTruncateLength ? result[..Constants.Debugging.LogTruncateLength] + "..." : result);
-            await Task.Delay(Constants.Debugging.InitializationDelay, cancellationToken); // Short pause between commands
+            _logger.LogDebug("Init command result for session {SessionId}: {Result}", SessionId,
+                result?.Length > Constants.Debugging.LogTruncateLength ? result[..Constants.Debugging.LogTruncateLength] + "..." : result);
+
+            await Task.Delay(Constants.Debugging.InitializationDelay, cancellationToken);
         }
 
         _isInitialized = true;
@@ -285,18 +155,12 @@ public sealed class CdbSessionService : ICdbSessionService
 
         var retryCommands = new[]
         {
-            // Retry with verbose output to diagnose issues
             ".symfix",
-            ".reload /v",  // Verbose reload to see what's happening
+            ".reload /v",
             ".echo Retrying symbol loading...",
-
-            // Verify symbol path is correct
-            $".sympath srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols",
-            ".reload",  // Try reload again with fresh symbol path
-
-            // Check symbol status
+            ".reload",
             ".echo === Symbol Retry Status ===",
-            "lm v",  // Verbose module list to check symbols
+            "lm v",
         };
 
         foreach (var command in retryCommands)
@@ -305,13 +169,13 @@ public sealed class CdbSessionService : ICdbSessionService
             {
                 _logger.LogDebug("Executing retry command for session {SessionId}: {Command}", SessionId, command);
                 var result = await ExecuteCommandInternalAsync(command, cancellationToken);
-                _logger.LogDebug("Retry command result for session {SessionId}: {Result}", SessionId, result?.Length > Constants.Debugging.LogTruncateLength ? result[..Constants.Debugging.LogTruncateLength] + "..." : result);
-                await Task.Delay(Constants.Debugging.InitializationDelay * 2, cancellationToken); // Longer pause for retries
+                _logger.LogDebug("Retry command result for session {SessionId}: {Result}", SessionId,
+                    result?.Length > Constants.Debugging.LogTruncateLength ? result[..Constants.Debugging.LogTruncateLength] + "..." : result);
+                await Task.Delay(Constants.Debugging.InitializationDelay * 2, cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Retry command failed for session {SessionId}: {Command}", SessionId, command);
-                // Continue with next retry command
             }
         }
     }
@@ -323,7 +187,7 @@ public sealed class CdbSessionService : ICdbSessionService
 
     public async Task<string> ExecuteCommandAsync(string command, IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default)
     {
-        if (_cdbProcess?.HasExited != false)
+        if (!_processManager.IsActive)
         {
             var error = "CDB process is not running. Load a dump file first.";
             _logger.LogError(error);
@@ -352,7 +216,7 @@ public sealed class CdbSessionService : ICdbSessionService
 
     private async Task<string> ExecuteCommandInternalAsync(string command, CancellationToken cancellationToken = default)
     {
-        if (_stdin == null || _cdbProcess?.HasExited != false)
+        if (!_processManager.IsActive)
         {
             var error = "CDB process is not available";
             _logger.LogError(error);
@@ -365,71 +229,19 @@ public sealed class CdbSessionService : ICdbSessionService
             var marker = $"__END_COMMAND_{Guid.NewGuid():N}__";
             var fullCommand = $"{command}; .echo {marker}";
 
-            lock (_lock)
-            {
-                _stdin.WriteLine(fullCommand);
-                _stdin.Flush();
-            }
+            // Write command using infrastructure manager
+            await _processManager.WriteCommandAsync(fullCommand);
 
-            // Read output until we find the marker - without Task.Run to avoid concurrent stream access
-            var reader = _cdbProcess.StandardOutput;
-            var buffer = new char[Constants.Debugging.ReadBufferSize];
-            var result = new StringBuilder();
+            // Read output until marker using infrastructure manager
+            var timeoutMs = (int)TimeSpan.FromMinutes(Constants.Debugging.SymbolLoadingTimeoutMinutes).TotalMilliseconds;
+            var result = await _processManager.ReadUntilMarkerAsync(marker, timeoutMs, cancellationToken);
 
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(Constants.Debugging.SymbolLoadingTimeoutMinutes));
-            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-
-            while (!_cdbProcess.HasExited && !combinedCts.Token.IsCancellationRequested)
-            {
-                try
-                {
-                    var readTask = reader.ReadAsync(buffer, 0, buffer.Length);
-                    var bytesRead = await readTask.ConfigureAwait(false);
-
-                    if (bytesRead == 0)
-                        break;
-
-                    var chunk = buffer.AsSpan(0, bytesRead).ToString();
-                    result.Append(chunk);
-
-                    // Check for marker
-                    var currentOutput = result.ToString();
-                    if (currentOutput.Contains(marker))
-                    {
-                        var markerIndex = currentOutput.LastIndexOf(marker);
-                        return currentOutput[..markerIndex].Trim();
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        _logger.LogInformation("Command execution cancelled by user for: {Command}", command);
-                        throw new OperationCanceledException("Command execution was cancelled by user", cancellationToken);
-                    }
-                    _logger.LogWarning("Command execution timeout for: {Command} (exceeded 5 minutes)", command);
-                    throw new TimeoutException($"Command '{command}' execution timeout (exceeded 5 minutes)");
-                }
-                catch (InvalidOperationException ex) when (ex.Message.Contains("currently in use"))
-                {
-                    // Stream is busy, wait a bit and retry
-                    await Task.Delay(Constants.Debugging.PollingDelay, combinedCts.Token).ConfigureAwait(false);
-                    continue;
-                }
-            }
-
-            if (combinedCts.Token.IsCancellationRequested)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    _logger.LogInformation("Command execution cancelled by user for: {Command}", command);
-                    throw new OperationCanceledException("Command execution was cancelled by user", cancellationToken);
-                }
-                _logger.LogWarning("Command execution timeout for: {Command} (exceeded 5 minutes)", command);
-                throw new TimeoutException($"Command '{command}' execution timeout (exceeded 5 minutes)");
-            }
-
-            return result.ToString();
+            return result;
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogWarning("Command execution timeout for: {Command}", command);
+            throw new TimeoutException($"Command '{command}' execution timeout", ex);
         }
         catch (Exception ex) when (ex is not (TimeoutException or InvalidOperationException))
         {
@@ -470,7 +282,7 @@ public sealed class CdbSessionService : ICdbSessionService
         foreach (var command in commands)
         {
             currentCommand++;
-            var progressPercent = 0.1 + (0.8 * currentCommand / totalCommands); // 10% - 90%
+            var progressPercent = 0.1 + (0.8 * currentCommand / totalCommands);
             progress?.Report(ProgressUpdate.Analyzing($"{analysisName} ({currentCommand}/{totalCommands})", progressPercent));
 
             var result = await ExecuteCommandAsync(command, cancellationToken);
@@ -483,30 +295,21 @@ public sealed class CdbSessionService : ICdbSessionService
 
     public void Dispose()
     {
-        lock (_lock)
+        try
         {
-            try
+            if (_processManager.IsActive)
             {
-                if (_cdbProcess?.HasExited == false)
-                {
-                    _stdin?.WriteLine("q");
-                    _stdin?.Flush();
-
-                    if (!_cdbProcess.WaitForExit(Constants.Debugging.ProcessWaitTimeout))
-                        _cdbProcess.Kill();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error disposing CDB session {SessionId}", SessionId);
-            }
-            finally
-            {
-                _stdin?.Dispose();
-                _cdbProcess?.Dispose();
-                _commandSemaphore.Dispose();
+                _processManager.ShutdownGracefullyAsync(Constants.Debugging.ProcessWaitTimeout).GetAwaiter().GetResult();
             }
         }
-        GC.SuppressFinalize(this);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error disposing CDB session {SessionId}", SessionId);
+        }
+        finally
+        {
+            _processManager.Dispose();
+            _commandSemaphore.Dispose();
+        }
     }
 }

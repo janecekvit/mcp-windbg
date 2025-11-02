@@ -1,5 +1,9 @@
-namespace BackgroundService.Services;
+namespace BackgroundService.Infrastructure.Detection;
 
+/// <summary>
+/// Infrastructure service for detecting CDB and WinDbg installations.
+/// Searches Windows SDK paths, Windows Store apps, and validates debugger executables.
+/// </summary>
 public class PathDetectionService : IPathDetectionService
 {
     private readonly ILogger<PathDetectionService> _logger;
@@ -11,13 +15,13 @@ public class PathDetectionService : IPathDetectionService
         @"C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\cdb.exe",
         @"C:\Program Files\Windows Kits\10\Debuggers\x64\cdb.exe",
         @"C:\Program Files\Windows Kits\10\Debuggers\x86\cdb.exe",
-        
+
         // Windows 11 SDK (newer versions)
         @"C:\Program Files (x86)\Windows Kits\11\Debuggers\x64\cdb.exe",
         @"C:\Program Files (x86)\Windows Kits\11\Debuggers\x86\cdb.exe",
         @"C:\Program Files\Windows Kits\11\Debuggers\x64\cdb.exe",
         @"C:\Program Files\Windows Kits\11\Debuggers\x86\cdb.exe",
-        
+
         // WinDbg Store App - use windbg.exe as fallback
         @"C:\Program Files\WindowsApps\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\amd64\windbg.exe",
         @"C:\Program Files\WindowsApps\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\x86\windbg.exe",

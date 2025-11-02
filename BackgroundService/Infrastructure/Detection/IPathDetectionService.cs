@@ -1,5 +1,9 @@
-namespace BackgroundService.Services;
+namespace BackgroundService.Infrastructure.Detection;
 
+/// <summary>
+/// Infrastructure service for detecting CDB and WinDbg installations on the system.
+/// Searches standard Windows SDK installation paths and Windows Store app locations.
+/// </summary>
 public interface IPathDetectionService
 {
     /// <summary>
@@ -7,13 +11,13 @@ public interface IPathDetectionService
     /// </summary>
     /// <returns>Tuple containing CDB path, WinDbg path, and list of all found debugger paths</returns>
     (string? CdbPath, string? WinDbgPath, List<string> FoundPaths) DetectDebuggerPaths();
-    
+
     /// <summary>
     /// Gets the best available debugger path, prioritizing CDB over WinDbg
     /// </summary>
     /// <returns>Path to the preferred debugger executable</returns>
     string GetBestDebuggerPath();
-    
+
     /// <summary>
     /// Validates if the provided path points to a valid debugger executable
     /// </summary>

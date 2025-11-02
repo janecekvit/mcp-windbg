@@ -8,58 +8,20 @@ namespace BackgroundService.Services;
 public sealed class SessionManagerService : ISessionManagerService
 {
     private readonly ILogger<SessionManagerService> _logger;
-    private readonly ILoggerFactory _loggerFactory;
-    private readonly IPathDetectionService _pathDetectionService;
-    private readonly IAnalysisService _analysisService;
+    private readonly ICdbSessionFactory _sessionFactory;
     private readonly IJobManagerService _jobManager;
     private readonly ConcurrentDictionary<string, ICdbSessionService> _sessions = new();
-    private readonly string _cdbPath;
-    private readonly string _symbolCache;
-    private readonly string _symbolPathExtra;
-    private readonly string? _symbolServers;
 
-    public SessionManagerService(ILogger<SessionManagerService> logger,
-                               ILoggerFactory loggerFactory,
-                               IPathDetectionService pathDetectionService,
-                               IAnalysisService analysisService,
-                               IJobManagerService jobManager,
-                               IConfiguration configuration)
+    public SessionManagerService(
+        ILogger<SessionManagerService> logger,
+        ICdbSessionFactory sessionFactory,
+        IJobManagerService jobManager)
     {
         _logger = logger;
-        _loggerFactory = loggerFactory;
-        _pathDetectionService = pathDetectionService;
-        _analysisService = analysisService;
+        _sessionFactory = sessionFactory;
         _jobManager = jobManager;
 
-        var debuggerConfig = configuration.GetDebuggerConfiguration();
-
-        // Auto-detect CDB path or use configuration/environment variable
-        if (!string.IsNullOrEmpty(debuggerConfig.CdbPath) && _pathDetectionService.ValidateDebuggerPath(debuggerConfig.CdbPath))
-        {
-            _cdbPath = debuggerConfig.CdbPath;
-            _logger.LogInformation("Using CDB path from configuration: {Path}", _cdbPath);
-        }
-        else
-        {
-            try
-            {
-                _cdbPath = _pathDetectionService.GetBestDebuggerPath();
-                _logger.LogInformation("Auto-detected debugger path: {Path}", _cdbPath);
-            }
-            catch (FileNotFoundException ex)
-            {
-                _logger.LogError("Failed to detect debugger path: {Error}", ex.Message);
-                throw new InvalidOperationException("Cannot initialize SessionManagerService without valid debugger path", ex);
-            }
-        }
-
-        _symbolCache = debuggerConfig.SymbolCache
-                       ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CdbMcpServer", "symbols");
-        _symbolPathExtra = debuggerConfig.SymbolPathExtra;
-        _symbolServers = debuggerConfig.SymbolServers;
-
-        _logger.LogInformation("CDB Configuration - Path: {CdbPath}, SymbolCache: {SymbolCache}, Extra: {Extra}",
-                              _cdbPath, _symbolCache, _symbolPathExtra);
+        _logger.LogInformation("SessionManagerService initialized with factory-based session creation");
     }
 
     public async Task<string> CreateSessionWithDumpAsync(string jobId, string dumpFilePath, CancellationToken cancellationToken = default)
@@ -78,7 +40,6 @@ public sealed class SessionManagerService : ISessionManagerService
             await _jobManager.UpdateProgressAsync(jobId, 0.1, "Creating CDB session...");
 
             var sessionId = Guid.NewGuid().ToString("N")[..Constants.Debugging.SessionIdLength];
-            var sessionLogger = _loggerFactory.CreateLogger<CdbSessionService>();
 
             // Create structured progress reporter for CDB session
             var progressReporter = new Progress<ProgressUpdate>(async update =>
@@ -87,7 +48,8 @@ public sealed class SessionManagerService : ISessionManagerService
                 await _jobManager.UpdateProgressAsync(jobId, update.Progress, update.Message);
             });
 
-            var session = new CdbSessionService(sessionId, sessionLogger, _analysisService, _cdbPath, _symbolCache, _symbolPathExtra, _symbolServers);
+            // Create session using factory (handles infrastructure dependencies)
+            var session = _sessionFactory.CreateSession(sessionId);
 
             // Add session to dictionary first to prevent race conditions
             _sessions[sessionId] = session;

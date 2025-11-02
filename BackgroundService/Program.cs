@@ -1,5 +1,8 @@
 using BackgroundService.Services;
+using BackgroundService.Infrastructure.Detection;
 using Shared;
+using Shared.Configuration;
+using Shared.Extensions;
 
 namespace BackgroundService;
 
@@ -11,9 +14,16 @@ internal class Program
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Configure services
+            // Load and register configuration
+            var debuggerConfig = builder.Configuration.GetDebuggerConfiguration();
+            builder.Services.AddSingleton(debuggerConfig);
+
+            // Infrastructure services
             builder.Services.AddSingleton<IPathDetectionService, PathDetectionService>();
+
+            // Application services
             builder.Services.AddSingleton<IAnalysisService, AnalysisService>();
+            builder.Services.AddSingleton<ICdbSessionFactory, CdbSessionFactory>();
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
             builder.Services.AddSingleton<IJobManagerService, JobManagerService>();
 
