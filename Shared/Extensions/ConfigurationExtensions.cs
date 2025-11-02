@@ -43,9 +43,15 @@ public static class ConfigurationExtensions
     /// <returns>DebuggerConfiguration with values from config or environment variables</returns>
     public static DebuggerConfiguration GetDebuggerConfiguration(this IConfiguration configuration)
     {
+        // Default symbol cache: %LOCALAPPDATA%\CdbMcpServer\symbols
+        var defaultSymbolCache = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "CdbAnalysisServer",
+            "Symbols");
+
         return new DebuggerConfiguration
         {
-            SymbolCache = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolCache", "SYMBOL_CACHE"),
+            SymbolCache = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolCache", "SYMBOL_CACHE", defaultSymbolCache)!,
             SymbolPathExtra = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolPathExtra", "SYMBOL_PATH_EXTRA", string.Empty)!,
             SymbolServers = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolServers", "SYMBOL_SERVERS")
         };

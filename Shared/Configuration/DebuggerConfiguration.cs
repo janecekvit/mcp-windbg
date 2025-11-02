@@ -6,9 +6,10 @@ namespace Shared.Configuration;
 public class DebuggerConfiguration
 {
     /// <summary>
-    /// Path to the symbol cache directory. If null, default location will be used.
+    /// Path to the symbol cache directory.
+    /// Default: %LOCALAPPDATA%\CdbMcpServer\symbols
     /// </summary>
-    public string? SymbolCache { get; set; }
+    public string SymbolCache { get; set; } = string.Empty;
 
     /// <summary>
     /// Additional symbol paths to include
