@@ -364,9 +364,6 @@ public class DebuggerApiService : IDebuggerApiService
         else
             output.AppendLine("❌ No CDB found");
 
-        if (!string.IsNullOrEmpty(response.WinDbgPath) && response.WinDbgPath != response.CdbPath)
-            output.AppendLine($"📊 WinDbg: {response.WinDbgPath}");
-
         output.AppendSection("🔧 Environment:");
         foreach (var env in response.EnvironmentVariables)
             output.AppendKeyValue(env.Key, env.Value ?? "(not set)");

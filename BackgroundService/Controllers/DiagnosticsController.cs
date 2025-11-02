@@ -55,7 +55,7 @@ public class DiagnosticsController : ControllerBase
     {
         try
         {
-            var (cdbPath, winDbgPath, foundPaths) = _pathDetectionService.DetectDebuggerPaths();
+            var (cdbPath, foundPaths) = _pathDetectionService.DetectDebuggerPaths();
 
             var debuggerConfig = _configuration.GetDebuggerConfiguration();
             var envVars = new Dictionary<string, string?>
@@ -65,9 +65,9 @@ public class DiagnosticsController : ControllerBase
                 ["SYMBOL_PATH_EXTRA"] = debuggerConfig.SymbolPathExtra
             };
 
-            _logger.LogInformation("Debugger detection completed. CDB: {CdbPath}, WinDbg: {WinDbgPath}", cdbPath, winDbgPath);
+            _logger.LogInformation("Debugger detection completed. CDB: {CdbPath}", cdbPath);
 
-            return Ok(new DebuggerDetectionResponse(cdbPath, winDbgPath, foundPaths, envVars));
+            return Ok(new DebuggerDetectionResponse(cdbPath, foundPaths, envVars));
         }
         catch (Exception ex)
         {

@@ -69,7 +69,6 @@ public record AnalysesResponse([property: JsonPropertyName("analyses")] IReadOnl
 
 public record DebuggerDetectionResponse(
     [property: JsonPropertyName("cdbPath")] string? CdbPath,
-    [property: JsonPropertyName("winDbgPath")] string? WinDbgPath,
     [property: JsonPropertyName("foundPaths")] IReadOnlyList<string> FoundPaths,
     [property: JsonPropertyName("environmentVariables")] Dictionary<string, string?> EnvironmentVariables);
 
