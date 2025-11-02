@@ -24,44 +24,17 @@ public class PathDetectionServiceTests
     public void DetectDebuggerPaths_ReturnsValidPaths()
     {
         // Act
-        var (CdbPath, FoundPaths) = _pathDetectionService.DetectDebuggerPaths();
+        var foundPaths = _pathDetectionService.DetectDebuggerPaths();
 
         // Assert
         // Paths may be null if debuggers are not installed, but method should not throw
-        Assert.NotNull(FoundPaths);
+        Assert.NotNull(foundPaths);
 
-        // If path is found, it should be valid
-        if (!string.IsNullOrEmpty(CdbPath))
+        // If paths are found, they should be valid
+        foreach (var path in foundPaths)
         {
-            Assert.True(CdbPath.Contains("cdb.exe", StringComparison.OrdinalIgnoreCase) ||
-                       CdbPath.Contains("cdb", StringComparison.OrdinalIgnoreCase));
-        }
-    }
-
-    [Fact]
-    public void DetectDebuggerPaths_HandlesEnvironmentVariables()
-    {
-        // Arrange
-        var originalCdbPath = Environment.GetEnvironmentVariable("CDB_PATH");
-        var testPath = @"C:\TestPath\cdb.exe";
-
-        try
-        {
-            // Set environment variable for test
-            Environment.SetEnvironmentVariable("CDB_PATH", testPath);
-
-            // Act
-            var (CdbPath, FoundPaths) = _pathDetectionService.DetectDebuggerPaths();
-
-            // Assert
-            // The service should respect environment variable if file exists
-            // Since test file doesn't exist, it will fallback to auto-detection
-            Assert.NotNull(FoundPaths);
-        }
-        finally
-        {
-            // Restore original environment variable
-            Environment.SetEnvironmentVariable("CDB_PATH", originalCdbPath);
+            Assert.True(path.Contains("cdb.exe", StringComparison.OrdinalIgnoreCase) ||
+                       path.Contains("cdb", StringComparison.OrdinalIgnoreCase));
         }
     }
 
@@ -69,11 +42,49 @@ public class PathDetectionServiceTests
     public void DetectDebuggerPaths_ReturnsConsistentResults()
     {
         // Act
-        var (CdbPath, FoundPaths) = _pathDetectionService.DetectDebuggerPaths();
-        var result2 = _pathDetectionService.DetectDebuggerPaths();
+        var foundPaths = _pathDetectionService.DetectDebuggerPaths();
+        var foundPaths2 = _pathDetectionService.DetectDebuggerPaths();
 
         // Assert
-        Assert.Equal(CdbPath, result2.CdbPath);
-        Assert.Equal(FoundPaths, result2.FoundPaths);
+        Assert.Equal(foundPaths, foundPaths2);
+    }
+
+    [Fact]
+    public void GetBestDebuggerPath_ReturnsValidPathOrThrowsIfNotFound()
+    {
+        try
+        {
+            // Act
+            var bestPath = _pathDetectionService.GetBestDebuggerPath();
+
+            // Assert - If path is found, it should be valid
+            Assert.NotNull(bestPath);
+            Assert.True(bestPath.Contains("cdb.exe", StringComparison.OrdinalIgnoreCase) ||
+                       bestPath.Contains("cdb", StringComparison.OrdinalIgnoreCase));
+        }
+        catch (FileNotFoundException)
+        {
+            // Expected if CDB is not installed
+            Assert.True(true);
+        }
+    }
+
+    [Fact]
+    public void GetBestDebuggerPath_ReturnsConsistentResults()
+    {
+        try
+        {
+            // Act
+            var bestPath1 = _pathDetectionService.GetBestDebuggerPath();
+            var bestPath2 = _pathDetectionService.GetBestDebuggerPath();
+
+            // Assert
+            Assert.Equal(bestPath1, bestPath2);
+        }
+        catch (FileNotFoundException)
+        {
+            // Expected if CDB is not installed - just verify it's consistent
+            Assert.Throws<FileNotFoundException>(() => _pathDetectionService.GetBestDebuggerPath());
+        }
     }
 }

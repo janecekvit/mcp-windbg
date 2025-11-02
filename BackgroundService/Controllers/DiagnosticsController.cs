@@ -55,12 +55,13 @@ public class DiagnosticsController : ControllerBase
     {
         try
         {
-            var (cdbPath, foundPaths) = _pathDetectionService.DetectDebuggerPaths();
+            var foundPaths = _pathDetectionService.DetectDebuggerPaths();
+            var cdbPath = _pathDetectionService.GetBestDebuggerPath();
 
             var debuggerConfig = _configuration.GetDebuggerConfiguration();
             var envVars = new Dictionary<string, string?>
             {
-                ["CDB_PATH"] = debuggerConfig.CdbPath,
+                // CDB path is auto-detected, not from environment variable
                 ["SYMBOL_CACHE"] = debuggerConfig.SymbolCache,
                 ["SYMBOL_PATH_EXTRA"] = debuggerConfig.SymbolPathExtra
             };

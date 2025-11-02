@@ -1,8 +1,7 @@
-using BackgroundService.Services;
 using BackgroundService.Infrastructure.Detection;
 using BackgroundService.Infrastructure.IO;
+using BackgroundService.Services;
 using Shared;
-using Shared.Configuration;
 using Shared.Extensions;
 
 namespace BackgroundService;
@@ -69,7 +68,7 @@ internal class Program
             app.MapControllers();
 
             // Map SignalR hub
-            app.MapHub<BackgroundService.Hubs.ProgressHub>("/hubs/progress");
+            app.MapHub<Hubs.ProgressHub>("/hubs/progress");
 
             // Start the service
             var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : Constants.Network.DefaultBackgroundServicePort;

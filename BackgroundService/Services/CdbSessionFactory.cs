@@ -35,16 +35,16 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
         _configuration = configuration;
 
         // Detect or validate CDB path during factory construction
-        if (!string.IsNullOrEmpty(_configuration.CdbPath) && _pathDetectionService.ValidateDebuggerPath(_configuration.CdbPath))
+        var path = _pathDetectionService.GetBestDebuggerPath();
+        if (string.IsNullOrWhiteSpace(path))
         {
-            _cdbPath = _configuration.CdbPath;
-            factoryLogger.LogInformation("Using CDB path from configuration: {Path}", _cdbPath);
+            factoryLogger.LogError("No valid CDB installation found on the system.");
+            throw new InvalidOperationException("CDBdebugger not found. Please ensure it is installed.");
         }
-        else
-        {
-            _cdbPath = _pathDetectionService.GetBestDebuggerPath();
-            factoryLogger.LogInformation("Auto-detected debugger path: {Path}", _cdbPath);
-        }
+
+        _cdbPath = path;
+        factoryLogger.LogInformation("Auto-detected debugger path: {Path}", path);
+
     }
 
     public ICdbSessionService CreateSession(string sessionId)

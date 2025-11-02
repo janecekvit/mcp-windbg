@@ -37,7 +37,7 @@ public static class ConfigurationExtensions
     }
 
     /// <summary>
-    /// Gets debugger configuration with environment variable fallback
+    /// Gets debugger configuration with environment variable fallback for symbol paths.
     /// </summary>
     /// <param name="configuration">The configuration instance</param>
     /// <returns>DebuggerConfiguration with values from config or environment variables</returns>
@@ -45,7 +45,6 @@ public static class ConfigurationExtensions
     {
         return new DebuggerConfiguration
         {
-            CdbPath = configuration.GetValueWithEnvironmentFallback("Debugger:CdbPath", "CDB_PATH"),
             SymbolCache = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolCache", "SYMBOL_CACHE"),
             SymbolPathExtra = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolPathExtra", "SYMBOL_PATH_EXTRA", string.Empty)!,
             SymbolServers = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolServers", "SYMBOL_SERVERS")
