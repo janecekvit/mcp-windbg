@@ -232,4 +232,38 @@ public class JobsController : ControllerBase
 
         return Accepted($"/api/jobs/{jobId}", response);
     }
+
+    /// <summary>
+    /// Creates a new job to close a debugging session asynchronously
+    /// </summary>
+    [HttpPost("close-session")]
+    [ProducesResponseType<JobCreatedResponse>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ErrorResponse>(StatusCodes.Status400BadRequest)]
+    public IActionResult CloseSessionAsync([FromBody] CloseSessionRequest request)
+    {
+        var jobId = _jobManager.CreateJob(JobOperationType.CloseSession, request.SessionId);
+        _logger.LogInformation("Created job {JobId} for closing session {SessionId}", jobId, request.SessionId);
+
+        // Start the operation in background
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _sessionManager.CancelSessionAsync(request.SessionId);
+                await _jobManager.CompleteJobAsync(jobId, $"Session {request.SessionId} closed successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Job {JobId} failed", jobId);
+                await _jobManager.FailJobAsync(jobId, ex.Message);
+            }
+        });
+
+        var response = new JobCreatedResponse(
+            jobId,
+            $"/api/jobs/{jobId}",
+            $"Job {jobId} created for closing session");
+
+        return Accepted($"/api/jobs/{jobId}", response);
+    }
 }

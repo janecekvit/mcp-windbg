@@ -66,7 +66,7 @@ dotnet run --project BackgroundService -- 8080
 - `CommunicationService`: Handles MCP JSON-RPC protocol over stdio
 - `DebuggerApiService`: HTTP client that calls BackgroundService job-based endpoints
 - `SignalRClientService`: WebSocket client for real-time progress notifications
-- `ToolsService`: Registers 8 MCP tools (load_dump, execute_command, etc.)
+- `ToolsService`: Registers 8 MCP tools (load_dump, execute_command, basic_analysis, predefined_analysis, close_session, list_jobs, list_analyses, detect_debuggers)
 
 **Why Job-Based + SignalR?**
 - **Non-blocking**: Operations return jobId immediately, no hanging
@@ -91,7 +91,6 @@ dotnet run --project BackgroundService -- 8080
 
 **Controllers**:
 - `JobsController`: **Job-based async API** at `/api/jobs/*` (primary API)
-- `SessionsController`: Utility endpoints - GET `/api/sessions` (list), DELETE `/api/sessions/{id}` (close)
 - `DiagnosticsController`: Health checks and debugger detection
 
 ### 3. Shared Library
@@ -139,7 +138,8 @@ ExecuteCommandAsync() (CdbSessionService.cs:263)
   → Read stdout until marker (with timeout & progress)
   → Release semaphore
 
-CloseSession() (SessionManagerService.cs:160)
+CancelSessionAsync() (SessionManagerService.cs:208)
+  → Call session.CancelAsync()
   → Send "q" to CDB stdin
   → WaitForExit(5s) or Kill()
   → Remove from dictionary, Dispose()
@@ -154,7 +154,7 @@ throw new FileNotFoundException("Dump file not found");
 throw new ArgumentException("Session not found");
 throw new InvalidOperationException("Session not active");
 
-// Controllers catch and convert to HTTP responses (SessionsController.cs:32-57)
+// Controllers catch and convert to HTTP responses (JobsController.cs)
 catch (FileNotFoundException) → 400 Bad Request
 catch (ArgumentException) → 404 Not Found
 catch (InvalidOperationException) → 400 Bad Request
@@ -256,13 +256,14 @@ BACKGROUND_SERVICE_URL # Default: http://localhost:8080
 
 ### Job-Based Endpoints (JobsController)
 ```
-POST /api/jobs/load-dump          → 202 Accepted, returns { jobId, statusEndpoint }
-POST /api/jobs/execute-command    → 202 Accepted, returns { jobId, statusEndpoint }
-POST /api/jobs/basic-analysis     → 202 Accepted, returns { jobId, statusEndpoint }
+POST /api/jobs/load-dump           → 202 Accepted, returns { jobId, statusEndpoint }
+POST /api/jobs/execute-command     → 202 Accepted, returns { jobId, statusEndpoint }
+POST /api/jobs/basic-analysis      → 202 Accepted, returns { jobId, statusEndpoint }
 POST /api/jobs/predefined-analysis → 202 Accepted, returns { jobId, statusEndpoint }
-GET  /api/jobs/{jobId}            → Job status with progress
-GET  /api/jobs?state=Running      → List all jobs (with optional state filter)
-POST /api/jobs/{jobId}/cancel     → Cancel running job
+POST /api/jobs/close-session       → 202 Accepted, returns { jobId, statusEndpoint }
+GET  /api/jobs/{jobId}             → Job status with progress
+GET  /api/jobs?state=Running       → List all jobs (with optional state filter)
+POST /api/jobs/{jobId}/cancel      → Cancel running job
 ```
 
 ### Flow:

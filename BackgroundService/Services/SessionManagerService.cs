@@ -205,27 +205,6 @@ public sealed class SessionManagerService : ISessionManagerService
         }
     }
 
-    public void CloseSession(string sessionId)
-    {
-        if (!_sessions.TryRemove(sessionId, out var session))
-        {
-            var error = $"Session {sessionId} not found";
-            _logger.LogError(error);
-            throw new ArgumentException(error, nameof(sessionId));
-        }
-
-        try
-        {
-            session.Dispose();
-            _logger.LogInformation("Closed CDB session {SessionId}", sessionId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error closing session {SessionId}", sessionId);
-            throw new InvalidOperationException($"Error closing session: {ex.Message}", ex);
-        }
-    }
-
     public async Task CancelSessionAsync(string sessionId)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
@@ -247,16 +226,6 @@ public sealed class SessionManagerService : ISessionManagerService
             _logger.LogError(ex, "Error cancelling session {SessionId}", sessionId);
             throw new InvalidOperationException($"Error cancelling session: {ex.Message}", ex);
         }
-    }
-
-    public IEnumerable<Models.SessionInfo> GetActiveSessions()
-    {
-        return _sessions.Values.Select(s => new Models.SessionInfo
-        {
-            SessionId = s.SessionId,
-            DumpFile = s.CurrentDumpFile ?? "",
-            IsActive = s.IsActive
-        }).ToList();
     }
 
     public void Dispose()

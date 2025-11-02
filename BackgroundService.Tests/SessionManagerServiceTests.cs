@@ -79,16 +79,6 @@ public sealed class SessionManagerServiceTests : IDisposable
     }
 
     [Fact]
-    public void GetActiveSessions_InitiallyEmpty()
-    {
-        // Act
-        var sessions = _sessionManager.GetActiveSessions();
-
-        // Assert
-        Assert.Empty(sessions);
-    }
-
-    [Fact]
     public async Task ExecuteCommandAsync_InvalidSessionId_ThrowsArgumentException()
     {
         // Arrange
@@ -124,16 +114,5 @@ public sealed class SessionManagerServiceTests : IDisposable
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(
             () => _sessionManager.ExecutePredefinedAnalysisAsync(jobId, invalidSessionId, analysisType));
-    }
-
-    [Fact]
-    public void CloseSession_InvalidSessionId_ThrowsArgumentException()
-    {
-        // Arrange
-        var invalidSessionId = "nonexistent";
-
-        // Act & Assert
-        Assert.Throws<ArgumentException>(
-            () => _sessionManager.CloseSession(invalidSessionId));
     }
 }

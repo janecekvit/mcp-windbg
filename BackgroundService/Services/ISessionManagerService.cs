@@ -43,20 +43,8 @@ public interface ISessionManagerService : IDisposable
     Task<string> ExecutePredefinedAnalysisAsync(string jobId, string sessionId, string analysisName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Closes a debugging session and frees its resources
-    /// </summary>
-    /// <param name="sessionId">ID of the session to close</param>
-    void CloseSession(string sessionId);
-
-    /// <summary>
     /// Cancels a running session and terminates its CDB process
     /// </summary>
     /// <param name="sessionId">ID of the session to cancel</param>
     Task CancelSessionAsync(string sessionId);
-
-    /// <summary>
-    /// Gets information about all currently active debugging sessions
-    /// </summary>
-    /// <returns>Enumerable of session information objects</returns>
-    IEnumerable<BackgroundService.Models.SessionInfo> GetActiveSessions();
 }

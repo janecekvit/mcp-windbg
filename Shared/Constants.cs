@@ -89,9 +89,9 @@ public static class Constants
         public const string LoadDump = "load_dump";
         public const string ExecuteCommand = "execute_command";
         public const string BasicAnalysis = "basic_analysis";
-        public const string ListSessions = "list_sessions";
         public const string CloseSession = "close_session";
         public const string PredefinedAnalysis = "predefined_analysis";
+        public const string ListJobs = "list_jobs";
         public const string ListAnalyses = "list_analyses";
         public const string DetectDebuggers = "detect_debuggers";
 
@@ -104,9 +104,9 @@ public static class Constants
         LoadDump,
         ExecuteCommand,
         BasicAnalysis,
-        ListSessions,
         CloseSession,
         PredefinedAnalysis,
+        ListJobs,
         ListAnalyses,
         DetectDebuggers
     };

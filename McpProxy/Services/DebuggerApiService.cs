@@ -251,34 +251,105 @@ public class DebuggerApiService : IDebuggerApiService
         }
     }
 
-    public async Task<McpToolResult> ListSessionsAsync(CancellationToken cancellationToken = default)
-    {
-        var response = await GetAsync<SessionsResponse>(ApiEndpoints.Sessions, cancellationToken);
-
-        var output = new StringBuilder()
-            .AppendSection("Active sessions:");
-
-        foreach (var session in response.Sessions)
-        {
-            output.AppendKeyValue("Session", session.SessionId)
-                  .AppendKeyValue("Dump", session.DumpFile)
-                  .AppendKeyValue("Active", session.IsActive)
-                  .AppendLine();
-        }
-        return output.ToMcpSuccess();
-    }
-
     public async Task<McpToolResult> CloseSessionAsync(JsonElement args, CancellationToken cancellationToken = default)
     {
-        var sessionResult = args.GetRequiredString("session_id");
-        if (sessionResult.IsFailure) return McpToolResult.Error(sessionResult.Error);
+        try
+        {
+            var sessionResult = args.GetRequiredString("session_id");
+            if (sessionResult.IsFailure) return McpToolResult.Error(sessionResult.Error);
 
-        var sessionId = sessionResult.Value;
-        var error = sessionId.ValidateAsSessionId();
-        if (error != null) return McpToolResult.Error(error);
+            var sessionId = sessionResult.Value;
+            var error = sessionId.ValidateAsSessionId();
+            if (error != null) return McpToolResult.Error(error);
 
-        var response = await DeleteAsync<CloseSessionResponse>(sessionId!.ToSessionEndpoint(), cancellationToken);
-        return McpToolResult.Success(response.Message);
+            var request = new CloseSessionRequest(sessionId!);
+
+            // Create job and subscribe to progress
+            var jobResponse = await PostAsync<CloseSessionRequest, JobCreatedResponse>(ApiEndpoints.CloseSessionAsync, request, cancellationToken);
+            _logger.LogInformation("Created job {JobId} for closing session {SessionId}", jobResponse.JobId, sessionId);
+
+            // Subscribe to SignalR progress updates
+            await _signalRClient.SubscribeToJobAsync(jobResponse.JobId, cancellationToken);
+
+            // Wait for job completion
+            var result = await WaitForJobCompletionAsync(jobResponse.JobId, cancellationToken);
+
+            // Unsubscribe from progress updates
+            await _signalRClient.UnsubscribeFromJobAsync(jobResponse.JobId, cancellationToken);
+
+            if (result.State == JobState.Completed)
+            {
+                return McpToolResult.Success($"Session {sessionId} closed successfully");
+            }
+            else
+            {
+                return McpToolResult.Error($"Failed to close session: {result.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error closing session");
+            return McpToolResult.Error($"Error closing session: {ex.Message}");
+        }
+    }
+
+    public async Task<McpToolResult> ListJobsAsync(JsonElement args, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Optional state filter
+            var stateFilter = args.TryGetProperty("state", out var stateProp) ? stateProp.GetString() : null;
+
+            // Build endpoint with optional query parameter
+            var endpoint = ApiEndpoints.Jobs;
+            if (!string.IsNullOrEmpty(stateFilter))
+            {
+                endpoint += $"?state={stateFilter}";
+            }
+
+            var jobs = await GetAsync<IEnumerable<JobStatus>>(endpoint, cancellationToken);
+
+            var output = new StringBuilder()
+                .AppendSection($"Jobs{(stateFilter != null ? $" (state={stateFilter})" : "")}:");
+
+            if (!jobs.Any())
+            {
+                output.AppendLine("No jobs found");
+            }
+            else
+            {
+                foreach (var job in jobs)
+                {
+                    output.AppendLine()
+                          .AppendKeyValue("Job ID", job.JobId)
+                          .AppendKeyValue("Operation", job.Operation.ToString())
+                          .AppendKeyValue("State", job.State.ToString())
+                          .AppendKeyValue("Phase", job.Phase.ToString())
+                          .AppendKeyValue("Progress", $"{job.Progress:P0}");
+
+                    if (job.SessionId != null)
+                        output.AppendKeyValue("Session", job.SessionId);
+
+                    if (job.Message != null)
+                        output.AppendKeyValue("Message", job.Message);
+
+                    if (job.Error != null)
+                        output.AppendKeyValue("Error", job.Error);
+
+                    output.AppendKeyValue("Created", job.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"));
+
+                    if (job.CompletedAt.HasValue)
+                        output.AppendKeyValue("Completed", job.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm:ss"));
+                }
+            }
+
+            return output.ToMcpSuccess();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing jobs");
+            return McpToolResult.Error($"Error listing jobs: {ex.Message}");
+        }
     }
 
     public async Task<McpToolResult> DetectDebuggersAsync(CancellationToken cancellationToken = default)

@@ -41,7 +41,8 @@ public enum JobOperationType
     ExecuteCommand,
     BasicAnalysis,
     PredefinedAnalysis,
-    BatchCommands
+    BatchCommands,
+    CloseSession
 }
 
 /// <summary>
