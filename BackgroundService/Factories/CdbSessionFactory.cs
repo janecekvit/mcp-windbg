@@ -1,6 +1,7 @@
 using BackgroundService.Infrastructure.Debugger;
 using BackgroundService.Infrastructure.Detection;
 using BackgroundService.Services;
+using Shared.Configuration;
 
 namespace BackgroundService.Factories;
 
@@ -16,6 +17,7 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
     private readonly ILogger<SymbolPathBuilder> _symbolLogger;
     private readonly IAnalysisService _analysisService;
     private readonly IPathDetectionService _pathDetectionService;
+    private readonly DebuggerConfiguration _debuggerConfig;
     private readonly string _cdbPath;
 
     public CdbSessionFactory(
@@ -24,6 +26,7 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
         ILogger<SymbolPathBuilder> symbolLogger,
         IAnalysisService analysisService,
         IPathDetectionService pathDetectionService,
+        DebuggerConfiguration debuggerConfig,
         ILogger<CdbSessionFactory> factoryLogger)
     {
         _sessionLogger = sessionLogger;
@@ -31,6 +34,7 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
         _symbolLogger = symbolLogger;
         _analysisService = analysisService;
         _pathDetectionService = pathDetectionService;
+        _debuggerConfig = debuggerConfig;
 
         // Detect or validate CDB path during factory construction
         var path = _pathDetectionService.GetBestDebuggerPath();
@@ -46,20 +50,21 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
 
     public ICdbSessionService CreateSession(
         string sessionId,
-        Shared.Configuration.SymbolsConfiguration? symbols = null)
+        SymbolsConfiguration? symbols = null)
     {
         // Create infrastructure components for this session
         var processManager = new CdbProcessManager(sessionId, _processLogger);
 
-        // Use symbol configuration from MCP server, or fall back to defaults
-        var symbolCache = symbols?.SymbolCache ?? GetDefaultSymbolCache();
-        var symbolPathExtra = symbols?.SymbolPathExtra ?? string.Empty;
+        // Use symbol configuration from client, or fall back to defaults from configuration
+        var symbolCache = symbols?.SymbolCache ?? _debuggerConfig.GetSymbolCachePath();
+        var symbolPathExtra = symbols?.SymbolPathExtra ?? _debuggerConfig.DefaultSymbolPathExtra;
         var symbolServers = symbols?.SymbolServers;
 
         var symbolPathBuilder = new SymbolPathBuilder(
             symbolCache,
             symbolPathExtra,
             symbolServers,
+            _debuggerConfig,
             _symbolLogger);
 
         // Create and return session service with infrastructure dependencies
@@ -70,14 +75,5 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
             processManager,
             symbolPathBuilder,
             _cdbPath);
-    }
-
-    private static string GetDefaultSymbolCache()
-    {
-        // Default: %LOCALAPPDATA%\CdbAnalysisServer\Symbols
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CdbAnalysisServer",
-            "Symbols");
     }
 }

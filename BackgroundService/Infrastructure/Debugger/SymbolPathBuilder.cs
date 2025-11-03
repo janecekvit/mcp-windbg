@@ -1,3 +1,5 @@
+using Shared.Configuration;
+
 namespace BackgroundService.Infrastructure.Debugger;
 
 /// <summary>
@@ -9,17 +11,20 @@ public sealed class SymbolPathBuilder
     private readonly string _symbolCache;
     private readonly string? _symbolPathExtra;
     private readonly string? _symbolServers;
+    private readonly string[] _defaultSymbolServers;
     private readonly ILogger<SymbolPathBuilder> _logger;
 
     public SymbolPathBuilder(
         string symbolCache,
         string? symbolPathExtra,
         string? symbolServers,
+        DebuggerConfiguration debuggerConfig,
         ILogger<SymbolPathBuilder> logger)
     {
         _symbolCache = symbolCache;
         _symbolPathExtra = symbolPathExtra;
         _symbolServers = symbolServers;
+        _defaultSymbolServers = debuggerConfig.GetDefaultSymbolServers();
         _logger = logger;
     }
 
@@ -68,14 +73,9 @@ public sealed class SymbolPathBuilder
             _logger.LogInformation("Using custom symbol servers: {SymbolServers}", _symbolServers);
         }
 
-        // Add default Microsoft symbol servers (lower priority)
-        var defaultServers = new[]
-        {
-            "srv*https://msdl.microsoft.com/download/symbols",
-            "srv*https://symbols.nuget.org/download/symbols",
-            "srv*https://download.microsoft.com/download/symbols"
-        };
-        symbolPathParts.AddRange(defaultServers);
+        // Add default symbol servers from configuration (lower priority)
+        symbolPathParts.AddRange(_defaultSymbolServers);
+        _logger.LogDebug("Added default symbol servers from configuration: {DefaultServers}", string.Join(", ", _defaultSymbolServers));
 
         var symbolPath = string.Join(";", symbolPathParts.Where(p => !string.IsNullOrWhiteSpace(p)));
         _logger.LogInformation("Built symbol path: {SymbolPath}", symbolPath);
