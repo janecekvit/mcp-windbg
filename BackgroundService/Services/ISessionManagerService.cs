@@ -9,9 +9,18 @@ public interface ISessionManagerService : IDisposable
     /// </summary>
     /// <param name="jobId">Job ID for progress tracking</param>
     /// <param name="dumpFilePath">Path to the memory dump file to load</param>
+    /// <param name="symbolCache">Optional: Symbol cache directory (per-session override)</param>
+    /// <param name="symbolPathExtra">Optional: Additional local symbol paths</param>
+    /// <param name="symbolServers">Optional: Custom symbol servers</param>
     /// <param name="cancellationToken">Token to cancel the operation</param>
     /// <returns>Unique session ID for the created session</returns>
-    Task<string> CreateSessionWithDumpAsync(string jobId, string dumpFilePath, CancellationToken cancellationToken = default);
+    Task<string> CreateSessionWithDumpAsync(
+        string jobId,
+        string dumpFilePath,
+        string? symbolCache = null,
+        string? symbolPathExtra = null,
+        string? symbolServers = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Executes a WinDbg/CDB command in the specified session with job-based progress reporting

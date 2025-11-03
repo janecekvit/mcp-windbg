@@ -24,7 +24,13 @@ public sealed class SessionManagerService : ISessionManagerService
         _logger.LogInformation("SessionManagerService initialized with factory-based session creation");
     }
 
-    public async Task<string> CreateSessionWithDumpAsync(string jobId, string dumpFilePath, CancellationToken cancellationToken = default)
+    public async Task<string> CreateSessionWithDumpAsync(
+        string jobId,
+        string dumpFilePath,
+        string? symbolCache = null,
+        string? symbolPathExtra = null,
+        string? symbolServers = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -48,8 +54,8 @@ public sealed class SessionManagerService : ISessionManagerService
                 await _jobManager.UpdateProgressAsync(jobId, update.Progress, update.Message);
             });
 
-            // Create session using factory (handles infrastructure dependencies)
-            var session = _sessionFactory.CreateSession(sessionId);
+            // Create session using factory with per-session symbol configuration
+            var session = _sessionFactory.CreateSession(sessionId, symbolCache, symbolPathExtra, symbolServers);
 
             // Add session to dictionary first to prevent race conditions
             _sessions[sessionId] = session;

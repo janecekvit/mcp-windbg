@@ -25,7 +25,8 @@ public sealed class SymbolPathBuilder
 
     /// <summary>
     /// Builds a comprehensive symbol path string for CDB
-    /// Priority: Extra paths > Custom servers > Default Microsoft servers
+    /// Format: cache*<path>;srv*<url1>;srv*<url2>;...
+    /// Priority: Cache > Extra paths > Custom servers > Default Microsoft servers
     /// </summary>
     public string BuildSymbolPath()
     {
@@ -34,7 +35,11 @@ public sealed class SymbolPathBuilder
 
         var symbolPathParts = new List<string>();
 
-        // Add extra symbol paths first (highest priority)
+        // FIRST: Add cache directive (WinDbg will use this for all srv* entries)
+        symbolPathParts.Add($"cache*{_symbolCache}");
+        _logger.LogInformation("Symbol cache: {SymbolCache}", _symbolCache);
+
+        // Add extra symbol paths (highest priority)
         if (!string.IsNullOrWhiteSpace(_symbolPathExtra))
         {
             symbolPathParts.AddRange(_symbolPathExtra.Split(';', StringSplitOptions.RemoveEmptyEntries));
@@ -49,8 +54,8 @@ public sealed class SymbolPathBuilder
                 var trimmedServer = server.Trim();
                 if (trimmedServer.StartsWith("http://") || trimmedServer.StartsWith("https://"))
                 {
-                    // It's a URL - add as srv*cache*url
-                    symbolPathParts.Add($"srv*{_symbolCache}*{trimmedServer}");
+                    // It's a URL - add as srv*url (cache is already set)
+                    symbolPathParts.Add($"srv*{trimmedServer}");
                 }
                 else
                 {
@@ -64,20 +69,21 @@ public sealed class SymbolPathBuilder
         // Add default Microsoft symbol servers (lower priority)
         var defaultServers = new[]
         {
-            $"srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols",
-            $"srv*{_symbolCache}*https://symbols.nuget.org/download/symbols",
-            $"srv*{_symbolCache}*https://download.microsoft.com/download/symbols"
+            "srv*https://msdl.microsoft.com/download/symbols",
+            "srv*https://symbols.nuget.org/download/symbols",
+            "srv*https://download.microsoft.com/download/symbols"
         };
         symbolPathParts.AddRange(defaultServers);
 
         var symbolPath = string.Join(";", symbolPathParts.Where(p => !string.IsNullOrWhiteSpace(p)));
-        _logger.LogDebug("Built symbol path: {SymbolPath}", symbolPath);
+        _logger.LogInformation("Built symbol path: {SymbolPath}", symbolPath);
 
         return symbolPath;
     }
 
     /// <summary>
     /// Gets the list of symbol initialization commands for CDB
+    /// Note: Symbol path is already set via -y parameter, these commands just verify
     /// </summary>
     public List<string> GetSymbolInitializationCommands()
     {
@@ -88,30 +94,6 @@ public sealed class SymbolPathBuilder
             ".symopt+ 0x400",         // SYMOPT_NO_PROMPTS
             ".symopt+ 0x800",         // SYMOPT_FAIL_CRITICAL_ERRORS
             ".symopt- 0x2",           // SYMOPT_UNDNAME (disable for cleaner output)
-        };
-
-        // Add custom symbol servers to init commands
-        if (!string.IsNullOrWhiteSpace(_symbolServers))
-        {
-            foreach (var server in _symbolServers.Split(';', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var trimmedServer = server.Trim();
-                if (trimmedServer.StartsWith("http://") || trimmedServer.StartsWith("https://"))
-                {
-                    commands.Add($".sympath+ srv*{_symbolCache}*{trimmedServer}");
-                }
-                else
-                {
-                    commands.Add($".sympath+ {trimmedServer}");
-                }
-            }
-        }
-
-        // Add default Microsoft symbol servers
-        commands.AddRange(new[]
-        {
-            $".sympath+ srv*{_symbolCache}*https://msdl.microsoft.com/download/symbols",
-            $".sympath+ srv*{_symbolCache}*https://symbols.nuget.org/download/symbols",
 
             // Reload symbols - uses cache if available, downloads only if needed
             ".reload",
@@ -124,7 +106,7 @@ public sealed class SymbolPathBuilder
             "lm",
             ".echo === Session initialized successfully ===",
             ".echo"
-        });
+        };
 
         return commands;
     }

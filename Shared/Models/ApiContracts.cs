@@ -25,7 +25,19 @@ public static class ApiEndpoints
 public record LoadDumpRequest(
     [Required(ErrorMessage = "Dump file path is required")]
     [property: JsonPropertyName("dumpFilePath")]
-    string DumpFilePath);
+    string DumpFilePath,
+
+    // Optional: Symbol cache directory path (per-session override)
+    [property: JsonPropertyName("symbolCache")]
+    string? SymbolCache = null,
+
+    // Optional: Additional local symbol paths (semicolon-separated)
+    [property: JsonPropertyName("symbolPathExtra")]
+    string? SymbolPathExtra = null,
+
+    // Optional: Custom symbol servers (semicolon-separated URLs)
+    [property: JsonPropertyName("symbolServers")]
+    string? SymbolServers = null);
 
 public record ExecuteCommandRequest(
     [Required(ErrorMessage = "Session ID is required")]

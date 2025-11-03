@@ -113,7 +113,12 @@ public class JobsController : ControllerBase
         {
             try
             {
-                var sessionId = await _sessionManager.CreateSessionWithDumpAsync(jobId, request.DumpFilePath);
+                var sessionId = await _sessionManager.CreateSessionWithDumpAsync(
+                    jobId,
+                    request.DumpFilePath,
+                    request.SymbolCache,
+                    request.SymbolPathExtra,
+                    request.SymbolServers);
                 await _jobManager.CompleteJobAsync(jobId, sessionId);
             }
             catch (Exception ex)

@@ -26,7 +26,11 @@ public sealed class SessionManagerServiceTests : IDisposable
         mockSession.Setup(x => x.LoadDumpAsync(It.IsAny<string>(), It.IsAny<IProgress<Shared.Models.ProgressUpdate>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        _mockSessionFactory.Setup(x => x.CreateSession(It.IsAny<string>()))
+        _mockSessionFactory.Setup(x => x.CreateSession(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
             .Returns(mockSession.Object);
 
         _sessionManager = new SessionManagerService(

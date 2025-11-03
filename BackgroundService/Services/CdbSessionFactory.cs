@@ -47,15 +47,24 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
 
     }
 
-    public ICdbSessionService CreateSession(string sessionId)
+    public ICdbSessionService CreateSession(
+        string sessionId,
+        string? symbolCache = null,
+        string? symbolPathExtra = null,
+        string? symbolServers = null)
     {
         // Create infrastructure components for this session
         var processManager = new CdbProcessManager(sessionId, _processLogger);
 
+        // Use per-session symbol configuration if provided, otherwise fall back to global config
+        var effectiveSymbolCache = symbolCache ?? _configuration.SymbolCache;
+        var effectiveSymbolPathExtra = symbolPathExtra ?? _configuration.SymbolPathExtra;
+        var effectiveSymbolServers = symbolServers ?? _configuration.SymbolServers;
+
         var symbolPathBuilder = new SymbolPathBuilder(
-            _configuration.SymbolCache,
-            _configuration.SymbolPathExtra,
-            _configuration.SymbolServers,
+            effectiveSymbolCache,
+            effectiveSymbolPathExtra,
+            effectiveSymbolServers,
             _symbolLogger);
 
         // Create and return session service with infrastructure dependencies
