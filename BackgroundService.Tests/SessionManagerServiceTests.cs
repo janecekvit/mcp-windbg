@@ -1,6 +1,4 @@
-using BackgroundService.Infrastructure.Detection;
 using BackgroundService.Services;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -28,9 +26,7 @@ public sealed class SessionManagerServiceTests : IDisposable
 
         _mockSessionFactory.Setup(x => x.CreateSession(
                 It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>()))
+                It.IsAny<Shared.Configuration.SymbolsConfiguration>()))
             .Returns(mockSession.Object);
 
         _sessionManager = new SessionManagerService(

@@ -58,12 +58,10 @@ public class DiagnosticsController : ControllerBase
             var foundPaths = _pathDetectionService.DetectDebuggerPaths();
             var cdbPath = _pathDetectionService.GetBestDebuggerPath();
 
-            var debuggerConfig = _configuration.GetDebuggerConfiguration();
+            // Symbol configuration is sent per-request from MCP server, not stored here
             var envVars = new Dictionary<string, string?>
             {
-                // CDB path is auto-detected, not from environment variable
-                ["SYMBOL_CACHE"] = debuggerConfig.SymbolCache,
-                ["SYMBOL_PATH_EXTRA"] = debuggerConfig.SymbolPathExtra
+                ["Info"] = "Symbol configuration is provided per-request from MCP server"
             };
 
             _logger.LogInformation("Debugger detection completed. CDB: {CdbPath}", cdbPath);

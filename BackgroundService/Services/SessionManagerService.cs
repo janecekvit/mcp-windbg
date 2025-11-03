@@ -27,9 +27,7 @@ public sealed class SessionManagerService : ISessionManagerService
     public async Task<string> CreateSessionWithDumpAsync(
         string jobId,
         string dumpFilePath,
-        string? symbolCache = null,
-        string? symbolPathExtra = null,
-        string? symbolServers = null,
+        Shared.Configuration.SymbolsConfiguration? symbols = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -54,8 +52,8 @@ public sealed class SessionManagerService : ISessionManagerService
                 await _jobManager.UpdateProgressAsync(jobId, update.Progress, update.Message);
             });
 
-            // Create session using factory with per-session symbol configuration
-            var session = _sessionFactory.CreateSession(sessionId, symbolCache, symbolPathExtra, symbolServers);
+            // Create session using factory with symbol configuration from MCP server
+            var session = _sessionFactory.CreateSession(sessionId, symbols);
 
             // Add session to dictionary first to prevent race conditions
             _sessions[sessionId] = session;

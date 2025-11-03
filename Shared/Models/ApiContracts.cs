@@ -27,17 +27,9 @@ public record LoadDumpRequest(
     [property: JsonPropertyName("dumpFilePath")]
     string DumpFilePath,
 
-    // Optional: Symbol cache directory path (per-session override)
-    [property: JsonPropertyName("symbolCache")]
-    string? SymbolCache = null,
-
-    // Optional: Additional local symbol paths (semicolon-separated)
-    [property: JsonPropertyName("symbolPathExtra")]
-    string? SymbolPathExtra = null,
-
-    // Optional: Custom symbol servers (semicolon-separated URLs)
-    [property: JsonPropertyName("symbolServers")]
-    string? SymbolServers = null);
+    // Optional: Symbol configuration (per-session from MCP server)
+    [property: JsonPropertyName("symbols")]
+    Shared.Configuration.SymbolsConfiguration? Symbols = null);
 
 public record ExecuteCommandRequest(
     [Required(ErrorMessage = "Session ID is required")]

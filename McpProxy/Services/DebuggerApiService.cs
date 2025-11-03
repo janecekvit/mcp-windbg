@@ -73,15 +73,12 @@ public class DebuggerApiService : IDebuggerApiService
         try
         {
             // Read symbol configuration from environment variables (set per MCP server instance)
-            var symbolCache = Environment.GetEnvironmentVariable("SYMBOL_CACHE");
-            var symbolPathExtra = Environment.GetEnvironmentVariable("SYMBOL_PATH_EXTRA");
-            var symbolServers = Environment.GetEnvironmentVariable("SYMBOL_SERVERS");
+            var symbols = new Shared.Configuration.SymbolsConfiguration(
+                SymbolCache: Environment.GetEnvironmentVariable("SYMBOL_CACHE"),
+                SymbolPathExtra: Environment.GetEnvironmentVariable("SYMBOL_PATH_EXTRA"),
+                SymbolServers: Environment.GetEnvironmentVariable("SYMBOL_SERVERS"));
 
-            var request = new LoadDumpRequest(
-                dumpFilePath!,
-                symbolCache,
-                symbolPathExtra,
-                symbolServers);
+            var request = new LoadDumpRequest(dumpFilePath!, symbols);
 
             // Create job and subscribe to progress
             var jobResponse = await PostAsync<LoadDumpRequest, JobCreatedResponse>(ApiEndpoints.LoadDumpAsync, request, cancellationToken);

@@ -2,7 +2,6 @@ using BackgroundService.Infrastructure.Detection;
 using BackgroundService.Infrastructure.IO;
 using BackgroundService.Services;
 using Shared;
-using Shared.Extensions;
 
 namespace BackgroundService;
 
@@ -14,11 +13,6 @@ internal class Program
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Load and register configuration
-            var debuggerConfig = builder.Configuration.GetDebuggerConfiguration();
-            builder.Services.AddSingleton(debuggerConfig);
-
-            // Infrastructure services
             builder.Services.AddSingleton<IPathExpansionService, PathExpansionService>();
             builder.Services.AddSingleton<IPathDetectionService, PathDetectionService>();
 
