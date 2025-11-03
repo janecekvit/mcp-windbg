@@ -1,7 +1,8 @@
 using BackgroundService.Infrastructure.Debugger;
 using BackgroundService.Infrastructure.Detection;
+using BackgroundService.Services;
 
-namespace BackgroundService.Services;
+namespace BackgroundService.Factories;
 
 /// <summary>
 /// Factory for creating CDB session instances with infrastructure dependencies injected.

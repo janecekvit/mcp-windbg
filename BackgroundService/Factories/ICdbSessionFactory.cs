@@ -1,4 +1,6 @@
-namespace BackgroundService.Services;
+using BackgroundService.Services;
+
+namespace BackgroundService.Factories;
 
 /// <summary>
 /// Factory for creating CDB session instances with proper infrastructure dependencies.

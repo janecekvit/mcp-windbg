@@ -7,13 +7,13 @@ namespace BackgroundService.Infrastructure.Debugger;
 public sealed class SymbolPathBuilder
 {
     private readonly string _symbolCache;
-    private readonly string _symbolPathExtra;
+    private readonly string? _symbolPathExtra;
     private readonly string? _symbolServers;
     private readonly ILogger<SymbolPathBuilder> _logger;
 
     public SymbolPathBuilder(
         string symbolCache,
-        string symbolPathExtra,
+        string? symbolPathExtra,
         string? symbolServers,
         ILogger<SymbolPathBuilder> logger)
     {
@@ -33,10 +33,12 @@ public sealed class SymbolPathBuilder
         // Ensure symbol cache directory exists
         Directory.CreateDirectory(_symbolCache);
 
-        var symbolPathParts = new List<string>();
+        var symbolPathParts = new List<string>
+        {
+            // FIRST: Add cache directive (WinDbg will use this for all srv* entries)
+            $"cache*{_symbolCache}"
+        };
 
-        // FIRST: Add cache directive (WinDbg will use this for all srv* entries)
-        symbolPathParts.Add($"cache*{_symbolCache}");
         _logger.LogInformation("Symbol cache: {SymbolCache}", _symbolCache);
 
         // Add extra symbol paths (highest priority)

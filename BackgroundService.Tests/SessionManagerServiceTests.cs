@@ -1,3 +1,4 @@
+using BackgroundService.Factories;
 using BackgroundService.Services;
 using Microsoft.Extensions.Logging;
 using Moq;
