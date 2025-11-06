@@ -18,6 +18,7 @@ internal class Program
                     services.AddScoped<IDebuggerApiService, DebuggerApiService>();
                     services.AddScoped<IToolsService, ToolsService>();
                     services.AddScoped<ICommunicationService, CommunicationService>();
+                    services.AddSingleton<ISignalRClientService, SignalRClientService>();
                     services.AddSingleton<McpProxy>();
                 })
                 .ConfigureLogging(logging =>
@@ -30,6 +31,10 @@ internal class Program
                     logging.SetMinimumLevel(LogLevel.Information);
                 })
                 .Build();
+
+            // Connect to SignalR hub
+            var signalRClient = host.Services.GetRequiredService<ISignalRClientService>();
+            await signalRClient.ConnectAsync();
 
             var mcpServerProxy = host.Services.GetRequiredService<McpProxy>();
             await mcpServerProxy.RunAsync();

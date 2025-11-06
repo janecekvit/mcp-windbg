@@ -15,6 +15,15 @@ public static class Constants
     }
 
     /// <summary>
+    /// Job execution timeouts and polling intervals
+    /// </summary>
+    public static class Jobs
+    {
+        public const int DefaultMaxWaitTimeMs = 600000; // 10 minutes default timeout
+        public const int DefaultPollIntervalMs = 1000; // Poll every second
+    }
+
+    /// <summary>
     /// HTTP status codes used throughout the application
     /// </summary>
     public static class Http
@@ -44,6 +53,7 @@ public static class Constants
     {
         public const int SessionIdLength = 8;
         public const int CommandTimeout = 30000; // 30 seconds
+        public const int SymbolLoadingTimeoutMinutes = 15; // 15 minutes for symbol loading (cache-aware)
         public const int ProcessWaitTimeout = 5000; // 5 seconds
         public const int InitializationDelay = 500; // 0.5 seconds
         public const int ReadBufferSize = 4096;
@@ -79,9 +89,9 @@ public static class Constants
         public const string LoadDump = "load_dump";
         public const string ExecuteCommand = "execute_command";
         public const string BasicAnalysis = "basic_analysis";
-        public const string ListSessions = "list_sessions";
         public const string CloseSession = "close_session";
         public const string PredefinedAnalysis = "predefined_analysis";
+        public const string ListJobs = "list_jobs";
         public const string ListAnalyses = "list_analyses";
         public const string DetectDebuggers = "detect_debuggers";
 
@@ -94,9 +104,9 @@ public static class Constants
         LoadDump,
         ExecuteCommand,
         BasicAnalysis,
-        ListSessions,
         CloseSession,
         PredefinedAnalysis,
+        ListJobs,
         ListAnalyses,
         DetectDebuggers
     };

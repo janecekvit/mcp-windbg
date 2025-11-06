@@ -6,21 +6,30 @@ namespace Shared.Models;
 // API Endpoints (for ASP.NET Core Controllers)
 public static class ApiEndpoints
 {
+    // Diagnostic endpoints
     public const string Health = "/api/diagnostics/health";
-    public const string LoadDump = "/api/sessions/load-dump";
-    public const string ExecuteCommand = "/api/sessions/execute-command";
-    public const string BasicAnalysis = "/api/sessions/basic-analysis";
-    public const string PredefinedAnalysis = "/api/sessions/predefined-analysis";
-    public const string Sessions = "/api/sessions";
     public const string DetectDebuggers = "/api/diagnostics/detect-debuggers";
     public const string Analyses = "/api/diagnostics/analyses";
+
+    // Job management endpoints (async with progress reporting via SignalR)
+    public const string Jobs = "/api/jobs";
+    public const string JobStatus = "/api/jobs/{jobId}";
+    public const string LoadDumpAsync = "/api/jobs/load-dump";
+    public const string ExecuteCommandAsync = "/api/jobs/execute-command";
+    public const string BasicAnalysisAsync = "/api/jobs/basic-analysis";
+    public const string PredefinedAnalysisAsync = "/api/jobs/predefined-analysis";
+    public const string CloseSessionAsync = "/api/jobs/close-session";
 }
 
 // Shared Request Models
 public record LoadDumpRequest(
     [Required(ErrorMessage = "Dump file path is required")]
     [property: JsonPropertyName("dumpFilePath")]
-    string DumpFilePath);
+    string DumpFilePath,
+
+    // Optional: Symbol configuration (per-session from MCP server)
+    [property: JsonPropertyName("symbols")]
+    Shared.Configuration.SymbolsConfiguration? Symbols = null);
 
 public record ExecuteCommandRequest(
     [Required(ErrorMessage = "Session ID is required")]
@@ -43,6 +52,11 @@ public record PredefinedAnalysisRequest(
     [property: JsonPropertyName("analysisType")]
     string AnalysisType);
 
+public record CloseSessionRequest(
+    [Required(ErrorMessage = "Session ID is required")]
+    [property: JsonPropertyName("sessionId")]
+    string SessionId);
+
 // Shared Response Models
 public record LoadDumpResponse(
     [property: JsonPropertyName("sessionId")] string SessionId,
@@ -50,13 +64,6 @@ public record LoadDumpResponse(
     [property: JsonPropertyName("dumpFile")] string? DumpFile = null);
 
 public record CommandExecutionResponse([property: JsonPropertyName("result")] string Result);
-
-public record SessionInfo(
-    [property: JsonPropertyName("sessionId")] string SessionId,
-    [property: JsonPropertyName("dumpFile")] string DumpFile,
-    [property: JsonPropertyName("isActive")] bool IsActive);
-
-public record SessionsResponse([property: JsonPropertyName("sessions")] IReadOnlyList<SessionInfo> Sessions);
 
 public record AnalysisInfo(
     [property: JsonPropertyName("name")] string Name,
@@ -66,11 +73,8 @@ public record AnalysesResponse([property: JsonPropertyName("analyses")] IReadOnl
 
 public record DebuggerDetectionResponse(
     [property: JsonPropertyName("cdbPath")] string? CdbPath,
-    [property: JsonPropertyName("winDbgPath")] string? WinDbgPath,
     [property: JsonPropertyName("foundPaths")] IReadOnlyList<string> FoundPaths,
     [property: JsonPropertyName("environmentVariables")] Dictionary<string, string?> EnvironmentVariables);
-
-public record CloseSessionResponse([property: JsonPropertyName("message")] string Message);
 
 public record ErrorResponse([property: JsonPropertyName("error")] string Error);
 
@@ -90,9 +94,9 @@ public static class StringValidationExtensions
 public static class ApiEndpointExtensions
 {
     /// <summary>
-    /// Creates an API endpoint path for a specific session
+    /// Creates an API endpoint path for a specific job
     /// </summary>
-    /// <param name="sessionId">The session ID</param>
-    /// <returns>API endpoint path for the session</returns>
-    public static string ToSessionEndpoint(this string sessionId) => $"/api/sessions/{sessionId}";
+    /// <param name="jobId">The job ID</param>
+    /// <returns>API endpoint path for the job</returns>
+    public static string ToJobEndpoint(this string jobId) => $"/api/jobs/{jobId}";
 }

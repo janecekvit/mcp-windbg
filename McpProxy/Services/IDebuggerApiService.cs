@@ -47,14 +47,7 @@ public interface IDebuggerApiService
     /// <param name="cancellationToken">Token to cancel the operation</param>
     /// <returns>Result containing the analysis output</returns>
     Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default);
-    
-    /// <summary>
-    /// Lists all active debugging sessions
-    /// </summary>
-    /// <param name="cancellationToken">Token to cancel the operation</param>
-    /// <returns>Result containing session information</returns>
-    Task<McpToolResult> ListSessionsAsync(CancellationToken cancellationToken = default);
-    
+
     /// <summary>
     /// Closes a debugging session and frees its resources
     /// </summary>
@@ -62,14 +55,22 @@ public interface IDebuggerApiService
     /// <param name="cancellationToken">Token to cancel the operation</param>
     /// <returns>Result containing the closure status</returns>
     Task<McpToolResult> CloseSessionAsync(JsonElement args, CancellationToken cancellationToken = default);
-    
+
+    /// <summary>
+    /// Lists all jobs with their current status, optionally filtered by state
+    /// </summary>
+    /// <param name="args">JSON arguments containing optional state filter</param>
+    /// <param name="cancellationToken">Token to cancel the operation</param>
+    /// <returns>Result containing job information</returns>
+    Task<McpToolResult> ListJobsAsync(JsonElement args, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Detects available CDB/WinDbg installations on the system
     /// </summary>
     /// <param name="cancellationToken">Token to cancel the operation</param>
     /// <returns>Result containing detected debugger paths and environment variables</returns>
     Task<McpToolResult> DetectDebuggersAsync(CancellationToken cancellationToken = default);
-    
+
     /// <summary>
     /// Lists all available predefined analyses with descriptions
     /// </summary>

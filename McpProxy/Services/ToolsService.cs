@@ -71,16 +71,6 @@ public class ToolsService : IToolsService
             },
             new McpTool
             {
-                Name = Constants.McpToolNames.ListSessions,
-                Description = "List all active debugging sessions",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new { }
-                }
-            },
-            new McpTool
-            {
                 Name = Constants.McpToolNames.CloseSession,
                 Description = "Close a debugging session and free resources",
                 InputSchema = new
@@ -119,6 +109,23 @@ public class ToolsService : IToolsService
                         }
                     },
                     required = new[] { "session_id", "analysis_type" }
+                }
+            },
+            new McpTool
+            {
+                Name = Constants.McpToolNames.ListJobs,
+                Description = "List all jobs with their current status, optionally filtered by state (Queued, Running, Completed, Failed, Cancelled)",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        state = new
+                        {
+                            type = "string",
+                            description = "Optional filter by job state (Queued, Running, Completed, Failed, Cancelled)"
+                        }
+                    }
                 }
             },
             new McpTool

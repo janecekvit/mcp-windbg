@@ -19,7 +19,7 @@ public static class ConfigurationExtensions
     public static string? GetValueWithEnvironmentFallback(
         this IConfiguration configuration,
         string key,
-        string environmentVariableName,
+        string? environmentVariableName = null,
         string? defaultValue = null)
     {
         // Try configuration first
@@ -28,28 +28,15 @@ public static class ConfigurationExtensions
             return configValue;
 
         // Fall back to environment variable
-        var envValue = Environment.GetEnvironmentVariable(environmentVariableName);
-        if (!string.IsNullOrEmpty(envValue))
-            return envValue;
+        if (environmentVariableName != null)
+        {
+            var envValue = Environment.GetEnvironmentVariable(environmentVariableName);
+            if (!string.IsNullOrEmpty(envValue))
+                return envValue;
+        }
 
         // Return default value
         return defaultValue;
-    }
-
-    /// <summary>
-    /// Gets debugger configuration with environment variable fallback
-    /// </summary>
-    /// <param name="configuration">The configuration instance</param>
-    /// <returns>DebuggerConfiguration with values from config or environment variables</returns>
-    public static DebuggerConfiguration GetDebuggerConfiguration(this IConfiguration configuration)
-    {
-        return new DebuggerConfiguration
-        {
-            CdbPath = configuration.GetValueWithEnvironmentFallback("Debugger:CdbPath", "CDB_PATH"),
-            SymbolCache = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolCache", "SYMBOL_CACHE"),
-            SymbolPathExtra = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolPathExtra", "SYMBOL_PATH_EXTRA", string.Empty)!,
-            SymbolServers = configuration.GetValueWithEnvironmentFallback("Debugger:SymbolServers", "SYMBOL_SERVERS")
-        };
     }
 
     /// <summary>
@@ -62,6 +49,24 @@ public static class ConfigurationExtensions
         return new BackgroundServiceConfiguration
         {
             BaseUrl = configuration.GetValueWithEnvironmentFallback("BackgroundService:BaseUrl", "BACKGROUND_SERVICE_URL", "http://localhost:8080")!
+        };
+    }
+
+    /// <summary>
+    /// Gets debugger configuration with environment variable fallback
+    /// </summary>
+    /// <param name="configuration">The configuration instance</param>
+    /// <returns>DebuggerConfiguration with values from config or environment variables</returns>
+    public static DebuggerConfiguration GetDebuggerConfiguration(this IConfiguration configuration)
+    {
+        return new DebuggerConfiguration
+        {
+            DefaultSymbolCache = configuration.GetValueWithEnvironmentFallback(
+                "Debugger:DefaultSymbolCache"),
+            DefaultSymbolPathExtra = configuration.GetValueWithEnvironmentFallback(
+                "Debugger:DefaultSymbolPathExtra"),
+            DefaultSymbolServers = configuration.GetValueWithEnvironmentFallback(
+                "Debugger:DefaultSymbolServers")
         };
     }
 }
