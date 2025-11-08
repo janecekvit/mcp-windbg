@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
 using Shared.Configuration;
+using Shared.Extensions;
 
 namespace McpProxy;
 
@@ -21,7 +22,10 @@ internal class Program
             .AddEnvironmentVariables()
             .Build();
 
-        var useFileLogging = configuration.GetValue<bool>("Logging:UseFileLogging");
+        var useFileLogging = configuration.GetValueWithEnvironmentFallback<bool>(
+            "Logging:UseFileLogging",
+            "USE_FILE_LOGGING",
+            defaultValue: false);
 
         // Configure Serilog if file logging is enabled
         if (useFileLogging)

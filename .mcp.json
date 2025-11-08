@@ -3,6 +3,13 @@
     "microsoft-docs": {
       "type": "http",
       "url": "https://learn.microsoft.com/api/mcp"
-    }
+    },
+    "dump-analyzer": {
+        "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
+        "args": [],
+        "env": {
+          "SYMBOL_CACHE": "D:\\Symbols"
+        }
+      }
   }
 }
