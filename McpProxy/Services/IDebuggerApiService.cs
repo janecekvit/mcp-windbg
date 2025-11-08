@@ -1,80 +1,78 @@
-using System.Text.Json;
-using McpProxy.Models;
+using ModelContextProtocol;
+using Shared.Models;
 
 namespace McpProxy.Services;
 
+/// <summary>
+/// Service for interacting with the BackgroundService HTTP API
+/// </summary>
 public interface IDebuggerApiService
 {
     /// <summary>
     /// Checks if the background debugging service is healthy and available
     /// </summary>
-    /// <param name="cancellationToken">Token to cancel the operation</param>
-    /// <returns>True if the service is available, false otherwise</returns>
     Task<bool> CheckHealthAsync(CancellationToken cancellationToken = default);
-    
+
     /// <summary>
     /// Loads a memory dump file and creates a new debugging session
     /// </summary>
-    /// <param name="args">JSON arguments containing dump_file_path</param>
-    /// <param name="progressToken">Optional progress token for notifications</param>
-    /// <param name="cancellationToken">Token to cancel the operation</param>
-    /// <returns>Result containing session ID and status information</returns>
-    Task<McpToolResult> LoadDumpAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default);
-    
+    /// <param name="dumpFilePath">Path to the dump file</param>
+    /// <param name="progress">Progress reporter for MCP notifications</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Session ID and status message</returns>
+    Task<string> LoadDumpAsync(
+        string dumpFilePath,
+        IProgress<ProgressNotificationValue>? progress = null,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Executes a WinDbg/CDB command in an existing debugging session
     /// </summary>
-    /// <param name="args">JSON arguments containing session_id and command</param>
-    /// <param name="progressToken">Optional progress token for notifications</param>
-    /// <param name="cancellationToken">Token to cancel the operation</param>
-    /// <returns>Result containing the command output</returns>
-    Task<McpToolResult> ExecuteCommandAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default);
-    
+    Task<string> ExecuteCommandAsync(
+        string sessionId,
+        string command,
+        IProgress<ProgressNotificationValue>? progress = null,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Runs a comprehensive basic analysis of the loaded dump
     /// </summary>
-    /// <param name="args">JSON arguments containing session_id</param>
-    /// <param name="progressToken">Optional progress token for notifications</param>
-    /// <param name="cancellationToken">Token to cancel the operation</param>
-    /// <returns>Result containing the analysis output</returns>
-    Task<McpToolResult> BasicAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default);
-    
+    Task<string> BasicAnalysisAsync(
+        string sessionId,
+        IProgress<ProgressNotificationValue>? progress = null,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Runs a predefined analysis on the loaded dump
     /// </summary>
-    /// <param name="args">JSON arguments containing session_id and analysis_type</param>
-    /// <param name="progressToken">Optional progress token for notifications</param>
-    /// <param name="cancellationToken">Token to cancel the operation</param>
-    /// <returns>Result containing the analysis output</returns>
-    Task<McpToolResult> PredefinedAnalysisAsync(JsonElement args, string? progressToken = null, CancellationToken cancellationToken = default);
+    Task<string> PredefinedAnalysisAsync(
+        string sessionId,
+        AnalysisType analysisType,
+        IProgress<ProgressNotificationValue>? progress = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Closes a debugging session and frees its resources
     /// </summary>
-    /// <param name="args">JSON arguments containing session_id</param>
-    /// <param name="cancellationToken">Token to cancel the operation</param>
-    /// <returns>Result containing the closure status</returns>
-    Task<McpToolResult> CloseSessionAsync(JsonElement args, CancellationToken cancellationToken = default);
+    Task<string> CloseSessionAsync(
+        string sessionId,
+        IProgress<ProgressNotificationValue>? progress = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lists all jobs with their current status, optionally filtered by state
     /// </summary>
-    /// <param name="args">JSON arguments containing optional state filter</param>
-    /// <param name="cancellationToken">Token to cancel the operation</param>
-    /// <returns>Result containing job information</returns>
-    Task<McpToolResult> ListJobsAsync(JsonElement args, CancellationToken cancellationToken = default);
+    Task<string> ListJobsAsync(
+        string? state = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Detects available CDB/WinDbg installations on the system
     /// </summary>
-    /// <param name="cancellationToken">Token to cancel the operation</param>
-    /// <returns>Result containing detected debugger paths and environment variables</returns>
-    Task<McpToolResult> DetectDebuggersAsync(CancellationToken cancellationToken = default);
+    Task<string> DetectDebuggersAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lists all available predefined analyses with descriptions
     /// </summary>
-    /// <param name="cancellationToken">Token to cancel the operation</param>
-    /// <returns>Result containing analysis types and their descriptions</returns>
-    Task<McpToolResult> ListAnalysesAsync(CancellationToken cancellationToken = default);
+    Task<string> ListAnalysesAsync(CancellationToken cancellationToken = default);
 }

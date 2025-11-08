@@ -1,7 +1,9 @@
 using McpProxy.Services;
+using McpProxy.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Server;
 using Serilog;
 using Serilog.Events;
 using Shared.Configuration;
@@ -12,7 +14,6 @@ internal class Program
 {
     private static async Task<int> Main(string[] args)
     {
-
         var useFileLogging = false;
         var envValue = Environment.GetEnvironmentVariable("USE_FILE_LOGGING");
         if (envValue != null)
@@ -44,20 +45,29 @@ internal class Program
         try
         {
             if (useFileLogging)
-                Log.Information("McpProxy starting with file logging...");
+                Log.Information("McpProxy starting with file logging (using official MCP SDK)...");
 
-            var hostBuilder = Host.CreateDefaultBuilder(args)
-                .ConfigureServices((context, services) =>
-                {
-                    services.AddHttpClient();
-                    services.AddScoped<IDebuggerApiService, DebuggerApiService>();
-                    services.AddScoped<IToolsService, ToolsService>();
-                    services.AddScoped<ICommunicationService, CommunicationService>();
-                    services.AddSingleton<ISignalRClientService, SignalRClientService>();
-                    services.AddSingleton<McpProxy>();
-                });
+            var hostBuilder = Host.CreateDefaultBuilder(args);
 
-            // Configure logging based on appsettings
+            // Configure services
+            hostBuilder.ConfigureServices((context, services) =>
+            {
+                // Add HTTP client for BackgroundService API calls
+                services.AddHttpClient();
+
+                // Add SignalR client for progress notifications
+                services.AddSingleton<ISignalRClientService, SignalRClientService>();
+
+                // Add API service for BackgroundService communication
+                services.AddScoped<IDebuggerApiService, DebuggerApiService>();
+
+                // Add MCP SDK server with stdio transport and automatic tool discovery
+                services.AddMcpServer()
+                    .WithStdioServerTransport()
+                    .WithToolsFromAssembly(); // Automatically discovers [McpServerTool] decorated methods
+            });
+
+            // Configure logging
             if (useFileLogging)
             {
                 hostBuilder.UseSerilog();
@@ -69,6 +79,7 @@ internal class Program
                     logging.ClearProviders();
                     logging.AddConsole(options =>
                     {
+                        // All logs go to stderr for MCP compatibility
                         options.LogToStandardErrorThreshold = LogLevel.Trace;
                     });
                     logging.SetMinimumLevel(LogLevel.Information);
@@ -77,12 +88,15 @@ internal class Program
 
             var host = hostBuilder.Build();
 
-            // Connect to SignalR hub
+            // Connect to SignalR hub before starting MCP server
             var signalRClient = host.Services.GetRequiredService<ISignalRClientService>();
             await signalRClient.ConnectAsync();
 
-            var mcpServerProxy = host.Services.GetRequiredService<McpProxy>();
-            await mcpServerProxy.RunAsync();
+            if (useFileLogging)
+                Log.Information("Starting MCP server...");
+
+            // MCP SDK automatically handles stdio communication, initialize/initialized, tools/list, tools/call
+            await host.RunAsync();
 
             if (useFileLogging)
                 Log.Information("McpProxy stopped gracefully");

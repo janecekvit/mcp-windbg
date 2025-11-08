@@ -9,21 +9,31 @@ namespace McpProxy.Services;
 public class SignalRClientService : ISignalRClientService
 {
     private readonly ILogger<SignalRClientService> _logger;
-    private readonly ICommunicationService _communicationService;
     private readonly string _hubUrl;
     private HubConnection? _connection;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JobCompletedNotification>> _jobCompletions = new();
+    private readonly ConcurrentDictionary<string, Action<ProgressNotification>> _progressCallbacks = new();
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
 
     public SignalRClientService(
         ILogger<SignalRClientService> logger,
-        ICommunicationService communicationService,
         string hubUrl = Constants.Network.DefaultProgressHubUrl)
     {
         _logger = logger;
-        _communicationService = communicationService;
         _hubUrl = hubUrl;
+    }
+
+    public void SubscribeToJobProgress(string jobId, Action<ProgressNotification> progressCallback)
+    {
+        _progressCallbacks[jobId] = progressCallback;
+        _logger.LogDebug("Subscribed to progress for job {JobId}", jobId);
+    }
+
+    public void UnsubscribeFromJobProgress(string jobId)
+    {
+        _progressCallbacks.TryRemove(jobId, out _);
+        _logger.LogDebug("Unsubscribed from progress for job {JobId}", jobId);
     }
 
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
@@ -42,17 +52,16 @@ public class SignalRClientService : ISignalRClientService
             .Build();
 
         // Register handlers for progress notifications
-        _connection.On<ProgressNotification>("Progress", async (notification) =>
+        _connection.On<ProgressNotification>("Progress", (notification) =>
         {
             _logger.LogDebug("Received progress notification for job {JobId}: {Progress:P0} - {Message}",
                 notification.JobId, notification.Progress, notification.Message);
 
-            // Forward progress to MCP client (Claude)
-            await _communicationService.SendProgressNotificationAsync(
-                notification.JobId,
-                notification.Progress,
-                notification.Message,
-                cancellationToken);
+            // Forward to subscribed callback
+            if (_progressCallbacks.TryGetValue(notification.JobId, out var callback))
+            {
+                callback(notification);
+            }
         });
 
         _connection.On<JobCompletedNotification>("Completed", (notification) =>

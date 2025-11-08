@@ -69,7 +69,7 @@ public static class Constants
     /// </summary>
     public static class Mcp
     {
-        public const string ProtocolVersion = "2024-11-05";
+        public const string ProtocolVersion = "2025-06-18";
     }
 
     /// <summary>
