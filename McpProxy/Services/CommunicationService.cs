@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Shared;
 using McpProxy.Models;
 using Microsoft.Extensions.Logging;
+using Shared;
 
 namespace McpProxy.Services;
 
@@ -47,7 +47,7 @@ public class CommunicationService : ICommunicationService
                 if (request != null)
                 {
                     _logger.LogInformation("Processing method: {Method}, ID: {Id}", request.Method, request.Id);
-                    var response = await HandleMcpRequestAsync(request, handleToolCall, healthCheck, cancellationToken);
+                    var response = await _HandleMcpRequestAsync(request, handleToolCall, healthCheck, cancellationToken);
                     if (response != null)
                     {
                         await SendResponseAsync(response);
@@ -65,15 +65,15 @@ public class CommunicationService : ICommunicationService
         _logger.LogInformation("MCP Server Proxy shutting down");
     }
 
-    private async Task<McpResponse?> HandleMcpRequestAsync(McpRequest request, Func<string, string?, JsonElement, CancellationToken, Task<McpToolResult>> handleToolCall, Func<CancellationToken, Task<bool>>? healthCheck, CancellationToken cancellationToken = default)
+    private async Task<McpResponse?> _HandleMcpRequestAsync(McpRequest request, Func<string, string?, JsonElement, CancellationToken, Task<McpToolResult>> handleToolCall, Func<CancellationToken, Task<bool>>? healthCheck, CancellationToken cancellationToken = default)
     {
         try
         {
             return request.Method switch
             {
-                "initialize" => await HandleInitializeAsync(request.Id, healthCheck, cancellationToken),
+                "initialize" => await _HandleInitializeAsync(request.Id, healthCheck, cancellationToken),
                 "tools/list" => _isInitialized ? _toolsService.CreateListToolsResponse(request.Id) : McpResponse.NotInitialized(request.Id),
-                "tools/call" => _isInitialized ? await HandleToolCallAsync(request, handleToolCall, cancellationToken) : McpResponse.NotInitialized(request.Id),
+                "tools/call" => _isInitialized ? await _HandleToolCallAsync(request, handleToolCall, cancellationToken) : McpResponse.NotInitialized(request.Id),
                 _ => McpResponse.MethodNotFound(request.Id, request.Method)
             };
         }
@@ -84,7 +84,7 @@ public class CommunicationService : ICommunicationService
         }
     }
 
-    private async Task<McpResponse> HandleInitializeAsync(int requestId, Func<CancellationToken, Task<bool>>? healthCheck, CancellationToken cancellationToken = default)
+    private async Task<McpResponse> _HandleInitializeAsync(int requestId, Func<CancellationToken, Task<bool>>? healthCheck, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Received initialize request");
 
@@ -104,17 +104,17 @@ public class CommunicationService : ICommunicationService
         }
 
         _isInitialized = true;
-        var response = CreateInitializeResponse(requestId, isHealthy);
+        var response = _CreateInitializeResponse(requestId, isHealthy);
 
         if (response.Error == null)
         {
-            await SendInitializedNotificationAsync(cancellationToken);
+            await _SendInitializedNotificationAsync(cancellationToken);
         }
 
         return response;
     }
 
-    private static McpResponse CreateInitializeResponse(int requestId, bool isHealthy)
+    private static McpResponse _CreateInitializeResponse(int requestId, bool isHealthy)
     {
         return McpResponse.Success(requestId, new
         {
@@ -134,7 +134,7 @@ public class CommunicationService : ICommunicationService
         });
     }
 
-    private static async Task<McpResponse> HandleToolCallAsync(McpRequest request, Func<string, string?, JsonElement, CancellationToken, Task<McpToolResult>> handleToolCall, CancellationToken cancellationToken = default)
+    private static async Task<McpResponse> _HandleToolCallAsync(McpRequest request, Func<string, string?, JsonElement, CancellationToken, Task<McpToolResult>> handleToolCall, CancellationToken cancellationToken = default)
     {
         if (request.Params == null)
         {
@@ -198,7 +198,7 @@ public class CommunicationService : ICommunicationService
         await _writer.WriteLineAsync(json).WaitAsync(cancellationToken);
     }
 
-    private async Task SendInitializedNotificationAsync(CancellationToken cancellationToken = default)
+    private async Task _SendInitializedNotificationAsync(CancellationToken cancellationToken = default)
     {
         if (_writer == null) return;
 

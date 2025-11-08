@@ -1,9 +1,7 @@
 using System.Reflection;
-using BackgroundService.Infrastructure.Detection;
 using BackgroundService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
-using Shared.Extensions;
 using Shared.Models;
 
 namespace BackgroundService.Controllers;
@@ -14,19 +12,16 @@ namespace BackgroundService.Controllers;
 public class DiagnosticsController : ControllerBase
 {
     private readonly ILogger<DiagnosticsController> _logger;
-    private readonly IPathDetectionService _pathDetectionService;
-    private readonly IAnalysisService _analysisService;
+    private readonly IDiagnosticsService _diagnosticsService;
     private readonly IConfiguration _configuration;
 
     public DiagnosticsController(
         ILogger<DiagnosticsController> logger,
-        IPathDetectionService pathDetectionService,
-        IAnalysisService analysisService,
+        IDiagnosticsService diagnosticsService,
         IConfiguration configuration)
     {
         _logger = logger;
-        _pathDetectionService = pathDetectionService;
-        _analysisService = analysisService;
+        _diagnosticsService = diagnosticsService;
         _configuration = configuration;
     }
 
@@ -55,22 +50,12 @@ public class DiagnosticsController : ControllerBase
     {
         try
         {
-            var foundPaths = _pathDetectionService.DetectDebuggerPaths();
-            var cdbPath = _pathDetectionService.GetBestDebuggerPath();
-
-            // Symbol configuration is sent per-request from MCP server, not stored here
-            var envVars = new Dictionary<string, string?>
-            {
-                ["Info"] = "Symbol configuration is provided per-request from MCP server"
-            };
-
-            _logger.LogInformation("Debugger detection completed. CDB: {CdbPath}", cdbPath);
-
-            return Ok(new DebuggerDetectionResponse(cdbPath, foundPaths, envVars));
+            var result = _diagnosticsService.DetectDebuggers();
+            return Ok(result);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in enhanced debugger detection");
+            _logger.LogError(ex, "Error in debugger detection");
             return Problem(
                 detail: $"Error detecting debuggers: {ex.Message}",
                 statusCode: Constants.Http.InternalServerError,
@@ -88,17 +73,12 @@ public class DiagnosticsController : ControllerBase
     {
         try
         {
-            var analyses = _analysisService.GetAvailableAnalyses()
-                .Select(a => new AnalysisInfo(a, _analysisService.GetAnalysisDescription(a)))
-                .ToList();
-
-            _logger.LogInformation("Retrieved {Count} available analyses", analyses.Count);
-
+            var analyses = _diagnosticsService.GetAvailableAnalyses();
             return Ok(new AnalysesResponse(analyses));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving enhanced analyses");
+            _logger.LogError(ex, "Error retrieving analyses");
             return Problem(
                 detail: $"Error retrieving analyses: {ex.Message}",
                 statusCode: Constants.Http.InternalServerError,

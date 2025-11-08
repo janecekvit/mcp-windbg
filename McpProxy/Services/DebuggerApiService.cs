@@ -54,7 +54,7 @@ public class DebuggerApiService : IDebuggerApiService
         }
     }
 
-    private async Task SendProgress(string? token, double progress, string message, CancellationToken cancellationToken = default)
+    private async Task _SendProgress(string? token, double progress, string message, CancellationToken cancellationToken = default)
     {
         if (!string.IsNullOrEmpty(token))
             await _communicationService.SendProgressNotificationAsync(token, progress, message, cancellationToken);
@@ -81,7 +81,7 @@ public class DebuggerApiService : IDebuggerApiService
             var request = new LoadDumpRequest(dumpFilePath!, symbols);
 
             // Create job and subscribe to progress
-            var jobResponse = await PostAsync<LoadDumpRequest, JobCreatedResponse>(ApiEndpoints.LoadDumpAsync, request, cancellationToken);
+            var jobResponse = await _PostAsync<LoadDumpRequest, JobCreatedResponse>(ApiEndpoints.LoadDumpAsync, request, cancellationToken);
             jobId = jobResponse.JobId;
             _logger.LogInformation("Created job {JobId} for loading dump", jobId);
 
@@ -89,7 +89,7 @@ public class DebuggerApiService : IDebuggerApiService
             await _signalRClient.SubscribeToJobAsync(jobId, cancellationToken);
 
             // Wait for job completion by polling status
-            var result = await WaitForJobCompletionAsync(jobId, cancellationToken);
+            var result = await _WaitForJobCompletionAsync(jobId, cancellationToken);
 
             if (result.State == JobState.Completed)
             {
@@ -108,14 +108,14 @@ public class DebuggerApiService : IDebuggerApiService
         }
         finally
         {
-            await UnsubscribeFromJobAsync(jobId, cancellationToken);
+            await _UnsubscribeFromJobAsync(jobId, cancellationToken);
         }
     }
 
     /// <summary>
     /// Waits for a job to complete via SignalR completion notification
     /// </summary>
-    private async Task<JobStatus> WaitForJobCompletionAsync(string jobId, CancellationToken cancellationToken = default)
+    private async Task<JobStatus> _WaitForJobCompletionAsync(string jobId, CancellationToken cancellationToken = default)
     {
         var timeout = TimeSpan.FromMilliseconds(Shared.Constants.Jobs.DefaultMaxWaitTimeMs);
 
@@ -123,7 +123,7 @@ public class DebuggerApiService : IDebuggerApiService
         var completionNotification = await _signalRClient.WaitForJobCompletionAsync(jobId, timeout, cancellationToken);
 
         // Get final job status with result/error details
-        var status = await GetAsync<JobStatus>(jobId.ToJobEndpoint(), cancellationToken);
+        var status = await _GetAsync<JobStatus>(jobId.ToJobEndpoint(), cancellationToken);
         _logger.LogInformation("Job {JobId} finished with state {State}", jobId, status.State);
 
         return status;
@@ -148,7 +148,7 @@ public class DebuggerApiService : IDebuggerApiService
             var request = new ExecuteCommandRequest(sessionId!, command!);
 
             // Create job and subscribe to progress
-            var jobResponse = await PostAsync<ExecuteCommandRequest, JobCreatedResponse>(ApiEndpoints.ExecuteCommandAsync, request, cancellationToken);
+            var jobResponse = await _PostAsync<ExecuteCommandRequest, JobCreatedResponse>(ApiEndpoints.ExecuteCommandAsync, request, cancellationToken);
             jobId = jobResponse.JobId;
             _logger.LogInformation("Created job {JobId} for executing command", jobId);
 
@@ -156,7 +156,7 @@ public class DebuggerApiService : IDebuggerApiService
             await _signalRClient.SubscribeToJobAsync(jobId, cancellationToken);
 
             // Wait for job completion
-            var result = await WaitForJobCompletionAsync(jobId, cancellationToken);
+            var result = await _WaitForJobCompletionAsync(jobId, cancellationToken);
 
             if (result.State == JobState.Completed)
             {
@@ -174,7 +174,7 @@ public class DebuggerApiService : IDebuggerApiService
         }
         finally
         {
-            await UnsubscribeFromJobAsync(jobId, cancellationToken);
+            await _UnsubscribeFromJobAsync(jobId, cancellationToken);
         }
     }
 
@@ -193,7 +193,7 @@ public class DebuggerApiService : IDebuggerApiService
             var request = new BasicAnalysisRequest(sessionId!);
 
             // Create job and subscribe to progress
-            var jobResponse = await PostAsync<BasicAnalysisRequest, JobCreatedResponse>(ApiEndpoints.BasicAnalysisAsync, request, cancellationToken);
+            var jobResponse = await _PostAsync<BasicAnalysisRequest, JobCreatedResponse>(ApiEndpoints.BasicAnalysisAsync, request, cancellationToken);
             jobId = jobResponse.JobId;
             _logger.LogInformation("Created job {JobId} for basic analysis", jobId);
 
@@ -201,7 +201,7 @@ public class DebuggerApiService : IDebuggerApiService
             await _signalRClient.SubscribeToJobAsync(jobId, cancellationToken);
 
             // Wait for job completion
-            var result = await WaitForJobCompletionAsync(jobId, cancellationToken);
+            var result = await _WaitForJobCompletionAsync(jobId, cancellationToken);
 
             if (result.State == JobState.Completed)
             {
@@ -219,7 +219,7 @@ public class DebuggerApiService : IDebuggerApiService
         }
         finally
         {
-            await UnsubscribeFromJobAsync(jobId, cancellationToken);
+            await _UnsubscribeFromJobAsync(jobId, cancellationToken);
         }
     }
 
@@ -228,18 +228,30 @@ public class DebuggerApiService : IDebuggerApiService
         var paramsResult = args.GetRequiredStrings("session_id", "analysis_type");
         if (paramsResult.IsFailure) return McpToolResult.Error(paramsResult.Error);
 
-        var (sessionId, analysisType) = paramsResult.Value;
+        var (sessionId, analysisTypeString) = paramsResult.Value;
 
         var sessionError = sessionId.ValidateAsSessionId();
         if (sessionError != null) return McpToolResult.Error(sessionError);
 
+        // Parse analysis type string to enum
+        AnalysisType analysisType;
+        try
+        {
+            analysisType = analysisTypeString!.ToAnalysisType();
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning("Invalid analysis type from MCP: {AnalysisType}", analysisTypeString);
+            return McpToolResult.Error(ex.Message);
+        }
+
         string? jobId = null;
         try
         {
-            var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
+            var request = new PredefinedAnalysisRequest(sessionId!, analysisType);
 
             // Create job and subscribe to progress
-            var jobResponse = await PostAsync<PredefinedAnalysisRequest, JobCreatedResponse>(ApiEndpoints.PredefinedAnalysisAsync, request, cancellationToken);
+            var jobResponse = await _PostAsync<PredefinedAnalysisRequest, JobCreatedResponse>(ApiEndpoints.PredefinedAnalysisAsync, request, cancellationToken);
             jobId = jobResponse.JobId;
             _logger.LogInformation("Created job {JobId} for predefined analysis", jobId);
 
@@ -247,7 +259,7 @@ public class DebuggerApiService : IDebuggerApiService
             await _signalRClient.SubscribeToJobAsync(jobId, cancellationToken);
 
             // Wait for job completion
-            var result = await WaitForJobCompletionAsync(jobId, cancellationToken);
+            var result = await _WaitForJobCompletionAsync(jobId, cancellationToken);
 
             if (result.State == JobState.Completed)
             {
@@ -265,7 +277,7 @@ public class DebuggerApiService : IDebuggerApiService
         }
         finally
         {
-            await UnsubscribeFromJobAsync(jobId, cancellationToken);
+            await _UnsubscribeFromJobAsync(jobId, cancellationToken);
         }
     }
 
@@ -284,7 +296,7 @@ public class DebuggerApiService : IDebuggerApiService
             var request = new CloseSessionRequest(sessionId!);
 
             // Create job and subscribe to progress
-            var jobResponse = await PostAsync<CloseSessionRequest, JobCreatedResponse>(ApiEndpoints.CloseSessionAsync, request, cancellationToken);
+            var jobResponse = await _PostAsync<CloseSessionRequest, JobCreatedResponse>(ApiEndpoints.CloseSessionAsync, request, cancellationToken);
             jobId = jobResponse.JobId;
             _logger.LogInformation("Created job {JobId} for closing session {SessionId}", jobId, sessionId);
 
@@ -292,7 +304,7 @@ public class DebuggerApiService : IDebuggerApiService
             await _signalRClient.SubscribeToJobAsync(jobId, cancellationToken);
 
             // Wait for job completion
-            var result = await WaitForJobCompletionAsync(jobId, cancellationToken);
+            var result = await _WaitForJobCompletionAsync(jobId, cancellationToken);
 
             if (result.State == JobState.Completed)
             {
@@ -310,7 +322,7 @@ public class DebuggerApiService : IDebuggerApiService
         }
         finally
         {
-            await UnsubscribeFromJobAsync(jobId, cancellationToken);
+            await _UnsubscribeFromJobAsync(jobId, cancellationToken);
         }
     }
 
@@ -328,7 +340,7 @@ public class DebuggerApiService : IDebuggerApiService
                 endpoint += $"?state={stateFilter}";
             }
 
-            var jobs = await GetAsync<IEnumerable<JobStatus>>(endpoint, cancellationToken);
+            var jobs = await _GetAsync<IEnumerable<JobStatus>>(endpoint, cancellationToken);
 
             var output = new StringBuilder()
                 .AppendSection($"Jobs{(stateFilter != null ? $" (state={stateFilter})" : "")}:");
@@ -375,7 +387,7 @@ public class DebuggerApiService : IDebuggerApiService
 
     public async Task<McpToolResult> DetectDebuggersAsync(CancellationToken cancellationToken = default)
     {
-        var response = await GetAsync<DebuggerDetectionResponse>(ApiEndpoints.DetectDebuggers, cancellationToken);
+        var response = await _GetAsync<DebuggerDetectionResponse>(ApiEndpoints.DetectDebuggers, cancellationToken);
 
         var output = new StringBuilder()
             .AppendSection("🔍 Debugger Detection:");
@@ -385,16 +397,12 @@ public class DebuggerApiService : IDebuggerApiService
         else
             output.AppendLine("❌ No CDB found");
 
-        output.AppendSection("🔧 Environment:");
-        foreach (var env in response.EnvironmentVariables)
-            output.AppendKeyValue(env.Key, env.Value ?? "(not set)");
-
         return output.ToMcpSuccess();
     }
 
     public async Task<McpToolResult> ListAnalysesAsync(CancellationToken cancellationToken = default)
     {
-        var response = await GetAsync<AnalysesResponse>(ApiEndpoints.Analyses, cancellationToken);
+        var response = await _GetAsync<AnalysesResponse>(ApiEndpoints.Analyses, cancellationToken);
 
         var output = new StringBuilder()
             .AppendSection("Available analyses:");
@@ -405,7 +413,7 @@ public class DebuggerApiService : IDebuggerApiService
         return output.ToMcpSuccess();
     }
 
-    private async Task<TResponse> PostAsync<TRequest, TResponse>(string endpoint, TRequest request, CancellationToken cancellationToken = default)
+    private async Task<TResponse> _PostAsync<TRequest, TResponse>(string endpoint, TRequest request, CancellationToken cancellationToken = default)
         where TRequest : class
         where TResponse : class
     {
@@ -433,7 +441,7 @@ public class DebuggerApiService : IDebuggerApiService
         }
     }
 
-    private async Task<TResponse> GetAsync<TResponse>(string endpoint, CancellationToken cancellationToken = default) where TResponse : class
+    private async Task<TResponse> _GetAsync<TResponse>(string endpoint, CancellationToken cancellationToken = default) where TResponse : class
     {
         try
         {
@@ -456,7 +464,7 @@ public class DebuggerApiService : IDebuggerApiService
         }
     }
 
-    private async Task<TResponse> DeleteAsync<TResponse>(string endpoint, CancellationToken cancellationToken = default) where TResponse : class
+    private async Task<TResponse> _DeleteAsync<TResponse>(string endpoint, CancellationToken cancellationToken = default) where TResponse : class
     {
         try
         {
@@ -479,7 +487,7 @@ public class DebuggerApiService : IDebuggerApiService
         }
     }
 
-    private async Task UnsubscribeFromJobAsync(string? jobId, CancellationToken cancellationToken = default)
+    private async Task _UnsubscribeFromJobAsync(string? jobId, CancellationToken cancellationToken = default)
     {
         // Always unsubscribe from progress updates, even on error
         if (jobId != null)

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
+using Shared;
 
 namespace McpProxy.Tests;
 
@@ -27,7 +28,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
         _mockHttpMessageHandler = new Mock<HttpMessageHandler>();
 
         // Setup configuration mock
-        _mockConfiguration.Setup(x => x["BackgroundService:BaseUrl"]).Returns("http://localhost:8080");
+        _mockConfiguration.Setup(x => x["BackgroundService:BaseUrl"]).Returns(Constants.Network.DefaultBackgroundServiceUrl);
 
         // Setup HttpClient to return failure for health check
         _mockHttpMessageHandler
@@ -176,7 +177,7 @@ public sealed class DebuggerApiServiceTests : IDisposable
         // Assert
         Assert.True(result.IsError);
         // Different error messages based on validation type
-        Assert.True(result.Content[0].Text.Contains("dump_file_path") || 
+        Assert.True(result.Content[0].Text.Contains("dump_file_path") ||
                    result.Content[0].Text.Contains("Dump file path"));
     }
 

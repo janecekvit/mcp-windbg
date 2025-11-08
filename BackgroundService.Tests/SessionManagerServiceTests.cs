@@ -2,6 +2,7 @@ using BackgroundService.Factories;
 using BackgroundService.Services;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Shared.Models;
 
 namespace BackgroundService.Tests;
 
@@ -22,7 +23,7 @@ public sealed class SessionManagerServiceTests : IDisposable
         var mockSession = new Mock<ICdbSessionService>();
         mockSession.Setup(x => x.SessionId).Returns("test123");
         mockSession.Setup(x => x.IsActive).Returns(true);
-        mockSession.Setup(x => x.LoadDumpAsync(It.IsAny<string>(), It.IsAny<IProgress<Shared.Models.ProgressUpdate>>(), It.IsAny<CancellationToken>()))
+        mockSession.Setup(x => x.LoadDumpAsync(It.IsAny<string>(), It.IsAny<IProgress<ProgressUpdate>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         _mockSessionFactory.Setup(x => x.CreateSession(
@@ -97,7 +98,7 @@ public sealed class SessionManagerServiceTests : IDisposable
         // Arrange
         var jobId = "test-job-5";
         var invalidSessionId = "nonexistent";
-        var analysisType = "basic";
+        var analysisType = AnalysisType.Basic;
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(

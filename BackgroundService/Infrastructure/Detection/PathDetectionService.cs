@@ -76,7 +76,7 @@ public class PathDetectionService : IPathDetectionService
         var scoredPaths = paths.Select(path => new
         {
             Path = path,
-            Score = CalculatePathScore(path, systemArch)
+            Score = _CalculatePathScore(path, systemArch)
         }).ToList();
 
         // Sort by score (highest first) and select the best
@@ -109,7 +109,7 @@ public class PathDetectionService : IPathDetectionService
     ///    - On ARM64: arm64 preferred
     ///    - On X86: x86 required (64-bit won't run)
     /// </summary>
-    private static int CalculatePathScore(string path, Architecture systemArchitecture)
+    private static int _CalculatePathScore(string path, Architecture systemArchitecture)
     {
         var score = 0;
 
@@ -124,7 +124,7 @@ public class PathDetectionService : IPathDetectionService
         }
 
         // Architecture priority: Match system architecture for optimal performance
-        score += GetArchitectureScore(path, systemArchitecture);
+        score += _GetArchitectureScore(path, systemArchitecture);
 
         return score;
     }
@@ -133,7 +133,7 @@ public class PathDetectionService : IPathDetectionService
     /// Calculates architecture-specific score based on system architecture.
     /// Simple matching: X64 → amd64/x64, ARM64 → arm64, X86 → x86
     /// </summary>
-    private static int GetArchitectureScore(string path, Architecture systemArchitecture)
+    private static int _GetArchitectureScore(string path, Architecture systemArchitecture)
     {
         var isAmd64 = path.Contains("\\amd64\\", StringComparison.OrdinalIgnoreCase);
         var isX64 = path.Contains("\\x64\\", StringComparison.OrdinalIgnoreCase);

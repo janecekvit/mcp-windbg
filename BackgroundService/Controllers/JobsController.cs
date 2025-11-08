@@ -126,12 +126,7 @@ public class JobsController : ControllerBase
             }
         });
 
-        var response = new JobCreatedResponse(
-            jobId,
-            $"/api/jobs/{jobId}",
-            $"Job {jobId} created for loading dump file");
-
-        return Accepted($"/api/jobs/{jobId}", response);
+        return _AcceptedJobResponse(jobId, "loading dump file");
     }
 
     /// <summary>
@@ -160,12 +155,7 @@ public class JobsController : ControllerBase
             }
         });
 
-        var response = new JobCreatedResponse(
-            jobId,
-            $"/api/jobs/{jobId}",
-            $"Job {jobId} created for executing command");
-
-        return Accepted($"/api/jobs/{jobId}", response);
+        return _AcceptedJobResponse(jobId, "executing command");
     }
 
     /// <summary>
@@ -194,12 +184,7 @@ public class JobsController : ControllerBase
             }
         });
 
-        var response = new JobCreatedResponse(
-            jobId,
-            $"/api/jobs/{jobId}",
-            $"Job {jobId} created for basic analysis");
-
-        return Accepted($"/api/jobs/{jobId}", response);
+        return _AcceptedJobResponse(jobId, "basic analysis");
     }
 
     /// <summary>
@@ -211,7 +196,8 @@ public class JobsController : ControllerBase
     public IActionResult PredefinedAnalysisAsync([FromBody] PredefinedAnalysisRequest request)
     {
         var jobId = _jobManager.CreateJob(JobOperationType.PredefinedAnalysis, request.SessionId);
-        _logger.LogInformation("Created job {JobId} for predefined analysis in session {SessionId}", jobId, request.SessionId);
+        _logger.LogInformation("Created job {JobId} for predefined analysis '{AnalysisType}' in session {SessionId}",
+            jobId, request.AnalysisType, request.SessionId);
 
         // Start the operation in background
         _ = Task.Run(async () =>
@@ -228,12 +214,7 @@ public class JobsController : ControllerBase
             }
         });
 
-        var response = new JobCreatedResponse(
-            jobId,
-            $"/api/jobs/{jobId}",
-            $"Job {jobId} created for predefined analysis");
-
-        return Accepted($"/api/jobs/{jobId}", response);
+        return _AcceptedJobResponse(jobId, "predefined analysis");
     }
 
     /// <summary>
@@ -262,11 +243,19 @@ public class JobsController : ControllerBase
             }
         });
 
+        return _AcceptedJobResponse(jobId, "closing session");
+    }
+
+    /// <summary>
+    /// Creates a standardized 202 Accepted response for job creation
+    /// </summary>
+    private AcceptedResult _AcceptedJobResponse(string jobId, string operationDescription)
+    {
         var response = new JobCreatedResponse(
             jobId,
-            $"/api/jobs/{jobId}",
-            $"Job {jobId} created for closing session");
+            jobId.ToJobEndpoint(),
+            $"Job {jobId} created for {operationDescription}");
 
-        return Accepted($"/api/jobs/{jobId}", response);
+        return Accepted(jobId.ToJobEndpoint(), response);
     }
 }

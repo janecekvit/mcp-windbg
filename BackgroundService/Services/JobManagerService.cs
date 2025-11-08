@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using Shared.Models;
-using Microsoft.AspNetCore.SignalR;
 using BackgroundService.Hubs;
+using Microsoft.AspNetCore.SignalR;
+using Shared.Models;
 
 namespace BackgroundService.Services;
 
@@ -30,13 +30,13 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
 
         public JobStatus ToJobStatus()
         {
-            var estimatedTime = EstimateTimeRemaining(Phase, Progress, StartedAt);
+            var estimatedTime = _EstimateTimeRemaining(Phase, Progress, StartedAt);
             return new JobStatus(
                 JobId, SessionId, Operation, State, Phase, Progress, Message,
                 CreatedAt, StartedAt, CompletedAt, estimatedTime, Result, Error);
         }
 
-        private static TimeSpan? EstimateTimeRemaining(JobPhase phase, double progress, DateTime? startedAt)
+        private static TimeSpan? _EstimateTimeRemaining(JobPhase phase, double progress, DateTime? startedAt)
         {
             if (startedAt == null || progress >= 1.0)
                 return null;
@@ -44,7 +44,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
             var elapsed = DateTime.UtcNow - startedAt.Value;
 
             // Phase-based estimation
-            TimeSpan? estimatedTotal = phase switch
+            var estimatedTotal = phase switch
             {
                 JobPhase.Queued => TimeSpan.Zero,
                 JobPhase.ValidatingInput => TimeSpan.FromSeconds(2),
@@ -108,14 +108,12 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
     public JobStatus GetJobStatus(string jobId)
     {
         if (!_jobs.TryGetValue(jobId, out var job))
-        {
             throw new ArgumentException($"Job {jobId} not found", nameof(jobId));
-        }
 
         return job.ToJobStatus();
     }
 
-    public async Task UpdateProgressAsync(string jobId, double progress, string? message = null)
+    public async Task UpdateProgressAsync(string jobId, JobPhase phase, double progress, string? message = null)
     {
         if (!_jobs.TryGetValue(jobId, out var job))
         {
@@ -130,47 +128,14 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
             job.StartedAt = DateTime.UtcNow;
         }
 
+        job.Phase = phase;
         job.Progress = Math.Clamp(progress, 0.0, 1.0);
         job.Message = message;
 
-        _logger.LogDebug("Job {JobId} progress: {Progress:P0} - {Message}",
-            jobId, progress, message ?? "(no message)");
+        _logger.LogDebug("Job {JobId} phase: {Phase}, progress: {Progress:P0} - {Message}",
+            jobId, phase, progress, message ?? "(no message)");
 
-        // Send SignalR notification
-        var notification = new ProgressNotification(
-            jobId,
-            job.Progress,
-            message,
-            DateTime.UtcNow);
-
-        await _hubContext.Clients.Group(jobId).SendAsync("Progress", notification);
-    }
-
-    public async Task UpdatePhaseAsync(string jobId, JobPhase phase, string? message = null)
-    {
-        if (!_jobs.TryGetValue(jobId, out var job))
-        {
-            _logger.LogWarning("Attempted to update phase for non-existent job: {JobId}", jobId);
-            return;
-        }
-
-        job.Phase = phase;
-        if (message != null)
-        {
-            job.Message = message;
-        }
-
-        _logger.LogDebug("Job {JobId} phase: {Phase} - {Message}",
-            jobId, phase, message ?? "(no message)");
-
-        // Send SignalR notification with updated phase
-        var notification = new ProgressNotification(
-            jobId,
-            job.Progress,
-            message ?? $"Phase: {phase}",
-            DateTime.UtcNow);
-
-        await _hubContext.Clients.Group(jobId).SendAsync("Progress", notification);
+        await _SendProgressNotificationAsync(jobId, phase, job.Progress, message);
     }
 
     public async Task CompleteJobAsync(string jobId, string result)
@@ -190,15 +155,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         _logger.LogInformation("Job {JobId} completed successfully in {Duration:mm\\:ss}",
             jobId, duration);
 
-        // Send SignalR notification
-        var notification = new JobCompletedNotification(
-            jobId,
-            true,
-            result,
-            null,
-            DateTime.UtcNow);
-
-        await _hubContext.Clients.Group(jobId).SendAsync("Completed", notification);
+        await _SendCompletedNotificationAsync(jobId, true, result, null);
     }
 
     public async Task FailJobAsync(string jobId, string error)
@@ -217,15 +174,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         _logger.LogError("Job {JobId} failed after {Duration:mm\\:ss}: {Error}",
             jobId, duration, error);
 
-        // Send SignalR notification
-        var notification = new JobCompletedNotification(
-            jobId,
-            false,
-            null,
-            error,
-            DateTime.UtcNow);
-
-        await _hubContext.Clients.Group(jobId).SendAsync("Completed", notification);
+        await _SendCompletedNotificationAsync(jobId, false, null, error);
     }
 
     public async Task CancelJobAsync(string jobId)
@@ -242,15 +191,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
 
         _logger.LogInformation("Job {JobId} was cancelled", jobId);
 
-        // Send SignalR notification
-        var notification = new JobCompletedNotification(
-            jobId,
-            false,
-            null,
-            "Job was cancelled",
-            DateTime.UtcNow);
-
-        await _hubContext.Clients.Group(jobId).SendAsync("Completed", notification);
+        await _SendCompletedNotificationAsync(jobId, false, null, "Job was cancelled");
     }
 
     public IEnumerable<JobStatus> GetAllJobs(JobState? filterByState = null)
@@ -258,9 +199,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         var jobs = _jobs.Values.Select(j => j.ToJobStatus());
 
         if (filterByState.HasValue)
-        {
             jobs = jobs.Where(j => j.State == filterByState.Value);
-        }
 
         return jobs.OrderByDescending(j => j.CreatedAt).ToList();
     }
@@ -277,15 +216,35 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         foreach (var jobId in jobsToRemove)
         {
             if (_jobs.TryRemove(jobId, out _))
-            {
                 _logger.LogDebug("Cleaned up old job: {JobId}", jobId);
-            }
         }
 
         if (jobsToRemove.Count > 0)
-        {
             _logger.LogInformation("Cleaned up {Count} old jobs", jobsToRemove.Count);
-        }
+    }
+
+    private async Task _SendProgressNotificationAsync(string jobId, JobPhase phase, double progress, string? message)
+    {
+        var notification = new ProgressNotification(
+            jobId,
+            phase,
+            progress,
+            message,
+            DateTime.UtcNow);
+
+        await _hubContext.Clients.Group(jobId).SendAsync("Progress", notification);
+    }
+
+    private async Task _SendCompletedNotificationAsync(string jobId, bool success, string? result, string? error)
+    {
+        var notification = new JobCompletedNotification(
+            jobId,
+            success,
+            result,
+            error,
+            DateTime.UtcNow);
+
+        await _hubContext.Clients.Group(jobId).SendAsync("Completed", notification);
     }
 
     public void Dispose()

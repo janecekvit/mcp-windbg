@@ -25,6 +25,7 @@ internal class Program
 
             // Application services
             builder.Services.AddSingleton<IAnalysisService, AnalysisService>();
+            builder.Services.AddSingleton<IDiagnosticsService, DiagnosticsService>();
             builder.Services.AddSingleton<ICdbSessionFactory, CdbSessionFactory>();
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
             builder.Services.AddSingleton<IJobManagerService, JobManagerService>();
@@ -43,7 +44,7 @@ internal class Program
             {
                 options.AddDefaultPolicy(policy =>
                 {
-                    policy.WithOrigins("http://localhost:8080")
+                    policy.WithOrigins($"http://localhost:{Constants.Network.DefaultBackgroundServicePort}")
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();

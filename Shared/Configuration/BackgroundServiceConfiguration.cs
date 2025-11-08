@@ -8,5 +8,5 @@ public class BackgroundServiceConfiguration
     /// <summary>
     /// Base URL for the BackgroundService HTTP API
     /// </summary>
-    public string BaseUrl { get; set; } = "http://localhost:8080";
+    public required string BaseUrl { get; set; }
 }

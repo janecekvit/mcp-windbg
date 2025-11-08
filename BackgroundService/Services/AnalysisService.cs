@@ -114,17 +114,9 @@ public class AnalysisService : IAnalysisService
         }
     };
 
-    public IReadOnlyList<string> GetAnalysisCommands(string analysisName)
+    public IReadOnlyList<string> GetAnalysisCommands(AnalysisType analysisType)
     {
-        try
-        {
-            var analysisType = analysisName.ToAnalysisType();
-            return Analyses.TryGetValue(analysisType, out var commands) ? commands : Array.Empty<string>();
-        }
-        catch (ArgumentException)
-        {
-            return Array.Empty<string>();
-        }
+        return Analyses.TryGetValue(analysisType, out var commands) ? commands : Array.Empty<string>();
     }
 
     public IEnumerable<string> GetAvailableAnalyses()
@@ -132,16 +124,8 @@ public class AnalysisService : IAnalysisService
         return Analyses.Keys.Select(AnalysisTypeExtensions.ToString);
     }
 
-    public string GetAnalysisDescription(string analysisName)
+    public string GetAnalysisDescription(AnalysisType analysisType)
     {
-        try
-        {
-            var analysisType = analysisName.ToAnalysisType();
-            return analysisType.GetDescription();
-        }
-        catch (ArgumentException)
-        {
-            return "Unknown analysis type";
-        }
+        return analysisType.GetDescription();
     }
 }

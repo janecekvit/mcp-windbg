@@ -9,30 +9,50 @@ namespace Shared.Extensions;
 public static class ConfigurationExtensions
 {
     /// <summary>
-    /// Gets a configuration value with environment variable fallback
+    /// Gets a typed configuration value with environment variable fallback
     /// </summary>
+    /// <typeparam name="T">Type of the configuration value</typeparam>
     /// <param name="configuration">The configuration instance</param>
     /// <param name="key">Configuration key</param>
     /// <param name="environmentVariableName">Environment variable name for fallback</param>
     /// <param name="defaultValue">Default value if neither config nor env var is found</param>
-    /// <returns>Configuration value, environment variable value, or default value</returns>
-    public static string? GetValueWithEnvironmentFallback(
+    /// <returns>Typed configuration value, environment variable value, or default value</returns>
+    public static T GetValueWithEnvironmentFallback<T>(
         this IConfiguration configuration,
         string key,
         string? environmentVariableName = null,
-        string? defaultValue = null)
+        T defaultValue = default!)
     {
         // Try configuration first
-        var configValue = configuration[key];
-        if (!string.IsNullOrEmpty(configValue))
-            return configValue;
+        try
+        {
+            var configValue = configuration.GetValue<T>(key);
+            if (configValue != null && !EqualityComparer<T>.Default.Equals(configValue, default(T)))
+                return configValue;
+        }
+        catch
+        {
+            // If reading from configuration fails, continue to environment variable
+        }
 
         // Fall back to environment variable
         if (environmentVariableName != null)
         {
             var envValue = Environment.GetEnvironmentVariable(environmentVariableName);
             if (!string.IsNullOrEmpty(envValue))
-                return envValue;
+            {
+                try
+                {
+                    // Handle nullable types
+                    var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+                    var convertedValue = Convert.ChangeType(envValue, targetType);
+                    return (T)convertedValue!;
+                }
+                catch
+                {
+                    // If parsing fails, fall through to default
+                }
+            }
         }
 
         // Return default value
@@ -48,7 +68,10 @@ public static class ConfigurationExtensions
     {
         return new BackgroundServiceConfiguration
         {
-            BaseUrl = configuration.GetValueWithEnvironmentFallback("BackgroundService:BaseUrl", "BACKGROUND_SERVICE_URL", "http://localhost:8080")!
+            BaseUrl = configuration.GetValueWithEnvironmentFallback<string>(
+                "BackgroundService:BaseUrl",
+                "BACKGROUND_SERVICE_URL",
+                Constants.Network.DefaultBackgroundServiceUrl)!
         };
     }
 
@@ -61,11 +84,11 @@ public static class ConfigurationExtensions
     {
         return new DebuggerConfiguration
         {
-            DefaultSymbolCache = configuration.GetValueWithEnvironmentFallback(
+            DefaultSymbolCache = configuration.GetValueWithEnvironmentFallback<string?>(
                 "Debugger:DefaultSymbolCache"),
-            DefaultSymbolPathExtra = configuration.GetValueWithEnvironmentFallback(
+            DefaultSymbolPathExtra = configuration.GetValueWithEnvironmentFallback<string?>(
                 "Debugger:DefaultSymbolPathExtra"),
-            DefaultSymbolServers = configuration.GetValueWithEnvironmentFallback(
+            DefaultSymbolServers = configuration.GetValueWithEnvironmentFallback<string?>(
                 "Debugger:DefaultSymbolServers")
         };
     }

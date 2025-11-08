@@ -17,15 +17,15 @@ public class McpProxy
         _debuggerApiService = debuggerApiService;
         _communicationService = communicationService;
     }
-    
+
 
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        await _communicationService.RunAsync(HandleToolCallAsync, _debuggerApiService.CheckHealthAsync, cancellationToken);
+        await _communicationService.RunAsync(_HandleToolCallAsync, _debuggerApiService.CheckHealthAsync, cancellationToken);
     }
 
-    private async Task<McpToolResult> HandleToolCallAsync(string toolName, string? progressToken, JsonElement args, CancellationToken cancellationToken)
+    private async Task<McpToolResult> _HandleToolCallAsync(string toolName, string? progressToken, JsonElement args, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Executing tool: {ToolName}", toolName);
 

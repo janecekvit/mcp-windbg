@@ -76,6 +76,7 @@ public record JobCreatedResponse(
 /// </summary>
 public record ProgressNotification(
     [property: JsonPropertyName("jobId")] string JobId,
+    [property: JsonPropertyName("phase")] JobPhase Phase,
     [property: JsonPropertyName("progress")] double Progress,
     [property: JsonPropertyName("message")] string? Message,
     [property: JsonPropertyName("timestamp")] DateTime Timestamp);
@@ -91,7 +92,7 @@ public record JobCompletedNotification(
     [property: JsonPropertyName("timestamp")] DateTime Timestamp);
 
 /// <summary>
-/// Structured progress update instead of raw string messages
+/// Structured progress update
 /// </summary>
 public record ProgressUpdate(
     [property: JsonPropertyName("phase")] JobPhase Phase,

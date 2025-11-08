@@ -79,13 +79,10 @@ public class PathExpansionService : IPathExpansionService
                                 var isFilePattern = part.Contains('.') && i == parts.Length - 1;
 
                                 if (isFilePattern)
-                                {
+
                                     nextPaths.AddRange(Directory.GetFiles(currentPath, part, SearchOption.TopDirectoryOnly));
-                                }
                                 else
-                                {
                                     nextPaths.AddRange(Directory.GetDirectories(currentPath, part, SearchOption.TopDirectoryOnly));
-                                }
                             }
                         }
                         else
@@ -93,9 +90,7 @@ public class PathExpansionService : IPathExpansionService
                             // No wildcard - just append
                             var nextPath = Path.Combine(currentPath, part);
                             if (Directory.Exists(nextPath) || File.Exists(nextPath))
-                            {
                                 nextPaths.Add(nextPath);
-                            }
                         }
                     }
                     catch (UnauthorizedAccessException)
