@@ -5,12 +5,8 @@
       "url": "https://learn.microsoft.com/api/mcp"
     },
     "dump-analyzer": {
-        "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
-        "args": [],
-        "env": {
-          "SYMBOL_CACHE": "D:\\Symbols",
-          "USE_FILE_LOGGING": "true"
-        }
-      }
+      "type": "http",
+      "url": "http://localhost:7997/mcp"
+    }
   }
 }

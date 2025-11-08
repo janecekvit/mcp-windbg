@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOTNET_VERSION: '8.0.x'
+  DOTNET_VERSION: '9.0.x'
   BUILD_CONFIGURATION: 'Release'
 
 jobs:
@@ -139,9 +139,9 @@ jobs:
           echo "✅ **All tests passed!**" >> $env:GITHUB_STEP_SUMMARY
         }
 
-    - name: Publish McpProxy
+    - name: Publish BackgroundService
       run: |
-        dotnet publish McpProxy/McpProxy.csproj `
+        dotnet publish BackgroundService/BackgroundService.csproj `
           --configuration ${{ env.BUILD_CONFIGURATION }} `
           --runtime win-x64 `
           --output publish/win-x64 `
@@ -151,9 +151,9 @@ jobs:
           -p:PublishReadyToRun=false `
           -p:Version=${{ steps.version.outputs.version }}
 
-    - name: Publish BackgroundService
+    - name: Publish CdbDebuggerClient
       run: |
-        dotnet publish BackgroundService/BackgroundService.csproj `
+        dotnet publish CdbDebuggerClient/CdbDebuggerClient.csproj `
           --configuration ${{ env.BUILD_CONFIGURATION }} `
           --runtime win-x64 `
           --output publish/win-x64 `
@@ -194,8 +194,8 @@ jobs:
         Copy-Item "LICENSE" "package/" -Force -ErrorAction SilentlyContinue
         Copy-Item "CLAUDE.md" "package/" -Force -ErrorAction Stop
         
-        # Copy configuration examples  
-        Copy-Item "claude-mcp-config.json" "package/" -Force -ErrorAction Stop
+        # Copy configuration examples
+        Copy-Item ".mcp.json" "package/" -Force -ErrorAction Stop
         if (Test-Path "Tests/") {
           Copy-Item "Tests/" "package/Examples/" -Recurse -Force
           Write-Host "✅ Copied Tests as Examples"
@@ -206,21 +206,22 @@ jobs:
         WinDbg MCP Server v$version
         Built on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
         Commit: $env:GITHUB_SHA
-        
+
         Files included:
-        - McpProxy.exe (Main MCP server executable)
-        - BackgroundService.exe (Background processing service)
+        - BackgroundService.exe (MCP HTTP server + REST API)
+        - CdbDebuggerClient.exe (Command-line tool for scripting)
         - Scripts/ (PowerShell scripts for standalone usage)
         - README.md (Complete documentation)
         - CLAUDE.md (Claude Code integration instructions)
-        - claude-mcp-config.json (Configuration example)
+        - .mcp.json (MCP HTTP configuration example)
         - Examples/ (Usage examples)
-        
+
         Quick start:
-        1. Run McpProxy.exe to start the MCP server
-        2. Configure Claude Code with claude-mcp-config.json
-        3. Use Scripts/cdb.ps1 for standalone dump analysis
-        
+        1. Run BackgroundService.exe to start the server (port 7997)
+        2. Configure Claude Code with .mcp.json (HTTP transport)
+        3. Use CdbDebuggerClient.exe for scripting and Azure Functions
+        4. Use Scripts/cdb.ps1 for standalone dump analysis
+
         For detailed instructions, see README.md
         "@
         $versionContent | Out-File -FilePath "package/VERSION.txt" -Encoding UTF8
@@ -241,7 +242,7 @@ jobs:
         }
         
         # Validate required files exist
-        $requiredFiles = @("McpProxy.exe", "BackgroundService.exe", "README.md", "CLAUDE.md")
+        $requiredFiles = @("BackgroundService.exe", "CdbDebuggerClient.exe", "README.md", "CLAUDE.md")
         foreach ($file in $requiredFiles) {
           if (Test-Path "package/$file") {
             Write-Host "✅ Found required file: $file"
@@ -306,36 +307,39 @@ jobs:
       run: |
         $body = @"
         ## WinDbg MCP Server ${{ needs.build.outputs.version }}
-        
-        Windows memory dump analysis tool with MCP (Model Context Protocol) integration.
-        
+
+        Windows memory dump analysis tool with MCP (Model Context Protocol) HTTP integration.
+
         ### Features
         - Interactive debugging with persistent WinDbg/CDB sessions
         - 10 types of predefined analyses (basic, exception, threads, heap, etc.)
-        - Claude Code integration via MCP protocol
-        - Visual Studio Code and GitHub Copilot integration
+        - Claude Code integration via MCP HTTP protocol
+        - REST API for PowerShell scripts and Azure Functions
+        - Command-line client for scripting and automation
         - Automatic debugger detection (Windows SDK, WinDbg Store App)
         - Single-file executable deployment
-        
+        - Real-time progress updates via SignalR
+
         ### What's included
-        - ``McpProxy.exe`` - Main MCP server executable
-        - ``BackgroundService.exe`` - Background processing service  
+        - ``BackgroundService.exe`` - MCP HTTP server + REST API (port 7997)
+        - ``CdbDebuggerClient.exe`` - Command-line tool for scripting
         - ``Scripts/`` - PowerShell scripts for standalone usage
         - ``README.md`` - Complete documentation and integration guide
-        - ``claude-mcp-config.json`` - Configuration example for Claude Code
+        - ``.mcp.json`` - Configuration example for Claude Code (HTTP transport)
         - ``Examples/`` - Usage examples and test files
-        
+
         ### Quick Start
         1. Download and extract the ZIP file
-        2. Run ``McpProxy.exe`` to start the MCP server
-        3. Configure Claude Code using the provided config example
-        4. See ``README.md`` for detailed integration instructions
-        
+        2. Run ``BackgroundService.exe`` to start the MCP HTTP server (port 7997)
+        3. Configure Claude Code with ``.mcp.json`` (uses HTTP transport at http://localhost:7997/mcp)
+        4. Use ``CdbDebuggerClient.exe`` for scripting, PowerShell, or Azure Functions integration
+        5. See ``README.md`` for detailed integration instructions
+
         ### Requirements
         - Windows 10/11
-        - .NET 8.0 runtime (included in single-file executable)
+        - .NET 9.0 runtime (included in single-file executable)
         - Windows SDK Debuggers (cdb.exe) or WinDbg from Microsoft Store
-        
+
         For detailed documentation, see [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md).
         "@
         echo "body<<EOF" >> $env:GITHUB_OUTPUT

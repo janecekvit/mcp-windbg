@@ -8,11 +8,56 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 - **Predefined analyses**: 10 types of specialized analyses (basic, exception, threads, heap, etc.)
 - **Custom commands**: Ability to execute custom WinDbg/CDB commands
 - **Session management**: Concurrent work with multiple dump files
-- **MCP compatibility**: Standard MCP protocol for integration
+- **MCP HTTP protocol**: Standard MCP over HTTP for seamless integration
+- **Real-time progress**: SignalR-based progress notifications
+- **Command-line client**: Standalone client for scripting and Azure Functions
+
+## Architecture
+
+```
+┌─────────────┐
+│ Claude Code │  MCP HTTP
+└──────┬──────┘
+       │ http://localhost:7997/mcp
+       ↓
+┌──────────────────────────────────────────────────┐
+│          BackgroundService (port 7997)           │
+│                                                  │
+│  ┌──────────────┐      ┌───────────────────┐   │
+│  │ MCP HTTP     │      │ REST API          │   │
+│  │ /mcp/*       │      │ /api/jobs/*       │   │
+│  └──────────────┘      └───────────────────┘   │
+│                                                  │
+│         ┌──────────────────────┐                │
+│         │ SessionManager       │                │
+│         │ + JobManager         │                │
+│         │ + ProgressHub        │                │
+│         └──────────┬───────────┘                │
+└────────────────────┼────────────────────────────┘
+                     ↓
+              ┌─────────────┐
+              │ CDB Process │
+              └─────────────┘
+
+┌────────────────┐
+│ PowerShell /   │  REST API
+│ Azure Function │
+└────────┬───────┘
+         │ http://localhost:7997/api
+         ↓
+    (BackgroundService)
+
+┌──────────────────┐
+│ CdbDebuggerClient│  REST API + SignalR
+└────────┬─────────┘
+         │ http://localhost:7997
+         ↓
+    (BackgroundService)
+```
 
 ## Requirements
 
-- .NET 8.0+
+- .NET 9.0+
 - Windows SDK Debuggers (cdb.exe)
 - Access to Microsoft symbol server (for downloading symbols)
 
@@ -20,17 +65,20 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 
 ### Quick Installation (Single-file executable)
 ```powershell
-# Build single-file executable
+# Build single-file executables
 .\Scripts\Publish.ps1
 
-# Run
-.\publish\McpProxy.exe
+# Start the MCP server
+.\publish\BackgroundService.exe
+
+# Or use the command-line client
+.\publish\CdbDebuggerClient.exe help
 ```
 
 ### Development build
 ```bash
 dotnet build
-dotnet run
+dotnet run --project BackgroundService
 ```
 
 ## Automatic Debugger Detection
@@ -50,22 +98,7 @@ The server supports multiple configuration methods with the following priority o
 2. **Environment variables** (fallback)
 3. **Default values**
 
-### Configuration Files
-
-#### McpProxy Configuration
-Create `McpProxy/appsettings.json`:
-```json
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information"
-    }
-  },
-  "BackgroundService": {
-    "BaseUrl": "http://localhost:7997"
-  }
-}
-```
+### Configuration File
 
 #### BackgroundService Configuration
 Create `BackgroundService/appsettings.json`:
@@ -123,7 +156,9 @@ C:\MyProject\Debug;srv*D:\SymbolCache*https://symbols.company.com;srv*D:\SymbolC
 ### Environment Variables (Optional Fallback)
 
 - `CDB_PATH`: Custom path to cdb.exe/windbg.exe (overrides auto-detection)
-- `BACKGROUND_SERVICE_URL`: Background service endpoint (default: `http://localhost:7997`)
+- `SYMBOL_CACHE`: Local symbol download directory (default: `%LOCALAPPDATA%\CdbMcpServer\symbols`)
+- `SYMBOL_PATH_EXTRA`: Additional local symbol directories
+- `SYMBOL_SERVERS`: Custom symbol servers (semicolon-separated)
 
 #### Symbol Configuration Parameters
 
@@ -186,8 +221,11 @@ Runs basic analysis (equivalent to PowerShell script).
 **Parameters:**
 - `session_id`: Debugging session ID
 
-### list_sessions
-Lists all active debugging sessions.
+### list_jobs
+Lists all jobs with their current status.
+
+**Parameters (optional):**
+- `state`: Filter by job state (Queued, Running, Completed, Failed, Cancelled)
 
 ### list_analyses
 Lists all available predefined analyses with descriptions.
@@ -223,7 +261,7 @@ Closes a debugging session and releases resources.
 # Build single-file executable
 .\Scripts\Publish.ps1
 # or
-dotnet publish McpProxy\McpProxy.csproj -c Release -r win-x64 -o publish --self-contained true -p:PublishSingleFile=true
+dotnet publish BackgroundService\BackgroundService.csproj -c Release -r win-x64 -o publish --self-contained true -p:PublishSingleFile=true
 ```
 
 #### 2. Configuration Options
@@ -234,45 +272,51 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "windbg-debugging": {
-        "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
-        "args": [],
-        "env": {
-          "CDB_PATH": "C:\\Program Files\\WindowsApps\\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\\amd64\\cdb.exe",
-          "SYMBOL_CACHE": "C:\\Users\\YourUser\\AppData\\Local\\CdbMcpServer\\symbols",
-          "SYMBOL_SERVERS": "https://your-company.com/symbols;C:\\MyLocalSymbols",
-          "BACKGROUND_SERVICE_URL": "http://localhost:7997"
-        }
-      }
+  "mcpServers": {
+    "dump-analyzer": {
+      "type": "http",
+      "url": "http://localhost:7997/mcp"
     }
   }
 }
+```
+
+**Important:** You must start BackgroundService.exe manually before using Claude Code:
+```powershell
+# Start the service (keep this running)
+.\publish\BackgroundService.exe
+
+# Optional: Configure via environment variables
+$env:SYMBOL_CACHE = "D:\Symbols"
+$env:CDB_PATH = "C:\Program Files\WindowsApps\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\amd64\cdb.exe"
+.\publish\BackgroundService.exe
 ```
 
 **Method B: Project-specific Configuration (Recommended)**
 
-Create `.claude/mcp_config.json` in your project root:
+Create `.mcp.json` in your project root:
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "windbg-debugging": {
-        "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
-        "args": []
-      }
+  "mcpServers": {
+    "dump-analyzer": {
+      "type": "http",
+      "url": "http://localhost:7997/mcp"
     }
   }
 }
 ```
 
-The server will automatically detect debugger installations and use default settings. For custom paths, use environment variables or modify the appsettings.json files in the published directory.
+Start BackgroundService separately:
+```powershell
+# In a separate terminal/PowerShell window
+cd D:\Git\mcp-windbg\publish
+.\BackgroundService.exe
+```
 
 #### 3. Usage in Claude Code
 
-After restarting Claude Code, you can use:
+After starting BackgroundService and configuring Claude Code, you can use:
 
 - `detect_debuggers` - verify debugger configuration
 - `load_dump` - load dump file and create session
@@ -281,135 +325,106 @@ After restarting Claude Code, you can use:
 - `predefined_analysis` - specialized analyses (heap, threads, modules, etc.)
 
 **Example workflow:**
-1. "Use detect_debuggers to verify configuration"
-2. "Load dump file D:\\crash.dmp using load_dump"
-3. "Perform basic_analysis on session"
-4. "Run predefined_analysis of type heap"
+1. Start BackgroundService.exe
+2. Open Claude Code
+3. "Use detect_debuggers to verify configuration"
+4. "Load dump file D:\\crash.dmp using load_dump"
+5. "Perform basic_analysis on session"
+6. "Run predefined_analysis of type heap"
 
 #### 4. Advanced Configuration
 
 For production deployment, you can customize configuration by:
 
-1. **Environment Variables in MCP Config:**
-```json
-"env": {
-  "CDB_PATH": "C:\\path\\to\\your\\cdb.exe",
-  "SYMBOL_CACHE": "C:\\your\\symbol\\cache",
-  "SYMBOL_PATH_EXTRA": "C:\\additional\\symbols",
-  "SYMBOL_SERVERS": "https://internal.company.com/symbols;\\\\fileserver\\symbols",
-  "BACKGROUND_SERVICE_URL": "http://localhost:7997"
-}
+1. **Environment Variables:**
+```powershell
+$env:CDB_PATH = "C:\path\to\your\cdb.exe"
+$env:SYMBOL_CACHE = "C:\your\symbol\cache"
+$env:SYMBOL_PATH_EXTRA = "C:\additional\symbols"
+$env:SYMBOL_SERVERS = "https://internal.company.com/symbols;\\fileserver\symbols"
+.\BackgroundService.exe
 ```
 
 2. **Modifying appsettings.json after publishing:**
-   - Edit `publish/McpProxy/appsettings.json`
-   - Edit `publish/BackgroundService/appsettings.json`
+   - Edit `publish/appsettings.json`
 
 3. **Development appsettings:**
    - Create `appsettings.Development.json` files for development-specific settings
 
-### Visual Studio Code Integration
+## Command-Line Client (CdbDebuggerClient)
 
-For VS Code users, you can integrate this tool through several approaches:
+Standalone command-line client for scripting, Azure Functions, and automation.
 
-#### 1. Terminal Integration
+### Installation
 ```powershell
-# Add to your PowerShell profile for quick access
-function Analyze-Dump {
-    param([string]$DumpPath)
-    & "D:\Git\mcp-windbg\Scripts\cdb.ps1" -DumpFile $DumpPath
-}
+# Build with Publish.ps1
+.\Scripts\Publish.ps1
 
-# Usage
-Analyze-Dump "C:\crash.dmp"
+# Client is in publish\CdbDebuggerClient.exe
 ```
 
-#### 2. Task Configuration
-Add to `.vscode/tasks.json`:
+### Usage
 
-```json
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Analyze Memory Dump",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-File",
-        "${workspaceFolder}/Scripts/cdb.ps1",
-        "-DumpFile",
-        "${input:dumpFilePath}",
-        "-OutputFile",
-        "${workspaceFolder}/analysis-report.txt"
-      ],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "new"
-      }
-    }
-  ],
-  "inputs": [
-    {
-      "id": "dumpFilePath",
-      "description": "Path to memory dump file",
-      "default": "C:\\dumps\\crash.dmp",
-      "type": "promptString"
-    }
-  ]
-}
+**Start BackgroundService first:**
+```powershell
+# Terminal 1: Start the service
+.\publish\BackgroundService.exe
 ```
 
-#### 3. Extension Integration
-You can create a simple VS Code extension to integrate the MCP server:
+**Then use the client:**
+```powershell
+# Terminal 2: Use the client
+cd .\publish
 
-1. Install the MCP extension development tools
-2. Configure the MCP server endpoint in VS Code settings
-3. Use the Command Palette to execute debugging commands
+# Load dump
+.\CdbDebuggerClient.exe load "C:\dumps\crash.dmp"
 
-### GitHub Copilot Integration
+# Execute command
+.\CdbDebuggerClient.exe exec session-id "!analyze -v"
 
-GitHub Copilot can assist with memory dump analysis by providing context-aware suggestions:
+# Run analysis
+.\CdbDebuggerClient.exe analyze session-id
 
-#### 1. Code Generation for Analysis Scripts
-Ask Copilot to generate WinDbg commands based on crash symptoms:
+# List jobs
+.\CdbDebuggerClient.exe list-jobs
+
+# Close session
+.\CdbDebuggerClient.exe close session-id
+```
+
+### Symbol Configuration
+```powershell
+# Via command line parameters
+.\CdbDebuggerClient.exe --symbol-cache "D:\Symbols" load "C:\dumps\crash.dmp"
+
+# Via environment variables
+$env:SYMBOL_CACHE = "D:\Symbols"
+$env:SYMBOL_SERVERS = "https://company.com/symbols"
+.\CdbDebuggerClient.exe load "C:\dumps\crash.dmp"
+```
+
+### Azure Functions Integration
 
 ```csharp
-// Example: Generate heap analysis commands
-// Copilot can suggest: !heap -s, !heap -stat, !heap -flt s <size>
-```
+// Example Azure Function using CdbDebuggerClient libraries
+using Shared.Client;
+using Microsoft.Extensions.Logging;
 
-#### 2. Automated Script Templates
-Use Copilot to generate PowerShell scripts for batch analysis:
-
-```powershell
-# Copilot can help create scripts like:
-# - Batch processing multiple dump files
-# - Custom report generation
-# - Symbol path configuration
-```
-
-#### 3. Integration with Chat Features
-In VS Code with Copilot Chat, you can ask:
-- "Generate a WinDbg command to analyze heap corruption"
-- "Create a PowerShell script to batch process crash dumps"
-- "Explain this stack trace from a memory dump"
-
-#### 4. Custom Copilot Prompts for Debugging
-Create custom prompts in your workspace:
-
-```json
-// .vscode/settings.json
+public static async Task<IActionResult> Run(
+    [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req,
+    ILogger log)
 {
-  "github.copilot.chat.welcomeMessage": "I can help you analyze memory dumps using WinDbg/CDB commands. Ask me about:\n- Heap analysis\n- Stack trace interpretation\n- Exception debugging\n- Performance analysis",
-  "github.copilot.enable": {
-    "*": true,
-    "markdown": true,
-    "powershell": true
-  }
+    var httpClient = new HttpClient();
+    var signalRClient = new SignalRClientService(log, "http://localhost:7997/hubs/progress");
+    await signalRClient.ConnectAsync();
+
+    var apiService = new DebuggerApiService(log, httpClient, signalRClient, "http://localhost:7997");
+
+    var dumpPath = req.Query["dumpPath"];
+    var sessionId = await apiService.LoadDumpAsync(dumpPath);
+    var analysis = await apiService.BasicAnalysisAsync(sessionId);
+
+    return new OkObjectResult(analysis);
 }
 ```
 
@@ -428,3 +443,33 @@ Create custom prompts in your workspace:
 // Specialized analysis
 {"method": "tools/call", "params": {"name": "predefined_analysis", "arguments": {"session_id": "abc12345", "analysis_type": "heap"}}}
 ```
+
+## PowerShell Script Usage
+
+For standalone usage without MCP:
+
+```powershell
+# Analyze dump using PowerShell script
+.\Scripts\cdb.ps1 -DumpFile "C:\dumps\crash.dmp" -OutputFile "analysis.txt"
+```
+
+## Troubleshooting
+
+### BackgroundService won't start
+- Check port 7997 is not in use: `netstat -ano | findstr :7997`
+- Verify CDB is installed: run `detect_debuggers` tool
+- Check logs in console output
+
+### Symbol loading is slow
+- First load downloads symbols (10-30 min)
+- Subsequent loads use cache (30-60 sec)
+- Configure `SYMBOL_CACHE` for persistent cache
+
+### Claude Code can't connect
+- Ensure BackgroundService.exe is running
+- Verify configuration in `.mcp.json` or Claude config
+- Check http://localhost:7997/api/health in browser
+
+## License
+
+MIT License - see LICENSE file for details
