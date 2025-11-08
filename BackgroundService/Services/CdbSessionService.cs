@@ -75,7 +75,7 @@ public sealed class CdbSessionService : ICdbSessionService
 
         // Initialize session with symbol configuration
         progress?.Report(ProgressUpdate.LoadingDump("CDB process started, initializing session..."));
-        await InitializeSessionAsync(progress, cancellationToken);
+        await _InitializeSessionAsync(progress, cancellationToken);
 
         _logger.LogInformation("CDB session {SessionId} loaded dump: {DumpFile}", SessionId, dumpFilePath);
     }
@@ -86,7 +86,7 @@ public sealed class CdbSessionService : ICdbSessionService
         await _processManager.KillProcessAsync();
     }
 
-    private async Task InitializeSessionAsync(IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default)
+    private async Task _InitializeSessionAsync(IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default)
     {
         if (_isInitialized) return;
 
@@ -115,13 +115,13 @@ public sealed class CdbSessionService : ICdbSessionService
 
             _logger.LogDebug("Executing init command for session {SessionId}: {Command}", SessionId, command);
 
-            var result = await ExecuteCommandInternalAsync(command, cancellationToken);
+            var result = await _ExecuteCommandInternalAsync(command, cancellationToken);
 
             // Check for symbol loading issues and retry if needed
             if (command == ".reload" && (result.Contains("WRONG_SYMBOLS") || result.Contains("MISSING")))
             {
                 _logger.LogWarning("Symbol loading issues detected, attempting retry for session {SessionId}", SessionId);
-                await RetrySymbolLoadingAsync(cancellationToken);
+                await _RetrySymbolLoadingAsync(cancellationToken);
             }
 
             // Log cache usage for symbol loading
@@ -149,7 +149,7 @@ public sealed class CdbSessionService : ICdbSessionService
         _logger.LogInformation("CDB session {SessionId} initialized successfully", SessionId);
     }
 
-    private async Task RetrySymbolLoadingAsync(CancellationToken cancellationToken = default)
+    private async Task _RetrySymbolLoadingAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Retrying symbol loading for session {SessionId}", SessionId);
 
@@ -168,7 +168,7 @@ public sealed class CdbSessionService : ICdbSessionService
             try
             {
                 _logger.LogDebug("Executing retry command for session {SessionId}: {Command}", SessionId, command);
-                var result = await ExecuteCommandInternalAsync(command, cancellationToken);
+                var result = await _ExecuteCommandInternalAsync(command, cancellationToken);
                 _logger.LogDebug("Retry command result for session {SessionId}: {Result}", SessionId,
                     result?.Length > Constants.Debugging.LogTruncateLength ? result[..Constants.Debugging.LogTruncateLength] + "..." : result);
                 await Task.Delay(Constants.Debugging.InitializationDelay * 2, cancellationToken);
@@ -206,7 +206,7 @@ public sealed class CdbSessionService : ICdbSessionService
         {
             _logger.LogInformation("Executing command in session {SessionId}: {Command}", SessionId, command);
             progress?.Report(ProgressUpdate.ExecutingCommand(command, 0.1));
-            return await ExecuteCommandInternalAsync(command, cancellationToken);
+            return await _ExecuteCommandInternalAsync(command, cancellationToken);
         }
         finally
         {
@@ -214,7 +214,7 @@ public sealed class CdbSessionService : ICdbSessionService
         }
     }
 
-    private async Task<string> ExecuteCommandInternalAsync(string command, CancellationToken cancellationToken = default)
+    private async Task<string> _ExecuteCommandInternalAsync(string command, CancellationToken cancellationToken = default)
     {
         if (!_processManager.IsActive)
         {

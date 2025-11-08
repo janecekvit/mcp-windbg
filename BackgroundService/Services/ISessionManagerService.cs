@@ -1,5 +1,3 @@
-using BackgroundService.Models;
-
 namespace BackgroundService.Services;
 
 public interface ISessionManagerService : IDisposable

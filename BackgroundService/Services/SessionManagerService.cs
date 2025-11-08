@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using BackgroundService.Factories;
 using Shared;
-using Shared.Extensions;
 using Shared.Models;
 
 namespace BackgroundService.Services;
@@ -33,8 +32,7 @@ public sealed class SessionManagerService : ISessionManagerService
     {
         try
         {
-            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.ValidatingInput, "Validating dump file...");
-            await _jobManager.UpdateProgressAsync(jobId, 0.05, "Validating dump file...");
+            await _jobManager.UpdateProgressAsync(jobId, JobPhase.ValidatingInput, 0.05, "Validating dump file...");
 
             if (!File.Exists(dumpFilePath))
             {
@@ -42,15 +40,14 @@ public sealed class SessionManagerService : ISessionManagerService
                 throw new FileNotFoundException($"Dump file not found: {dumpFilePath}", dumpFilePath);
             }
 
-            await _jobManager.UpdateProgressAsync(jobId, 0.1, "Creating CDB session...");
+            await _jobManager.UpdateProgressAsync(jobId, JobPhase.StartingCdb, 0.1, "Creating CDB session...");
 
             var sessionId = Guid.NewGuid().ToString("N")[..Constants.Debugging.SessionIdLength];
 
             // Create structured progress reporter for CDB session
             var progressReporter = new Progress<ProgressUpdate>(async update =>
             {
-                await _jobManager.UpdatePhaseAsync(jobId, update.Phase, update.Message);
-                await _jobManager.UpdateProgressAsync(jobId, update.Progress, update.Message);
+                await _jobManager.UpdateProgressAsync(jobId, update.Phase, update.Progress, update.Message);
             });
 
             // Create session using factory with symbol configuration from MCP server
@@ -70,8 +67,7 @@ public sealed class SessionManagerService : ISessionManagerService
                 throw new InvalidOperationException($"CDB process failed to start or exited during dump loading for session {sessionId}");
             }
 
-            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.Completed, $"Session {sessionId} ready");
-            await _jobManager.UpdateProgressAsync(jobId, 1.0, $"Session {sessionId} ready");
+            await _jobManager.UpdateProgressAsync(jobId, JobPhase.Completed, 1.0, $"Session {sessionId} ready");
 
             _logger.LogInformation("Successfully loaded dump in session {SessionId}: {DumpFile}", sessionId, dumpFilePath);
             return sessionId;
@@ -101,20 +97,17 @@ public sealed class SessionManagerService : ISessionManagerService
 
         try
         {
-            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.ExecutingCommand, $"Executing command: {command}");
-            await _jobManager.UpdateProgressAsync(jobId, 0.1, $"Executing command: {command}");
+            await _jobManager.UpdateProgressAsync(jobId, JobPhase.ExecutingCommand, 0.1, $"Executing command: {command}");
 
             // Create structured progress reporter
             var progressReporter = new Progress<ProgressUpdate>(async update =>
             {
-                await _jobManager.UpdatePhaseAsync(jobId, update.Phase, update.Message);
-                await _jobManager.UpdateProgressAsync(jobId, update.Progress, update.Message);
+                await _jobManager.UpdateProgressAsync(jobId, update.Phase, update.Progress, update.Message);
             });
 
             var result = await session.ExecuteCommandAsync(command, progressReporter, cancellationToken);
 
-            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.Completed, "Command completed");
-            await _jobManager.UpdateProgressAsync(jobId, 1.0, "Command completed");
+            await _jobManager.UpdateProgressAsync(jobId, JobPhase.Completed, 1.0, "Command completed");
 
             return result;
         }
@@ -148,20 +141,17 @@ public sealed class SessionManagerService : ISessionManagerService
 
         try
         {
-            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.Analyzing, $"Starting {analysisName} analysis...");
-            await _jobManager.UpdateProgressAsync(jobId, 0.1, $"Starting {analysisName} analysis...");
+            await _jobManager.UpdateProgressAsync(jobId, JobPhase.Analyzing, 0.1, $"Starting {analysisName} analysis...");
 
             // Create structured progress reporter
             var progressReporter = new Progress<ProgressUpdate>(async update =>
             {
-                await _jobManager.UpdatePhaseAsync(jobId, update.Phase, update.Message);
-                await _jobManager.UpdateProgressAsync(jobId, update.Progress, update.Message);
+                await _jobManager.UpdateProgressAsync(jobId, update.Phase, update.Progress, update.Message);
             });
 
             var result = await session.ExecutePredefinedAnalysisAsync(analysisName, progressReporter, cancellationToken);
 
-            await _jobManager.UpdatePhaseAsync(jobId, JobPhase.Completed, "Analysis completed");
-            await _jobManager.UpdateProgressAsync(jobId, 1.0, "Analysis completed");
+            await _jobManager.UpdateProgressAsync(jobId, JobPhase.Completed, 1.0, "Analysis completed");
 
             return result;
         }

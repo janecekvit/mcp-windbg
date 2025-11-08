@@ -15,14 +15,9 @@ public interface IJobManagerService
     JobStatus GetJobStatus(string jobId);
 
     /// <summary>
-    /// Updates the progress of a running job
+    /// Updates the progress and phase of a running job
     /// </summary>
-    Task UpdateProgressAsync(string jobId, double progress, string? message = null);
-
-    /// <summary>
-    /// Updates the phase of a running job
-    /// </summary>
-    Task UpdatePhaseAsync(string jobId, JobPhase phase, string? message = null);
+    Task UpdateProgressAsync(string jobId, JobPhase phase, double progress, string? message = null);
 
     /// <summary>
     /// Marks a job as completed successfully
