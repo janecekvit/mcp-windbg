@@ -50,7 +50,7 @@ public record PredefinedAnalysisRequest(
     string SessionId,
     [Required(ErrorMessage = "Analysis type is required")]
     [property: JsonPropertyName("analysisType")]
-    string AnalysisType);
+    AnalysisType AnalysisType);
 
 public record CloseSessionRequest(
     [Required(ErrorMessage = "Session ID is required")]

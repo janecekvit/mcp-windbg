@@ -1,3 +1,5 @@
+using Shared.Models;
+
 namespace BackgroundService.Services;
 
 public interface ISessionManagerService : IDisposable
@@ -40,10 +42,10 @@ public interface ISessionManagerService : IDisposable
     /// </summary>
     /// <param name="jobId">Job ID for progress tracking</param>
     /// <param name="sessionId">ID of the session to analyze</param>
-    /// <param name="analysisName">Name of the predefined analysis to run</param>
+    /// <param name="analysisType">Type of predefined analysis to run</param>
     /// <param name="cancellationToken">Token to cancel the operation</param>
     /// <returns>Analysis output from the debugger</returns>
-    Task<string> ExecutePredefinedAnalysisAsync(string jobId, string sessionId, string analysisName, CancellationToken cancellationToken = default);
+    Task<string> ExecutePredefinedAnalysisAsync(string jobId, string sessionId, AnalysisType analysisType, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Cancels a running session and terminates its CDB process

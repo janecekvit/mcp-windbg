@@ -120,10 +120,10 @@ public sealed class SessionManagerService : ISessionManagerService
 
     public async Task<string> ExecuteBasicAnalysisAsync(string jobId, string sessionId, CancellationToken cancellationToken = default)
     {
-        return await ExecutePredefinedAnalysisAsync(jobId, sessionId, "basic", cancellationToken);
+        return await ExecutePredefinedAnalysisAsync(jobId, sessionId, AnalysisType.Basic, cancellationToken);
     }
 
-    public async Task<string> ExecutePredefinedAnalysisAsync(string jobId, string sessionId, string analysisName, CancellationToken cancellationToken = default)
+    public async Task<string> ExecutePredefinedAnalysisAsync(string jobId, string sessionId, AnalysisType analysisType, CancellationToken cancellationToken = default)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
@@ -141,7 +141,7 @@ public sealed class SessionManagerService : ISessionManagerService
 
         try
         {
-            await _jobManager.UpdateProgressAsync(jobId, JobPhase.Analyzing, 0.1, $"Starting {analysisName} analysis...");
+            await _jobManager.UpdateProgressAsync(jobId, JobPhase.Analyzing, 0.1, $"Starting {analysisType.ToString()} analysis...");
 
             // Create structured progress reporter
             var progressReporter = new Progress<ProgressUpdate>(async update =>
@@ -149,7 +149,7 @@ public sealed class SessionManagerService : ISessionManagerService
                 await _jobManager.UpdateProgressAsync(jobId, update.Phase, update.Progress, update.Message);
             });
 
-            var result = await session.ExecutePredefinedAnalysisAsync(analysisName, progressReporter, cancellationToken);
+            var result = await session.ExecutePredefinedAnalysisAsync(analysisType, progressReporter, cancellationToken);
 
             await _jobManager.UpdateProgressAsync(jobId, JobPhase.Completed, 1.0, "Analysis completed");
 
@@ -157,7 +157,7 @@ public sealed class SessionManagerService : ISessionManagerService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error executing {AnalysisName} analysis in session {SessionId}", analysisName, sessionId);
+            _logger.LogError(ex, "Error executing {AnalysisType} analysis in session {SessionId}", analysisType.ToString(), sessionId);
             throw;
         }
     }

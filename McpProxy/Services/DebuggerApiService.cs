@@ -228,15 +228,27 @@ public class DebuggerApiService : IDebuggerApiService
         var paramsResult = args.GetRequiredStrings("session_id", "analysis_type");
         if (paramsResult.IsFailure) return McpToolResult.Error(paramsResult.Error);
 
-        var (sessionId, analysisType) = paramsResult.Value;
+        var (sessionId, analysisTypeString) = paramsResult.Value;
 
         var sessionError = sessionId.ValidateAsSessionId();
         if (sessionError != null) return McpToolResult.Error(sessionError);
 
+        // Parse analysis type string to enum
+        AnalysisType analysisType;
+        try
+        {
+            analysisType = analysisTypeString!.ToAnalysisType();
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning("Invalid analysis type from MCP: {AnalysisType}", analysisTypeString);
+            return McpToolResult.Error(ex.Message);
+        }
+
         string? jobId = null;
         try
         {
-            var request = new PredefinedAnalysisRequest(sessionId!, analysisType!);
+            var request = new PredefinedAnalysisRequest(sessionId!, analysisType);
 
             // Create job and subscribe to progress
             var jobResponse = await _PostAsync<PredefinedAnalysisRequest, JobCreatedResponse>(ApiEndpoints.PredefinedAnalysisAsync, request, cancellationToken);

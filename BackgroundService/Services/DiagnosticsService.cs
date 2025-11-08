@@ -46,7 +46,7 @@ public class DiagnosticsService : IDiagnosticsService
         try
         {
             var analyses = _analysisService.GetAvailableAnalyses()
-                .Select(a => new AnalysisInfo(a, _analysisService.GetAnalysisDescription(a)))
+                .Select(a => new AnalysisInfo(a, _analysisService.GetAnalysisDescription(a.ToAnalysisType())))
                 .ToList();
 
             _logger.LogInformation("Retrieved {Count} available analyses via DiagnosticsService", analyses.Count);

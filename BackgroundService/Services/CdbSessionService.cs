@@ -252,29 +252,30 @@ public sealed class CdbSessionService : ICdbSessionService
 
     public async Task<string> ExecuteBasicAnalysisAsync(CancellationToken cancellationToken = default)
     {
-        return await ExecutePredefinedAnalysisAsync("basic", cancellationToken);
+        return await ExecutePredefinedAnalysisAsync(AnalysisType.Basic, cancellationToken);
     }
 
-    public async Task<string> ExecutePredefinedAnalysisAsync(string analysisName, CancellationToken cancellationToken = default)
+    public async Task<string> ExecutePredefinedAnalysisAsync(AnalysisType analysisType, CancellationToken cancellationToken = default)
     {
-        return await ExecutePredefinedAnalysisAsync(analysisName, null, cancellationToken);
+        return await ExecutePredefinedAnalysisAsync(analysisType, null, cancellationToken);
     }
 
-    public async Task<string> ExecutePredefinedAnalysisAsync(string analysisName, IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default)
+    public async Task<string> ExecutePredefinedAnalysisAsync(AnalysisType analysisType, IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default)
     {
+        var analysisName = analysisType.ToString();
         progress?.Report(ProgressUpdate.Analyzing(analysisName, 0.1));
 
-        var commands = _analysisService.GetAnalysisCommands(analysisName);
+        var commands = _analysisService.GetAnalysisCommands(analysisType);
         if (commands.Count == 0)
         {
             var error = $"Unknown analysis type: {analysisName}. Available analyses: {string.Join(", ", _analysisService.GetAvailableAnalyses())}";
             _logger.LogError(error);
-            throw new ArgumentException(error, nameof(analysisName));
+            throw new ArgumentException(error, nameof(analysisType));
         }
 
         var results = new StringBuilder()
             .AppendSection($"Executing {analysisName} analysis:")
-            .AppendKeyValue("Description", _analysisService.GetAnalysisDescription(analysisName));
+            .AppendKeyValue("Description", _analysisService.GetAnalysisDescription(analysisType));
 
         var totalCommands = commands.Count;
         var currentCommand = 0;

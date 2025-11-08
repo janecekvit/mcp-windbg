@@ -57,19 +57,19 @@ public interface ICdbSessionService : IDisposable
     Task<string> ExecuteBasicAnalysisAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Executes a predefined analysis by name
+    /// Executes a predefined analysis by type
     /// </summary>
-    /// <param name="analysisName">Name of the analysis to run</param>
+    /// <param name="analysisType">Type of analysis to run</param>
     /// <param name="cancellationToken">Token to cancel the operation</param>
     /// <returns>Analysis output from the debugger</returns>
-    Task<string> ExecutePredefinedAnalysisAsync(string analysisName, CancellationToken cancellationToken = default);
+    Task<string> ExecutePredefinedAnalysisAsync(AnalysisType analysisType, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Executes a predefined analysis by name with progress reporting
+    /// Executes a predefined analysis by type with progress reporting
     /// </summary>
-    /// <param name="analysisName">Name of the analysis to run</param>
+    /// <param name="analysisType">Type of analysis to run</param>
     /// <param name="progress">Structured progress reporter for long-running analysis</param>
     /// <param name="cancellationToken">Token to cancel the operation</param>
     /// <returns>Analysis output from the debugger</returns>
-    Task<string> ExecutePredefinedAnalysisAsync(string analysisName, IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default);
+    Task<string> ExecutePredefinedAnalysisAsync(AnalysisType analysisType, IProgress<ProgressUpdate>? progress, CancellationToken cancellationToken = default);
 }

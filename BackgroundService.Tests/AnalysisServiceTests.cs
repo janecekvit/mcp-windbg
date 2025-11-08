@@ -42,27 +42,15 @@ public class AnalysisServiceTests
     public void GetAnalysisDescription_ValidAnalysisType_ReturnsDescription(string analysisType)
     {
         // Arrange
-        var expectedDescription = analysisType.ToAnalysisType().GetDescription();
+        var analysisTypeEnum = analysisType.ToAnalysisType();
+        var expectedDescription = analysisTypeEnum.GetDescription();
 
         // Act
-        var description = _analysisService.GetAnalysisDescription(analysisType);
+        var description = _analysisService.GetAnalysisDescription(analysisTypeEnum);
 
         // Assert
         Assert.Equal(expectedDescription, description);
         Assert.NotEmpty(description);
-    }
-
-    [Fact]
-    public void GetAnalysisDescription_InvalidAnalysisType_ReturnsNotFoundMessage()
-    {
-        // Arrange
-        var invalidType = "nonexistent";
-
-        // Act
-        var description = _analysisService.GetAnalysisDescription(invalidType);
-
-        // Assert
-        Assert.Equal("Unknown analysis type", description);
     }
 
     [Theory]
@@ -78,24 +66,14 @@ public class AnalysisServiceTests
     [InlineData("processes")]
     public void GetAnalysisCommands_ValidAnalysisType_ReturnsCommands(string analysisType)
     {
+        // Arrange
+        var analysisTypeEnum = analysisType.ToAnalysisType();
+
         // Act
-        var commands = _analysisService.GetAnalysisCommands(analysisType);
+        var commands = _analysisService.GetAnalysisCommands(analysisTypeEnum);
 
         // Assert
         Assert.NotEmpty(commands);
         Assert.All(commands, cmd => Assert.False(string.IsNullOrWhiteSpace(cmd)));
-    }
-
-    [Fact]
-    public void GetAnalysisCommands_InvalidAnalysisType_ReturnsEmptyArray()
-    {
-        // Arrange
-        var invalidType = "nonexistent";
-
-        // Act
-        var commands = _analysisService.GetAnalysisCommands(invalidType);
-
-        // Assert
-        Assert.Empty(commands);
     }
 }
