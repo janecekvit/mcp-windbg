@@ -8,7 +8,7 @@ public class DebuggerConfiguration
 {
     /// <summary>
     /// Default symbol cache directory path.
-    /// If not specified, uses: %LOCALAPPDATA%\CdbAnalysisServer\Symbols
+    /// If not specified, uses: %LOCALAPPDATA%\CdbAnalysisServer\symbols
     /// </summary>
     public string? DefaultSymbolCache { get; set; }
 
@@ -34,10 +34,7 @@ public class DebuggerConfiguration
             return DefaultSymbolCache;
 
         // Fallback to default location
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CdbAnalysisServer",
-            "Symbols");
+        return ApplicationPaths.GetSymbolsDirectory();
     }
 
     /// <summary>
