@@ -9,15 +9,38 @@ namespace BackgroundService.Infrastructure.Debugger;
 /// </summary>
 public sealed class CdbProcessManager : ICdbProcessManager
 {
+    private const int DefaultReadBufferSize = 4096;
+    private const int DefaultReadDelayMs = 10;
+    private const int DefaultGracefulShutdownTimeoutMs = 5000;
+
     private readonly ILogger<CdbProcessManager> _logger;
     private readonly string _sessionId;
+    private readonly object _lock = new();
     private Process? _cdbProcess;
     private StreamWriter? _stdin;
-    private readonly object _lock = new();
     private bool _disposed;
 
-    public bool IsActive => _cdbProcess?.HasExited == false;
-    public int? ProcessId => _cdbProcess?.Id;
+    public bool IsActive
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _IsActiveNoLock();
+            }
+        }
+    }
+
+    public int? ProcessId
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _cdbProcess?.Id;
+            }
+        }
+    }
 
     public CdbProcessManager(string sessionId, ILogger<CdbProcessManager> logger)
     {
@@ -29,10 +52,10 @@ public sealed class CdbProcessManager : ICdbProcessManager
     {
         lock (_lock)
         {
-            if (_cdbProcess != null && !_cdbProcess.HasExited)
+            if (_IsActiveNoLock())
             {
                 _logger.LogWarning("CDB process already running for session {SessionId}, terminating old process", _sessionId);
-                _cdbProcess.Kill();
+                _cdbProcess!.Kill();
                 _cdbProcess.Dispose();
             }
 
@@ -80,56 +103,29 @@ public sealed class CdbProcessManager : ICdbProcessManager
 
     public async Task WriteCommandAsync(string command)
     {
-        if (_stdin == null || _cdbProcess?.HasExited != false)
-        {
-            throw new InvalidOperationException($"CDB process not running for session {_sessionId}");
-        }
+        _EnsureProcessIsRunning();
 
-        await _stdin.WriteLineAsync(command);
+        await _stdin!.WriteLineAsync(command);
         await _stdin.FlushAsync();
         _logger.LogTrace("Command written to CDB for session {SessionId}: {Command}", _sessionId, command);
     }
 
     public async Task<string> ReadUntilMarkerAsync(string endMarker, int timeoutMs, CancellationToken cancellationToken = default)
     {
-        if (_cdbProcess?.HasExited != false)
-        {
-            throw new InvalidOperationException($"CDB process not running for session {_sessionId}");
-        }
+        _EnsureProcessIsRunning();
 
         var output = new StringBuilder();
-        var stdout = _cdbProcess.StandardOutput;
+        var stdout = _cdbProcess!.StandardOutput;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeoutMs);
 
         try
         {
-            var buffer = new char[4096];
-            while (!cts.Token.IsCancellationRequested)
-            {
-                // Read available data
-                var readTask = stdout.ReadAsync(buffer, 0, buffer.Length);
-                var bytesRead = await readTask.WaitAsync(cts.Token);
+            await _ReadOutputUntilMarkerAsync(stdout, output, endMarker, cts.Token);
 
-                if (bytesRead > 0)
-                {
-                    var chunk = new string(buffer, 0, bytesRead);
-                    output.Append(chunk);
-
-                    // Check if we've hit the end marker
-                    if (output.ToString().Contains(endMarker))
-                    {
-                        var result = output.ToString();
-                        var markerIndex = result.IndexOf(endMarker, StringComparison.Ordinal);
-                        return result[..markerIndex].Trim();
-                    }
-                }
-
-                // Small delay to avoid tight loop
-                await Task.Delay(10, cts.Token);
-            }
-
-            throw new TimeoutException($"Timeout waiting for marker '{endMarker}' in session {_sessionId}");
+            var result = output.ToString();
+            var markerIndex = result.IndexOf(endMarker, StringComparison.Ordinal);
+            return result[..markerIndex].Trim();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -144,42 +140,66 @@ public sealed class CdbProcessManager : ICdbProcessManager
 
     public async Task KillProcessAsync()
     {
-        if (_cdbProcess != null && !_cdbProcess.HasExited)
+        lock (_lock)
         {
-            try
-            {
-                _logger.LogWarning("Killing CDB process for session {SessionId}", _sessionId);
-                _cdbProcess.Kill(entireProcessTree: true);
-                await _cdbProcess.WaitForExitAsync();
-                _logger.LogInformation("CDB process killed for session {SessionId}", _sessionId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error killing CDB process for session {SessionId}", _sessionId);
-                throw;
-            }
-        }
-    }
-
-    public async Task ShutdownGracefullyAsync(int timeoutMs = 5000)
-    {
-        if (_cdbProcess == null || _cdbProcess.HasExited)
-        {
-            _logger.LogDebug("CDB process already exited for session {SessionId}", _sessionId);
-            return;
+            if (!_IsActiveNoLock())
+                return;
         }
 
         try
         {
-            // Send quit command
-            if (_stdin != null)
+            _logger.LogWarning("Killing CDB process for session {SessionId}", _sessionId);
+
+            lock (_lock)
             {
-                await _stdin.WriteLineAsync("q");
-                await _stdin.FlushAsync();
+                _cdbProcess?.Kill(entireProcessTree: true);
             }
 
-            // Wait for graceful exit
-            var exited = _cdbProcess.WaitForExit(timeoutMs);
+            if (_cdbProcess != null)
+            {
+                await _cdbProcess.WaitForExitAsync();
+                _logger.LogInformation("CDB process killed for session {SessionId}", _sessionId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error killing CDB process for session {SessionId}", _sessionId);
+            throw;
+        }
+    }
+
+    public async Task ShutdownGracefullyAsync(int timeoutMs = DefaultGracefulShutdownTimeoutMs)
+    {
+        lock (_lock)
+        {
+            if (!_IsActiveNoLock())
+            {
+                _logger.LogDebug("CDB process already exited for session {SessionId}", _sessionId);
+                return;
+            }
+        }
+
+        try
+        {
+            Process? process;
+            lock (_lock)
+            {
+                if (_stdin != null)
+                {
+                    _stdin.WriteLineAsync("q").Wait();
+                    _stdin.FlushAsync().Wait();
+                }
+
+                _logger.LogInformation("Sent graceful shutdown command to CDB for session {SessionId}", _sessionId);
+
+                process = _cdbProcess;
+            }
+
+
+            if (process == null)
+                return;
+
+            var exited = process.WaitForExit(timeoutMs);
             if (!exited)
             {
                 _logger.LogWarning("CDB process did not exit gracefully for session {SessionId}, forcing termination", _sessionId);
@@ -189,6 +209,7 @@ public sealed class CdbProcessManager : ICdbProcessManager
             {
                 _logger.LogInformation("CDB process exited gracefully for session {SessionId}", _sessionId);
             }
+
         }
         catch (Exception ex)
         {
@@ -199,17 +220,18 @@ public sealed class CdbProcessManager : ICdbProcessManager
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
 
-        _stdin?.Dispose();
-
-        if (_cdbProcess != null)
+        lock (_lock)
         {
-            if (!_cdbProcess.HasExited)
+            _stdin?.Dispose();
+
+            if (_IsActiveNoLock())
             {
                 try
                 {
-                    _cdbProcess.Kill();
+                    _cdbProcess!.Kill();
                 }
                 catch (Exception ex)
                 {
@@ -217,9 +239,54 @@ public sealed class CdbProcessManager : ICdbProcessManager
                 }
             }
 
-            _cdbProcess.Dispose();
+            _cdbProcess?.Dispose();
+
+            _disposed = true;
         }
 
-        _disposed = true;
+        GC.SuppressFinalize(this);
+    }
+
+
+    private void _EnsureProcessIsRunning()
+    {
+        lock (_lock)
+        {
+            if (_stdin == null || !_IsActiveNoLock())
+            {
+                throw new InvalidOperationException($"CDB process not running for session {_sessionId}");
+            }
+        }
+    }
+
+
+    private bool _IsActiveNoLock()
+    {
+        return _cdbProcess?.HasExited == false;
+    }
+
+    private async Task _ReadOutputUntilMarkerAsync(StreamReader stdout, StringBuilder output, string endMarker, CancellationToken cancellationToken)
+    {
+        var buffer = new char[DefaultReadBufferSize];
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var bytesRead = await stdout.ReadAsync(buffer, 0, buffer.Length).WaitAsync(cancellationToken);
+
+            if (bytesRead > 0)
+            {
+                var chunk = new string(buffer, 0, bytesRead);
+                output.Append(chunk);
+
+                if (output.ToString().Contains(endMarker))
+                {
+                    return;
+                }
+            }
+
+            await Task.Delay(DefaultReadDelayMs, cancellationToken);
+        }
+
+        throw new TimeoutException($"Timeout waiting for marker '{endMarker}' in session {_sessionId}");
     }
 }
