@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
+using Shared;
 using Shared.Models;
 
 namespace McpProxy.Services;
@@ -18,7 +19,7 @@ public class SignalRClientService : ISignalRClientService
     public SignalRClientService(
         ILogger<SignalRClientService> logger,
         ICommunicationService communicationService,
-        string hubUrl = "http://localhost:8080/hubs/progress")
+        string hubUrl = Constants.Network.DefaultProgressHubUrl)
     {
         _logger = logger;
         _communicationService = communicationService;

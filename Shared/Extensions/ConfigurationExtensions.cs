@@ -48,7 +48,7 @@ public static class ConfigurationExtensions
     {
         return new BackgroundServiceConfiguration
         {
-            BaseUrl = configuration.GetValueWithEnvironmentFallback("BackgroundService:BaseUrl", "BACKGROUND_SERVICE_URL", "http://localhost:8080")!
+            BaseUrl = configuration.GetValueWithEnvironmentFallback("BackgroundService:BaseUrl", "BACKGROUND_SERVICE_URL", Constants.Network.DefaultBackgroundServiceUrl)!
         };
     }
 

@@ -62,7 +62,7 @@ Create `McpProxy/appsettings.json`:
     }
   },
   "BackgroundService": {
-    "BaseUrl": "http://localhost:8080"
+    "BaseUrl": "http://localhost:7997"
   }
 }
 ```
@@ -123,7 +123,7 @@ C:\MyProject\Debug;srv*D:\SymbolCache*https://symbols.company.com;srv*D:\SymbolC
 ### Environment Variables (Optional Fallback)
 
 - `CDB_PATH`: Custom path to cdb.exe/windbg.exe (overrides auto-detection)
-- `BACKGROUND_SERVICE_URL`: Background service endpoint (default: `http://localhost:8080`)
+- `BACKGROUND_SERVICE_URL`: Background service endpoint (default: `http://localhost:7997`)
 
 #### Symbol Configuration Parameters
 
@@ -243,7 +243,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
           "CDB_PATH": "C:\\Program Files\\WindowsApps\\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\\amd64\\cdb.exe",
           "SYMBOL_CACHE": "C:\\Users\\YourUser\\AppData\\Local\\CdbMcpServer\\symbols",
           "SYMBOL_SERVERS": "https://your-company.com/symbols;C:\\MyLocalSymbols",
-          "BACKGROUND_SERVICE_URL": "http://localhost:8080"
+          "BACKGROUND_SERVICE_URL": "http://localhost:7997"
         }
       }
     }
@@ -297,7 +297,7 @@ For production deployment, you can customize configuration by:
   "SYMBOL_CACHE": "C:\\your\\symbol\\cache",
   "SYMBOL_PATH_EXTRA": "C:\\additional\\symbols",
   "SYMBOL_SERVERS": "https://internal.company.com/symbols;\\\\fileserver\\symbols",
-  "BACKGROUND_SERVICE_URL": "http://localhost:8080"
+  "BACKGROUND_SERVICE_URL": "http://localhost:7997"
 }
 ```
 
