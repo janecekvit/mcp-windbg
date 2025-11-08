@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using Shared.Models;
-using Microsoft.AspNetCore.SignalR;
 using BackgroundService.Hubs;
+using Microsoft.AspNetCore.SignalR;
+using Shared.Models;
 
 namespace BackgroundService.Services;
 
@@ -44,7 +44,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
             var elapsed = DateTime.UtcNow - startedAt.Value;
 
             // Phase-based estimation
-            TimeSpan? estimatedTotal = phase switch
+            var estimatedTotal = phase switch
             {
                 JobPhase.Queued => TimeSpan.Zero,
                 JobPhase.ValidatingInput => TimeSpan.FromSeconds(2),
@@ -108,9 +108,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
     public JobStatus GetJobStatus(string jobId)
     {
         if (!_jobs.TryGetValue(jobId, out var job))
-        {
             throw new ArgumentException($"Job {jobId} not found", nameof(jobId));
-        }
 
         return job.ToJobStatus();
     }
@@ -156,9 +154,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
 
         job.Phase = phase;
         if (message != null)
-        {
             job.Message = message;
-        }
 
         _logger.LogDebug("Job {JobId} phase: {Phase} - {Message}",
             jobId, phase, message ?? "(no message)");
@@ -258,9 +254,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         var jobs = _jobs.Values.Select(j => j.ToJobStatus());
 
         if (filterByState.HasValue)
-        {
             jobs = jobs.Where(j => j.State == filterByState.Value);
-        }
 
         return jobs.OrderByDescending(j => j.CreatedAt).ToList();
     }
@@ -277,15 +271,11 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         foreach (var jobId in jobsToRemove)
         {
             if (_jobs.TryRemove(jobId, out _))
-            {
                 _logger.LogDebug("Cleaned up old job: {JobId}", jobId);
-            }
         }
 
         if (jobsToRemove.Count > 0)
-        {
             _logger.LogInformation("Cleaned up {Count} old jobs", jobsToRemove.Count);
-        }
     }
 
     public void Dispose()

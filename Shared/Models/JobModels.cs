@@ -91,7 +91,7 @@ public record JobCompletedNotification(
     [property: JsonPropertyName("timestamp")] DateTime Timestamp);
 
 /// <summary>
-/// Structured progress update instead of raw string messages
+/// Structured progress update
 /// </summary>
 public record ProgressUpdate(
     [property: JsonPropertyName("phase")] JobPhase Phase,

@@ -385,10 +385,6 @@ public class DebuggerApiService : IDebuggerApiService
         else
             output.AppendLine("❌ No CDB found");
 
-        output.AppendSection("🔧 Environment:");
-        foreach (var env in response.EnvironmentVariables)
-            output.AppendKeyValue(env.Key, env.Value ?? "(not set)");
-
         return output.ToMcpSuccess();
     }
 

@@ -29,7 +29,7 @@ public record LoadDumpRequest(
 
     // Optional: Symbol configuration (per-session from MCP server)
     [property: JsonPropertyName("symbols")]
-    Shared.Configuration.SymbolsConfiguration? Symbols = null);
+    Configuration.SymbolsConfiguration? Symbols = null);
 
 public record ExecuteCommandRequest(
     [Required(ErrorMessage = "Session ID is required")]
@@ -73,8 +73,7 @@ public record AnalysesResponse([property: JsonPropertyName("analyses")] IReadOnl
 
 public record DebuggerDetectionResponse(
     [property: JsonPropertyName("cdbPath")] string? CdbPath,
-    [property: JsonPropertyName("foundPaths")] IReadOnlyList<string> FoundPaths,
-    [property: JsonPropertyName("environmentVariables")] Dictionary<string, string?> EnvironmentVariables);
+    [property: JsonPropertyName("foundPaths")] IReadOnlyList<string> FoundPaths);
 
 public record ErrorResponse([property: JsonPropertyName("error")] string Error);
 

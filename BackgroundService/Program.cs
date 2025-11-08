@@ -43,7 +43,7 @@ internal class Program
             {
                 options.AddDefaultPolicy(policy =>
                 {
-                    policy.WithOrigins("http://localhost:8080")
+                    policy.WithOrigins($"http://localhost:{Constants.Network.DefaultBackgroundServicePort}")
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();

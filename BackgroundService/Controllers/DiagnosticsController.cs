@@ -3,7 +3,6 @@ using BackgroundService.Infrastructure.Detection;
 using BackgroundService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
-using Shared.Extensions;
 using Shared.Models;
 
 namespace BackgroundService.Controllers;
@@ -58,15 +57,10 @@ public class DiagnosticsController : ControllerBase
             var foundPaths = _pathDetectionService.DetectDebuggerPaths();
             var cdbPath = _pathDetectionService.GetBestDebuggerPath();
 
-            // Symbol configuration is sent per-request from MCP server, not stored here
-            var envVars = new Dictionary<string, string?>
-            {
-                ["Info"] = "Symbol configuration is provided per-request from MCP server"
-            };
 
             _logger.LogInformation("Debugger detection completed. CDB: {CdbPath}", cdbPath);
 
-            return Ok(new DebuggerDetectionResponse(cdbPath, foundPaths, envVars));
+            return Ok(new DebuggerDetectionResponse(cdbPath, foundPaths));
         }
         catch (Exception ex)
         {
