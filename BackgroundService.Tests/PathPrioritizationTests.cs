@@ -110,7 +110,7 @@ public class PathPrioritizationTests
         var architecture = Enum.Parse<Architecture>(archString);
 
         // Use reflection to access private static method
-        var method = typeof(PathDetectionService).GetMethod("CalculatePathScore",
+        var method = typeof(PathDetectionService).GetMethod("_CalculatePathScore",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
 
         // Act - For static methods, pass null as the first parameter
@@ -133,7 +133,7 @@ public class PathPrioritizationTests
             (@"C:\WindowsApps\amd64\cdb.exe", Architecture.X64, 150)   // 100 + 50
         };
 
-        var method = typeof(PathDetectionService).GetMethod("CalculatePathScore",
+        var method = typeof(PathDetectionService).GetMethod("_CalculatePathScore",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
 
         var scores = paths.Select(p => (Path: p.Item1, Score: (int)method!.Invoke(null, new object[] { p.Item1, p.Item2 })!)).ToList();
@@ -156,7 +156,7 @@ public class PathPrioritizationTests
             (@"C:\WindowsApps\arm64\cdb.exe", Architecture.Arm64, 150)   // 100 + 50
         };
 
-        var method = typeof(PathDetectionService).GetMethod("CalculatePathScore",
+        var method = typeof(PathDetectionService).GetMethod("_CalculatePathScore",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
 
         var scores = paths.Select(p => (Path: p.Item1, Score: (int)method!.Invoke(null, new object[] { p.Item1, p.Item2 })!)).ToList();
@@ -179,7 +179,7 @@ public class PathPrioritizationTests
             (@"C:\WindowsApps\x86\cdb.exe", Architecture.X86, 150)     // 100 + 50 = works
         };
 
-        var method = typeof(PathDetectionService).GetMethod("CalculatePathScore",
+        var method = typeof(PathDetectionService).GetMethod("_CalculatePathScore",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
 
         var scores = paths.Select(p => (Path: p.Item1, Score: (int)method!.Invoke(null, new object[] { p.Item1, p.Item2 })!)).ToList();
