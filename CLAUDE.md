@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains a modern C# MCP (Model Context Protocol) server for interactive Windows memory dump analysis using Microsoft's Command Line Debugger (cdb.exe) or WinDbg. The system uses a **dual-process architecture** where an MCP protocol layer communicates with a separate HTTP API service that manages long-running CDB debugging sessions.
+This repository contains a modern C# MCP (Model Context Protocol) server for interactive Windows memory dump analysis using Microsoft's Command Line Debugger (cdb.exe) or WinDbg. The system uses a **single-process architecture** where BackgroundService provides both MCP HTTP endpoints (for Claude Code/MCP clients) and REST API endpoints (for PowerShell scripts, Azure Functions, or custom clients), managing long-running CDB debugging sessions with job-based async operations.
 
 ## Build and Development Commands
 
@@ -15,86 +15,100 @@ This repository contains a modern C# MCP (Model Context Protocol) server for int
 # Development builds
 dotnet build
 
-# Run tests (unit tests for both projects)
+# Run tests
 dotnet test
 dotnet test --filter "FullyQualifiedName~AnalysisService"  # Run specific test class
 
-# Development: Run both services
-# Terminal 1: Start background service
+# Development: Run BackgroundService
 dotnet run --project BackgroundService
-# Terminal 2: Start MCP proxy
-dotnet run --project McpProxy
 
-# Run background service on custom port
-dotnet run --project BackgroundService -- 8080
+# Run on custom port (default: 7997)
+dotnet run --project BackgroundService -- 7997
+
+# Configure Claude Code to use MCP HTTP transport
+claude mcp add --transport http dump-analyzer http://localhost:7997/mcp
+
+# Test REST API endpoints (for PowerShell/Azure Functions)
+curl http://localhost:7997/api/jobs
+curl http://localhost:7997/api/diagnostics/analyses
 ```
 
-## Architecture Overview - Why Dual Process + Job-Based System?
+## Architecture Overview - Single Process + Job-Based System
 
 **Problem**: CDB dump loading and symbol resolution can take **several minutes**. MCP clients expect immediate responses and need progress updates.
 
-**Solution**: Two separate processes communicating via HTTP + Job-based async operations with SignalR for real-time progress:
+**Solution**: Single ASP.NET Core service with dual interfaces (MCP HTTP + REST API) and job-based async operations:
 
 ```
-┌─────────────┐           ┌──────────────┐           ┌─────────────────┐
-│ MCP Client  │◄─────────►│  McpProxy    │◄─ HTTP ──►│BackgroundService│
-│  (Claude)   │  JSON-RPC │ (stdin/MCP)  │           │  (ASP.NET API)  │
-└─────────────┘           └──────────────┘           └─────────────────┘
-                                │                             │
-                                │    WebSocket (SignalR)      │
-                                │◄────────────────────────────┤
-                                │  Real-time Progress Updates │
-                                                              │
-                                                              ▼
-                                                      ┌─────────────────┐
-                                                      │ JobManager      │
-                                                      │ + ProgressHub   │
-                                                      └────────┬────────┘
-                                                              │
-                                                              ▼
-                                                       ┌─────────────┐
-                                                       │ CDB Process │
-                                                       │  (per dump) │
-                                                       └─────────────┘
+┌─────────────┐
+│ Claude Code │  MCP HTTP (claude mcp add --transport http)
+│ (MCP Client)│
+└──────┬──────┘
+       │ HTTP + SSE (/mcp/sse, /mcp/messages)
+       ↓
+┌──────────────────────────────────────────────────┐
+│          BackgroundService (port 7997)           │
+│                                                  │
+│  ┌──────────────┐      ┌───────────────────┐   │
+│  │ MCP HTTP     │      │ REST API          │   │
+│  │ /mcp/*       │      │ /api/jobs/*       │   │
+│  │ (DebuggerTools)     │ (JobsController)  │   │
+│  └──────┬───────┘      └────────┬──────────┘   │
+│         │                       │               │
+│         └───────────┬───────────┘               │
+│                     ↓                           │
+│         ┌──────────────────────┐                │
+│         │ SessionManager       │                │
+│         │ + JobManager         │                │
+│         │ + ProgressHub        │                │
+│         │ (SignalR)            │                │
+│         └──────────┬───────────┘                │
+│                    │                            │
+└────────────────────┼────────────────────────────┘
+                     ↓
+              ┌─────────────┐
+              │ CDB Process │
+              │ (per dump)  │
+              └─────────────┘
+
+┌────────────────┐
+│ PowerShell /   │  REST API (Invoke-RestMethod)
+│ Azure Function │
+└────────┬───────┘
+         │ HTTP (/api/jobs/*)
+         ↓
+    (BackgroundService)
 ```
 
-### 1. McpProxy (MCP Protocol Layer)
-**Entry Point**: `McpProxy/Program.cs` → `McpProxy.cs:23`
-**Communication**: stdin/stdout JSON-RPC ↔ HTTP + SignalR to BackgroundService
-
-**Key Services**:
-- `CommunicationService`: Handles MCP JSON-RPC protocol over stdio
-- `DebuggerApiService`: HTTP client that calls BackgroundService job-based endpoints
-- `SignalRClientService`: WebSocket client for real-time progress notifications
-- `ToolsService`: Registers 8 MCP tools (load_dump, execute_command, basic_analysis, predefined_analysis, close_session, list_jobs, list_analyses, detect_debuggers)
-
-**Why Job-Based + SignalR?**
-- **Non-blocking**: Operations return jobId immediately, no hanging
-- **Real-time progress**: SignalR pushes updates (0-100%) to MCP client
-- **Polling fallback**: If SignalR fails, falls back to HTTP polling every 1 second
-- **Timeout handling**: Configurable timeout (default 10 minutes) via `Constants.Jobs`
-- BackgroundService can run independently for debugging
-
-### 2. BackgroundService (Debugging Engine + Job Management)
+### 1. BackgroundService (All-in-One: MCP Server + REST API + Debugging Engine)
 **Entry Point**: `BackgroundService/Program.cs` - ASP.NET Core Web API
-**Default Port**: 8080 (configurable via args or env var)
+**Default Port**: 7997 (configurable via args or env var)
+
+**MCP Integration** (via ModelContextProtocol.AspNetCore SDK):
+- MCP HTTP Transport configured via `.AddMcpServer().WithHttpTransport()`
+- MCP endpoints: `GET /mcp/sse` (Server-Sent Events), `POST /mcp/messages`
+- DebuggerTools (`BackgroundService/Tools/DebuggerTools.cs`): 8 MCP tools with [McpServerTool] attributes
+  - Tools create jobs internally, poll for completion, and forward progress to MCP client via `IProgress<ProgressNotificationValue>`
+- Claude Code configuration: `claude mcp add --transport http dump-analyzer http://localhost:7997/mcp`
 
 **Key Services**:
 - `SessionManagerService`: Thread-safe session orchestration using `ConcurrentDictionary<string, ICdbSessionService>` - **All methods require jobId for progress tracking**
 - `JobManagerService`: Thread-safe job tracking using `ConcurrentDictionary<string, JobStatus>` with auto-cleanup (every 10 min)
 - `CdbSessionService`: **One CDB process per session** - manages stdin/stdout communication
 - `AnalysisService`: Predefined WinDbg command sequences (basic, heap, threads, etc.)
+- `DiagnosticsService`: Debugger detection and analysis enumeration
 - `PathDetectionService`: Auto-detects CDB.exe from Windows SDK/WinDbg installations
 
 **SignalR Hub**:
-- `ProgressHub`: WebSocket hub at `/hubs/progress` for real-time progress notifications
+- `ProgressHub`: WebSocket hub at `/hubs/progress` for real-time progress notifications (used internally by jobs)
 
-**Controllers**:
-- `JobsController`: **Job-based async API** at `/api/jobs/*` (primary API)
-- `DiagnosticsController`: Health checks and debugger detection
+**HTTP API Endpoints**:
+- **MCP HTTP**: `/mcp/sse` (GET), `/mcp/messages` (POST) - MCP protocol over HTTP
+- **REST API** (JobsController): `/api/jobs/*` - Job-based async API for PowerShell/Azure Functions
+- **Diagnostics** (DiagnosticsController): `/api/diagnostics/*` - Health checks, debugger detection, analyses list
 
-### 3. Shared Library
-**Purpose**: Shared models, contracts, and constants between both processes
+### 2. Shared Library
+**Purpose**: Shared models, contracts, and constants used by BackgroundService and test projects
 
 **Key Files**:
 - `ApiContracts.cs`: Request/Response models, API endpoints

@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Shared;
 using Shared.Models;
 
-namespace McpProxy.Services;
+namespace Shared.Client;
 
 public class SignalRClientService : ISignalRClientService
 {

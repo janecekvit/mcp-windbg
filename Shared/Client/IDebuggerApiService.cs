@@ -1,7 +1,7 @@
 using ModelContextProtocol;
 using Shared.Models;
 
-namespace McpProxy.Services;
+namespace Shared.Client;
 
 /// <summary>
 /// Service for interacting with the BackgroundService HTTP API

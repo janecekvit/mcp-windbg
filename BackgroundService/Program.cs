@@ -2,6 +2,7 @@ using BackgroundService.Factories;
 using BackgroundService.Infrastructure.Detection;
 using BackgroundService.Infrastructure.IO;
 using BackgroundService.Services;
+using ModelContextProtocol.Server;
 using Shared;
 using Shared.Extensions;
 
@@ -32,6 +33,15 @@ internal class Program
 
             // Configure SignalR for real-time progress notifications
             builder.Services.AddSignalR();
+
+            // Configure MCP Server with HTTP transport
+            builder.Services.AddMcpServer()
+                .WithHttpTransport(options =>
+                {
+                    options.IdleTimeout = TimeSpan.FromHours(1);
+                    options.Stateless = false; // Enable session state for progress notifications
+                })
+                .WithToolsFromAssembly();
 
             // Configure controllers
             builder.Services.AddControllers();
@@ -69,6 +79,9 @@ internal class Program
             // Configure controllers
             app.MapControllers();
 
+            // Map MCP HTTP endpoints (/mcp/sse and /mcp/messages)
+            app.MapMcp("/mcp");
+
             // Map SignalR hub
             app.MapHub<Hubs.ProgressHub>("/hubs/progress");
 
@@ -77,6 +90,8 @@ internal class Program
             app.Urls.Add($"http://localhost:{port}");
 
             logger.LogInformation("CDB Background Service listening on port {Port}", port);
+            logger.LogInformation("MCP HTTP endpoint available at http://localhost:{Port}/mcp", port);
+            logger.LogInformation("REST API available at http://localhost:{Port}/api", port);
             logger.LogInformation("SignalR hub available at http://localhost:{Port}/hubs/progress", port);
 
             await app.RunAsync();
