@@ -8,7 +8,8 @@
         "command": "D:\\Git\\mcp-windbg\\publish\\McpProxy.exe",
         "args": [],
         "env": {
-          "SYMBOL_CACHE": "D:\\Symbols"
+          "SYMBOL_CACHE": "D:\\Symbols",
+          "USE_FILE_LOGGING": "true"
         }
       }
   }

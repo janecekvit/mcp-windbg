@@ -1,12 +1,10 @@
 using McpProxy.Services;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
 using Shared.Configuration;
-using Shared.Extensions;
 
 namespace McpProxy;
 
@@ -14,18 +12,11 @@ internal class Program
 {
     private static async Task<int> Main(string[] args)
     {
-        // Load configuration to determine logging mode
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false)
-            .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Production"}.json", optional: true)
-            .AddEnvironmentVariables()
-            .Build();
 
-        var useFileLogging = configuration.GetValueWithEnvironmentFallback<bool>(
-            "Logging:UseFileLogging",
-            "USE_FILE_LOGGING",
-            defaultValue: false);
+        var useFileLogging = false;
+        var envValue = Environment.GetEnvironmentVariable("USE_FILE_LOGGING");
+        if (envValue != null)
+            useFileLogging = Convert.ToBoolean(envValue);
 
         // Configure Serilog if file logging is enabled
         if (useFileLogging)
