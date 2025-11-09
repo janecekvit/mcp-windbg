@@ -8,7 +8,7 @@ public class DebuggerConfiguration
 {
     /// <summary>
     /// Default symbol cache directory path.
-    /// If not specified, uses: %LOCALAPPDATA%\CdbAnalysisServer\symbols
+    /// If not specified, uses: %LOCALAPPDATA%\DumpAnalysisService\symbols
     /// </summary>
     public string? DefaultSymbolCache { get; set; }
 
