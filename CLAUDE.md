@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains a modern C# MCP (Model Context Protocol) server for interactive Windows memory dump analysis using Microsoft's Command Line Debugger (cdb.exe) or WinDbg. The system uses a **single-process architecture** where BackgroundService provides both MCP HTTP endpoints (for Claude Code/MCP clients) and REST API endpoints (for PowerShell scripts, Azure Functions, or custom clients), managing long-running CDB debugging sessions with job-based async operations.
+This repository contains a modern C# MCP (Model Context Protocol) server for interactive Windows memory dump analysis using Microsoft's Command Line Debugger (cdb.exe) or WinDbg. The system uses a **single-process architecture** where DumpAnalysisService provides both MCP HTTP endpoints (for Claude Code/MCP clients) and REST API endpoints (for PowerShell scripts, Azure Functions, or custom clients), managing long-running CDB debugging sessions with job-based async operations.
 
 ## Build and Development Commands
 
@@ -19,11 +19,11 @@ dotnet build
 dotnet test
 dotnet test --filter "FullyQualifiedName~AnalysisService"  # Run specific test class
 
-# Development: Run BackgroundService
-dotnet run --project BackgroundService
+# Development: Run DumpAnalysisService
+dotnet run --project DumpAnalysisService
 
 # Run on custom port (default: 7997)
-dotnet run --project BackgroundService -- 7997
+dotnet run --project DumpAnalysisService -- 7997
 
 # Test REST API endpoints
 curl http://localhost:7997/api/jobs
@@ -44,7 +44,7 @@ curl http://localhost:7997/api/diagnostics/analyses
        │ http://localhost:7997/mcp
        ↓
 ┌──────────────────────────────────────────────────┐
-│          BackgroundService (port 7997)           │
+│        DumpAnalysisService (port 7997)           │
 │                                                  │
 │  ┌──────────────┐      ┌───────────────────┐   │
 │  │ MCP HTTP     │      │ REST API          │   │
@@ -74,19 +74,19 @@ curl http://localhost:7997/api/diagnostics/analyses
 └────────┬───────┘
          │ http://localhost:7997/api
          ↓
-    (BackgroundService)
+    (DumpAnalysisService)
 
 ┌──────────────────┐
-│ CdbDebuggerClient│  REST API + SignalR
+│ CommandLineClient│  REST API + SignalR
 └────────┬─────────┘
          │ http://localhost:7997
          ↓
-    (BackgroundService)
+    (DumpAnalysisService)
 ```
 
 ### Projects Structure
 
-1. **BackgroundService** - All-in-One: MCP Server + REST API + Debugging Engine
+1. **DumpAnalysisService** - All-in-One: MCP Server + REST API + Debugging Engine
    - Entry Point: `Program.cs` - ASP.NET Core Web API (port 7997)
    - **MCP Integration**: ModelContextProtocol.AspNetCore SDK
      - HTTP Transport: `/mcp/sse` (GET), `/mcp/messages` (POST)
@@ -101,19 +101,19 @@ curl http://localhost:7997/api/diagnostics/analyses
    - Constants (ports, timeouts, MCP error codes)
    - Client libraries (`DebuggerApiService`, `SignalRClientService`)
 
-3. **CdbDebuggerClient** - Command-line client for scripting
+3. **CommandLineClient** - Command-line client for scripting
    - Standalone executable for PowerShell scripts and Azure Functions
-   - Uses Shared.Client libraries to communicate with BackgroundService
+   - Uses Shared.Client libraries to communicate with DumpAnalysisService
 
 4. **Test Projects**
-   - `BackgroundService.Tests`: Service layer unit tests (45 tests)
+   - `DumpAnalysisService.Tests`: Service layer unit tests (45 tests)
    - `Shared.Tests`: Shared library tests (88 tests, 16 skipped SignalR tests)
 
 ## Critical Implementation Details
 
 ### Symbol Configuration Architecture (3-Tier Priority)
 
-**Priority Order** (BackgroundService/Tools/DebuggerTools.cs):
+**Priority Order** (DumpAnalysisService/Tools/DebuggerTools.cs):
 1. **Tool Parameters** (highest) - Per-call override via MCP tool arguments
 2. **HTTP Headers** - Per-MCP-client via `.mcp.json` headers (X-Symbol-Cache, X-Symbol-Path-Extra, X-Symbol-Servers)
 3. **appsettings.json** - Server-wide defaults (DefaultSymbolCache, DefaultSymbolPathExtra, DefaultSymbolServers)
@@ -128,7 +128,7 @@ var symbols = new SymbolsConfiguration(
     SymbolServers: symbol_servers ?? providerConfig.SymbolServers);
 ```
 
-**HttpHeaderSymbolConfigurationProvider** (BackgroundService/Providers/):
+**HttpHeaderSymbolConfigurationProvider** (DumpAnalysisService/Providers/):
 - Scoped service (per HTTP request)
 - Reads `X-Symbol-Cache`, `X-Symbol-Path-Extra`, `X-Symbol-Servers` headers
 - Accessed via `IHttpContextAccessor`
@@ -279,10 +279,10 @@ All 8 tools follow the same pattern:
 4. MCP client receives progress via `IProgress<ProgressNotificationValue>`
 5. When complete, return result or throw exception
 
-**CdbDebuggerClient Flow** (for PowerShell/Azure Functions):
+**CommandLineClient Flow** (for PowerShell/Azure Functions):
 1. Client calls REST API → receives `jobId` (202 Accepted)
 2. `SignalRClientService` subscribes to `ProgressHub` for that `jobId`
-3. BackgroundService sends progress via SignalR `ProgressHub.SendJobProgress()`
+3. DumpAnalysisService sends progress via SignalR `ProgressHub.SendJobProgress()`
 4. Client receives progress callbacks and waits for completion
 
 ### Timeout Configuration
