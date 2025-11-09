@@ -84,12 +84,8 @@ public class SignalRClientServiceTests : IAsyncDisposable
         await service.ConnectAsync();
 
         var jobId = "job123";
-        var receivedNotifications = new List<ProgressNotification>();
 
-        service.SubscribeToJobProgress(jobId, notification =>
-        {
-            receivedNotifications.Add(notification);
-        });
+        service.SubscribeToJobProgress(jobId, notification => { });
 
         // Simulate SignalR hub sending progress notification
         // Note: In real scenario, this would come from the hub
