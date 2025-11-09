@@ -10,7 +10,7 @@ param(
     [string]$OutputDir = "..\publish"
 )
 
-Write-Host "🚀 Publishing WinDbg MCP Server Projects..." -ForegroundColor Green
+Write-Host "🚀 Publishing Dump Analysis Service Projects..." -ForegroundColor Green
 Write-Host "Configuration: $Configuration" -ForegroundColor Yellow
 Write-Host "Runtime: $Runtime" -ForegroundColor Yellow
 Write-Host "Output: $OutputDir" -ForegroundColor Yellow
@@ -24,21 +24,21 @@ if (Test-Path $OutputDir) {
 
 $buildSuccess = $true
 
-# Publish Background Service (MCP HTTP Server + REST API)
-Write-Host "📦 Publishing BackgroundService (MCP HTTP + REST API)..." -ForegroundColor Cyan
-dotnet publish ..\BackgroundService\BackgroundService.csproj -c $Configuration -r $Runtime -o $OutputDir --self-contained true -p:PublishSingleFile=true
+# Publish Dump Analysis Service (MCP HTTP Server + REST API)
+Write-Host "📦 Publishing DumpAnalysisService (MCP HTTP + REST API)..." -ForegroundColor Cyan
+dotnet publish ..\DumpAnalysisService\DumpAnalysisService.csproj -c $Configuration -r $Runtime -o $OutputDir --self-contained true -p:PublishSingleFile=true
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ BackgroundService build failed!" -ForegroundColor Red
+    Write-Host "❌ DumpAnalysisService build failed!" -ForegroundColor Red
     $buildSuccess = $false
 }
 
-# Publish CdbDebuggerClient (Command-line tool)
-Write-Host "📦 Publishing CdbDebuggerClient (CLI tool)..." -ForegroundColor Cyan
-dotnet publish ..\CdbDebuggerClient\CdbDebuggerClient.csproj -c $Configuration -r $Runtime -o $OutputDir --self-contained true -p:PublishSingleFile=true
+# Publish Command Line Client (Command-line tool)
+Write-Host "📦 Publishing CommandLineClient (CLI tool)..." -ForegroundColor Cyan
+dotnet publish ..\CommandLineClient\CommandLineClient.csproj -c $Configuration -r $Runtime -o $OutputDir --self-contained true -p:PublishSingleFile=true
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ CdbDebuggerClient build failed!" -ForegroundColor Red
+    Write-Host "❌ CommandLineClient build failed!" -ForegroundColor Red
     $buildSuccess = $false
 }
 
@@ -46,26 +46,26 @@ if ($buildSuccess) {
     Write-Host "✅ All builds completed successfully!" -ForegroundColor Green
     Write-Host
 
-    # Check BackgroundService executable
-    $bgExePath = Join-Path $OutputDir "BackgroundService.exe"
+    # Check DumpAnalysisService executable
+    $bgExePath = Join-Path $OutputDir "DumpAnalysisService.exe"
     if (Test-Path $bgExePath) {
         $fileInfo = Get-Item $bgExePath
         $sizeMB = [math]::Round($fileInfo.Length / 1MB, 2)
-        Write-Host "📁 BackgroundService: $bgExePath" -ForegroundColor Green
+        Write-Host "📁 DumpAnalysisService: $bgExePath" -ForegroundColor Green
         Write-Host "   Size: $sizeMB MB" -ForegroundColor Gray
     }
 
-    # Check CdbDebuggerClient executable
-    $clientExePath = Join-Path $OutputDir "CdbDebuggerClient.exe"
+    # Check CommandLineClient executable
+    $clientExePath = Join-Path $OutputDir "CommandLineClient.exe"
     if (Test-Path $clientExePath) {
         $fileInfo = Get-Item $clientExePath
         $sizeMB = [math]::Round($fileInfo.Length / 1MB, 2)
-        Write-Host "📁 CdbDebuggerClient: $clientExePath" -ForegroundColor Green
+        Write-Host "📁 CommandLineClient: $clientExePath" -ForegroundColor Green
         Write-Host "   Size: $sizeMB MB" -ForegroundColor Gray
     }
 
     Write-Host "`n🎯 Usage:" -ForegroundColor Yellow
-    Write-Host "  1. Start BackgroundService:" -ForegroundColor White
+    Write-Host "  1. Start DumpAnalysisService:" -ForegroundColor White
     Write-Host "     $bgExePath" -ForegroundColor Cyan
     Write-Host
     Write-Host "  2. Configure Claude Code (.mcp.json):" -ForegroundColor White
@@ -87,9 +87,6 @@ if ($buildSuccess) {
     Write-Host "  2. HTTP headers in .mcp.json: Per-MCP-client configuration" -ForegroundColor White
     Write-Host "  3. appsettings.json: Server-wide defaults for all clients" -ForegroundColor White
     Write-Host "  (See README.md for detailed examples)" -ForegroundColor Gray
-    Write-Host
-    Write-Host "🔧 Optional Environment Variable:" -ForegroundColor Yellow
-    Write-Host "  CDB_PATH - Custom path to cdb.exe or windbg.exe (overrides auto-detection)" -ForegroundColor White
     Write-Host
     Write-Host "📖 For more information, see README.md" -ForegroundColor Gray
 } else {

@@ -139,9 +139,9 @@ jobs:
           echo "✅ **All tests passed!**" >> $env:GITHUB_STEP_SUMMARY
         }
 
-    - name: Publish BackgroundService
+    - name: Publish DumpAnalysisService
       run: |
-        dotnet publish BackgroundService/BackgroundService.csproj `
+        dotnet publish DumpAnalysisService/DumpAnalysisService.csproj `
           --configuration ${{ env.BUILD_CONFIGURATION }} `
           --runtime win-x64 `
           --output publish/win-x64 `
@@ -151,9 +151,9 @@ jobs:
           -p:PublishReadyToRun=false `
           -p:Version=${{ steps.version.outputs.version }}
 
-    - name: Publish CdbDebuggerClient
+    - name: Publish CommandLineClient
       run: |
-        dotnet publish CdbDebuggerClient/CdbDebuggerClient.csproj `
+        dotnet publish CommandLineClient/CommandLineClient.csproj `
           --configuration ${{ env.BUILD_CONFIGURATION }} `
           --runtime win-x64 `
           --output publish/win-x64 `
@@ -208,8 +208,8 @@ jobs:
         Commit: $env:GITHUB_SHA
 
         Files included:
-        - BackgroundService.exe (MCP HTTP server + REST API)
-        - CdbDebuggerClient.exe (Command-line tool for scripting)
+        - DumpAnalysisService.exe (MCP HTTP server + REST API)
+        - CommandLineClient.exe (Command-line tool for scripting)
         - Scripts/ (PowerShell scripts for standalone usage)
         - README.md (Complete documentation)
         - CLAUDE.md (Claude Code integration instructions)
@@ -217,9 +217,9 @@ jobs:
         - Examples/ (Usage examples)
 
         Quick start:
-        1. Run BackgroundService.exe to start the server (port 7997)
+        1. Run DumpAnalysisService.exe to start the server (port 7997)
         2. Configure Claude Code with .mcp.json (HTTP transport)
-        3. Use CdbDebuggerClient.exe for scripting and Azure Functions
+        3. Use CommandLineClient.exe for scripting and Azure Functions
         4. Use Scripts/cdb.ps1 for standalone dump analysis
 
         For detailed instructions, see README.md
@@ -242,7 +242,7 @@ jobs:
         }
         
         # Validate required files exist
-        $requiredFiles = @("BackgroundService.exe", "CdbDebuggerClient.exe", "README.md", "CLAUDE.md")
+        $requiredFiles = @("DumpAnalysisService.exe", "CommandLineClient.exe", "README.md", "CLAUDE.md")
         foreach ($file in $requiredFiles) {
           if (Test-Path "package/$file") {
             Write-Host "✅ Found required file: $file"
@@ -321,8 +321,8 @@ jobs:
         - Real-time progress updates via SignalR
 
         ### What's included
-        - ``BackgroundService.exe`` - MCP HTTP server + REST API (port 7997)
-        - ``CdbDebuggerClient.exe`` - Command-line tool for scripting
+        - ``DumpAnalysisService.exe`` - MCP HTTP server + REST API (port 7997)
+        - ``CommandLineClient.exe`` - Command-line tool for scripting
         - ``Scripts/`` - PowerShell scripts for standalone usage
         - ``README.md`` - Complete documentation and integration guide
         - ``.mcp.json`` - Configuration example for Claude Code (HTTP transport)
@@ -330,9 +330,9 @@ jobs:
 
         ### Quick Start
         1. Download and extract the ZIP file
-        2. Run ``BackgroundService.exe`` to start the MCP HTTP server (port 7997)
+        2. Run ``DumpAnalysisService.exe`` to start the MCP HTTP server (port 7997)
         3. Configure Claude Code with ``.mcp.json`` (uses HTTP transport at http://localhost:7997/mcp)
-        4. Use ``CdbDebuggerClient.exe`` for scripting, PowerShell, or Azure Functions integration
+        4. Use ``CommandLineClient.exe`` for scripting, PowerShell, or Azure Functions integration
         5. See ``README.md`` for detailed integration instructions
 
         ### Requirements

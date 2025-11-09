@@ -21,7 +21,7 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
        │ http://localhost:7997/mcp
        ↓
 ┌──────────────────────────────────────────────────┐
-│          BackgroundService (port 7997)           │
+│        DumpAnalysisService (port 7997)           │
 │                                                  │
 │  ┌──────────────┐      ┌───────────────────┐   │
 │  │ MCP HTTP     │      │ REST API          │   │
@@ -45,14 +45,14 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 └────────┬───────┘
          │ http://localhost:7997/api
          ↓
-    (BackgroundService)
+    (DumpAnalysisService)
 
 ┌──────────────────┐
-│ CdbDebuggerClient│  REST API + SignalR
+│ CommandLineClient│  REST API + SignalR
 └────────┬─────────┘
          │ http://localhost:7997
          ↓
-    (BackgroundService)
+    (DumpAnalysisService)
 ```
 
 ## Requirements
@@ -69,16 +69,16 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 .\Scripts\Publish.ps1
 
 # Start the MCP server
-.\publish\BackgroundService.exe
+.\publish\DumpAnalysisService.exe
 
 # Or use the command-line client
-.\publish\CdbDebuggerClient.exe help
+.\publish\CommandLineClient.exe help
 ```
 
 ### Development build
 ```bash
 dotnet build
-dotnet run --project BackgroundService
+dotnet run --project DumpAnalysisService
 ```
 
 ## Automatic Debugger Detection
@@ -99,8 +99,8 @@ The server supports multiple configuration methods with the following priority o
 
 ### Configuration File
 
-#### BackgroundService Configuration
-Create `BackgroundService/appsettings.json`:
+#### DumpAnalysisService Configuration
+Create `DumpAnalysisService/appsettings.json`:
 ```json
 {
   "Logging": {
@@ -221,7 +221,7 @@ Closes a debugging session and releases resources.
 # Build single-file executable
 .\Scripts\Publish.ps1
 # or
-dotnet publish BackgroundService\BackgroundService.csproj -c Release -r win-x64 -o publish --self-contained true -p:PublishSingleFile=true
+dotnet publish DumpAnalysisService\DumpAnalysisService.csproj -c Release -r win-x64 -o publish --self-contained true -p:PublishSingleFile=true
 ```
 
 #### 2. Configuration Options
@@ -246,10 +246,10 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 }
 ```
 
-**Important:** You must start BackgroundService.exe manually before using Claude Code:
+**Important:** You must start DumpAnalysisService.exe manually before using Claude Code:
 ```powershell
 # Start the service (keep this running)
-.\publish\BackgroundService.exe
+.\publish\DumpAnalysisService.exe
 **Method B: Project-specific Configuration (Recommended)**
 
 Create `.mcp.json` in your project root:
@@ -270,11 +270,11 @@ Create `.mcp.json` in your project root:
 }
 ```
 
-Start BackgroundService separately:
+Start DumpAnalysisService separately:
 ```powershell
 # In a separate terminal/PowerShell window
 cd D:\Git\mcp-windbg\publish
-.\BackgroundService.exe
+.\DumpAnalysisService.exe
 ```
 
 **Symbol Configuration Options:**
@@ -314,7 +314,7 @@ Configure in your `.mcp.json` to set defaults for your MCP client:
 
 **3. appsettings.json (Server-Wide Defaults)**
 
-Edit `publish/appsettings.json` or `BackgroundService/appsettings.json` to set defaults for all MCP clients:
+Edit `publish/appsettings.json` or `DumpAnalysisService/appsettings.json` to set defaults for all MCP clients:
 ```json
 {
   "Debugger": {
@@ -327,7 +327,7 @@ Edit `publish/appsettings.json` or `BackgroundService/appsettings.json` to set d
 
 #### 3. Usage in Claude Code
 
-After starting BackgroundService and configuring Claude Code, you can use:
+After starting DumpAnalysisService and configuring Claude Code, you can use:
 
 - `detect_debuggers` - verify debugger configuration
 - `load_dump` - load dump file and create session
@@ -336,7 +336,7 @@ After starting BackgroundService and configuring Claude Code, you can use:
 - `predefined_analysis` - specialized analyses (heap, threads, modules, etc.)
 
 **Example workflow:**
-1. Start BackgroundService.exe
+1. Start DumpAnalysisService.exe
 2. Open Claude Code
 3. "Use detect_debuggers to verify configuration"
 4. "Load dump file D:\\crash.dmp with symbol_cache='D:\\Symbols'"
@@ -392,7 +392,7 @@ After starting BackgroundService and configuring Claude Code, you can use:
 
 Create `appsettings.Development.json` for development-specific settings.
 
-## Command-Line Client (CdbDebuggerClient)
+## Command-Line Client (CommandLineClient)
 
 Standalone command-line client for scripting, Azure Functions, and automation.
 
@@ -401,15 +401,15 @@ Standalone command-line client for scripting, Azure Functions, and automation.
 # Build with Publish.ps1
 .\Scripts\Publish.ps1
 
-# Client is in publish\CdbDebuggerClient.exe
+# Client is in publish\CommandLineClient.exe
 ```
 
 ### Usage
 
-**Start BackgroundService first:**
+**Start DumpAnalysisService first:**
 ```powershell
 # Terminal 1: Start the service
-.\publish\BackgroundService.exe
+.\publish\DumpAnalysisService.exe
 ```
 
 **Then use the client:**
@@ -418,31 +418,31 @@ Standalone command-line client for scripting, Azure Functions, and automation.
 cd .\publish
 
 # Load dump
-.\CdbDebuggerClient.exe load "C:\dumps\crash.dmp"
+.\CommandLineClient.exe load "C:\dumps\crash.dmp"
 
 # Execute command
-.\CdbDebuggerClient.exe exec session-id "!analyze -v"
+.\CommandLineClient.exe exec session-id "!analyze -v"
 
 # Run analysis
-.\CdbDebuggerClient.exe analyze session-id
+.\CommandLineClient.exe analyze session-id
 
 # List jobs
-.\CdbDebuggerClient.exe list-jobs
+.\CommandLineClient.exe list-jobs
 
 # Close session
-.\CdbDebuggerClient.exe close session-id
+.\CommandLineClient.exe close session-id
 ```
 
 ### Symbol Configuration
 ```powershell
 # Via command line parameters
-.\CdbDebuggerClient.exe --symbol-cache "D:\Symbols" load "C:\dumps\crash.dmp"
+.\CommandLineClient.exe --symbol-cache "D:\Symbols" load "C:\dumps\crash.dmp"
 ```
 
 ### Azure Functions Integration
 
 ```csharp
-// Example Azure Function using CdbDebuggerClient libraries
+// Example Azure Function using CommandLineClient libraries
 using Shared.Client;
 using Microsoft.Extensions.Logging;
 
@@ -491,7 +491,7 @@ For standalone usage without MCP:
 
 ## Troubleshooting
 
-### BackgroundService won't start
+### DumpAnalysisService won't start
 - Check port 7997 is not in use: `netstat -ano | findstr :7997`
 - Verify CDB is installed: run `detect_debuggers` tool
 - Check logs in console output
@@ -502,7 +502,7 @@ For standalone usage without MCP:
 - Configure symbol cache in appsettings.json for persistent cache
 
 ### Claude Code can't connect
-- Ensure BackgroundService.exe is running
+- Ensure DumpAnalysisService.exe is running
 - Verify configuration in `.mcp.json` or Claude config
 - Check http://localhost:7997/api/health in browser
 

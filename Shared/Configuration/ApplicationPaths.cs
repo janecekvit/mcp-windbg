@@ -7,18 +7,18 @@ public static class ApplicationPaths
 {
     /// <summary>
     /// Gets the base application data directory.
-    /// Returns: %LOCALAPPDATA%\CdbAnalysisServer
+    /// Returns: %LOCALAPPDATA%\DumpAnalysisService
     /// </summary>
     public static string GetBaseDirectory()
     {
         return Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CdbAnalysisServer");
+            "DumpAnalysisService");
     }
 
     /// <summary>
-    /// Gets the logs directory for McpProxy.
-    /// Returns: %LOCALAPPDATA%\CdbAnalysisServer\logs
+    /// Gets the logs directory for DumpAnalyser.
+    /// Returns: %LOCALAPPDATA%\DumpAnalysisService\logs
     /// </summary>
     public static string GetLogsDirectory()
     {
@@ -27,7 +27,7 @@ public static class ApplicationPaths
 
     /// <summary>
     /// Gets the default symbols cache directory.
-    /// Returns: %LOCALAPPDATA%\CdbAnalysisServer\symbols
+    /// Returns: %LOCALAPPDATA%\DumpAnalysisService\symbols
     /// </summary>
     public static string GetSymbolsDirectory()
     {
