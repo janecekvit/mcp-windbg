@@ -250,8 +250,6 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 ```powershell
 # Start the service (keep this running)
 .\publish\BackgroundService.exe
-
-
 **Method B: Project-specific Configuration (Recommended)**
 
 Create `.mcp.json` in your project root:
