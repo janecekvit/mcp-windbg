@@ -260,17 +260,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         // Act & Assert
         // Note: This may not throw immediately due to automatic reconnection
         // The connection will be attempted but may fail asynchronously
-        try
-        {
-            await service.ConnectAsync();
-            // If it doesn't throw, that's also acceptable (async retry logic)
-            Assert.True(true);
-        }
-        catch (Exception)
-        {
-            // Expected for invalid URL
-            Assert.True(true);
-        }
+        await Assert.ThrowsAsync<Exception>(async () => await service.ConnectAsync());
     }
 
     [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
