@@ -25,10 +25,7 @@ dotnet run --project BackgroundService
 # Run on custom port (default: 7997)
 dotnet run --project BackgroundService -- 7997
 
-# Configure Claude Code to use MCP HTTP transport
-claude mcp add --transport http dump-analyzer http://localhost:7997/mcp
-
-# Test REST API endpoints (for PowerShell/Azure Functions)
+# Test REST API endpoints
 curl http://localhost:7997/api/jobs
 curl http://localhost:7997/api/diagnostics/analyses
 ```
@@ -41,10 +38,10 @@ curl http://localhost:7997/api/diagnostics/analyses
 
 ```
 ┌─────────────┐
-│ Claude Code │  MCP HTTP (claude mcp add --transport http)
+│ Claude Code │  MCP HTTP
 │ (MCP Client)│
 └──────┬──────┘
-       │ HTTP + SSE (/mcp/sse, /mcp/messages)
+       │ http://localhost:7997/mcp
        ↓
 ┌──────────────────────────────────────────────────┐
 │          BackgroundService (port 7997)           │
@@ -75,49 +72,68 @@ curl http://localhost:7997/api/diagnostics/analyses
 │ PowerShell /   │  REST API (Invoke-RestMethod)
 │ Azure Function │
 └────────┬───────┘
-         │ HTTP (/api/jobs/*)
+         │ http://localhost:7997/api
+         ↓
+    (BackgroundService)
+
+┌──────────────────┐
+│ CdbDebuggerClient│  REST API + SignalR
+└────────┬─────────┘
+         │ http://localhost:7997
          ↓
     (BackgroundService)
 ```
 
-### 1. BackgroundService (All-in-One: MCP Server + REST API + Debugging Engine)
-**Entry Point**: `BackgroundService/Program.cs` - ASP.NET Core Web API
-**Default Port**: 7997 (configurable via args or env var)
+### Projects Structure
 
-**MCP Integration** (via ModelContextProtocol.AspNetCore SDK):
-- MCP HTTP Transport configured via `.AddMcpServer().WithHttpTransport()`
-- MCP endpoints: `GET /mcp/sse` (Server-Sent Events), `POST /mcp/messages`
-- DebuggerTools (`BackgroundService/Tools/DebuggerTools.cs`): 8 MCP tools with [McpServerTool] attributes
-  - Tools create jobs internally, poll for completion, and forward progress to MCP client via `IProgress<ProgressNotificationValue>`
-- Claude Code configuration: `claude mcp add --transport http dump-analyzer http://localhost:7997/mcp`
+1. **BackgroundService** - All-in-One: MCP Server + REST API + Debugging Engine
+   - Entry Point: `Program.cs` - ASP.NET Core Web API (port 7997)
+   - **MCP Integration**: ModelContextProtocol.AspNetCore SDK
+     - HTTP Transport: `/mcp/sse` (GET), `/mcp/messages` (POST)
+     - Tools: `DebuggerTools.cs` with 8 [McpServerTool] methods
+   - **Services**: Session management, job tracking, CDB process orchestration
+   - **Controllers**: REST API for PowerShell/Azure Functions integration
+   - **SignalR Hub**: Real-time progress notifications at `/hubs/progress`
 
-**Key Services**:
-- `SessionManagerService`: Thread-safe session orchestration using `ConcurrentDictionary<string, ICdbSessionService>` - **All methods require jobId for progress tracking**
-- `JobManagerService`: Thread-safe job tracking using `ConcurrentDictionary<string, JobStatus>` with auto-cleanup (every 10 min)
-- `CdbSessionService`: **One CDB process per session** - manages stdin/stdout communication
-- `AnalysisService`: Predefined WinDbg command sequences (basic, heap, threads, etc.)
-- `DiagnosticsService`: Debugger detection and analysis enumeration
-- `PathDetectionService`: Auto-detects CDB.exe from Windows SDK/WinDbg installations
+2. **Shared** - Shared models, contracts, and utilities
+   - Configuration models (`SymbolsConfiguration`, `DebuggerConfiguration`)
+   - API contracts (`ApiContracts.cs`)
+   - Constants (ports, timeouts, MCP error codes)
+   - Client libraries (`DebuggerApiService`, `SignalRClientService`)
 
-**SignalR Hub**:
-- `ProgressHub`: WebSocket hub at `/hubs/progress` for real-time progress notifications (used internally by jobs)
+3. **CdbDebuggerClient** - Command-line client for scripting
+   - Standalone executable for PowerShell scripts and Azure Functions
+   - Uses Shared.Client libraries to communicate with BackgroundService
 
-**HTTP API Endpoints**:
-- **MCP HTTP**: `/mcp/sse` (GET), `/mcp/messages` (POST) - MCP protocol over HTTP
-- **REST API** (JobsController): `/api/jobs/*` - Job-based async API for PowerShell/Azure Functions
-- **Diagnostics** (DiagnosticsController): `/api/diagnostics/*` - Health checks, debugger detection, analyses list
-
-### 2. Shared Library
-**Purpose**: Shared models, contracts, and constants used by BackgroundService and test projects
-
-**Key Files**:
-- `ApiContracts.cs`: Request/Response models, API endpoints
-- `Constants.cs`: Network ports, timeouts, MCP error codes
-- `OperationResult.cs`: Result monad for error handling
+4. **Test Projects**
+   - `BackgroundService.Tests`: Service layer unit tests (45 tests)
+   - `Shared.Tests`: Shared library tests (88 tests, 16 skipped SignalR tests)
 
 ## Critical Implementation Details
 
-### Asynchronous Command Execution (CdbSessionService.cs:297-400)
+### Symbol Configuration Architecture (3-Tier Priority)
+
+**Priority Order** (BackgroundService/Tools/DebuggerTools.cs):
+1. **Tool Parameters** (highest) - Per-call override via MCP tool arguments
+2. **HTTP Headers** - Per-MCP-client via `.mcp.json` headers (X-Symbol-Cache, X-Symbol-Path-Extra, X-Symbol-Servers)
+3. **appsettings.json** - Server-wide defaults (DefaultSymbolCache, DefaultSymbolPathExtra, DefaultSymbolServers)
+
+**Implementation**:
+```csharp
+// DebuggerTools.cs - LoadDump tool
+var providerConfig = _symbolConfigProvider.GetConfiguration(); // Reads HTTP headers
+var symbols = new SymbolsConfiguration(
+    SymbolCache: symbol_cache ?? providerConfig.SymbolCache,           // Tool param overrides
+    SymbolPathExtra: symbol_path_extra ?? providerConfig.SymbolPathExtra,
+    SymbolServers: symbol_servers ?? providerConfig.SymbolServers);
+```
+
+**HttpHeaderSymbolConfigurationProvider** (BackgroundService/Providers/):
+- Scoped service (per HTTP request)
+- Reads `X-Symbol-Cache`, `X-Symbol-Path-Extra`, `X-Symbol-Servers` headers
+- Accessed via `IHttpContextAccessor`
+
+### Asynchronous Command Execution (CdbSessionService.cs)
 
 CDB commands execute asynchronously with **marker-based output parsing**:
 
@@ -137,22 +153,22 @@ CDB commands execute asynchronously with **marker-based output parsing**:
 ### Session Lifecycle
 
 ```
-CreateSessionWithDumpAsync() (SessionManagerService.cs:61)
+CreateSessionWithDumpAsync() (SessionManagerService.cs)
   → Generate 8-char session ID
-  → CdbSessionService.LoadDumpAsync() (CdbSessionService.cs:42)
+  → CdbSessionService.LoadDumpAsync()
     → Process.Start("cdb.exe -z dump.dmp")
-    → InitializeSessionAsync() - symbol setup (CdbSessionService.cs:153)
+    → InitializeSessionAsync() - symbol setup
       → Configure symbol options, add symbol servers
-      → .reload /f with retry logic for symbol failures
+      → .reload with retry logic for symbol failures
   → Store in _sessions dictionary
 
-ExecuteCommandAsync() (CdbSessionService.cs:263)
+ExecuteCommandAsync() (CdbSessionService.cs)
   → Acquire semaphore lock
   → Write command + marker to stdin
   → Read stdout until marker (with timeout & progress)
   → Release semaphore
 
-CancelSessionAsync() (SessionManagerService.cs:208)
+CancelSessionAsync() (SessionManagerService.cs)
   → Call session.CancelAsync()
   → Send "q" to CDB stdin
   → WaitForExit(5s) or Kill()
@@ -174,18 +190,7 @@ catch (ArgumentException) → 404 Not Found
 catch (InvalidOperationException) → 400 Bad Request
 catch (Exception) → 500 Internal Server Error
 
-// MCP layer converts to McpToolResult.Error() (McpProxy.cs:47-51)
-```
-
-### Factory Patterns for MCP Models
-
-All MCP response objects use static factory methods:
-```csharp
-McpToolResult.Success(text)  // Success response
-McpToolResult.Error(message) // Error response
-McpResponse.Success(id, result)
-McpResponse.NotInitialized(id)
-McpError.ServerNotInitialized()
+// MCP Tools catch and return McpToolResult.Error()
 ```
 
 ## Symbol Resolution Architecture
@@ -210,58 +215,28 @@ Symbol path is built from configuration with the following priority:
 - **Timeout**: 15 minutes (configurable via `Constants.Debugging.SymbolLoadingTimeoutMinutes`)
 - **Smart logging**: Detects cache hits vs downloads and logs appropriately
 
-**Retry Logic** (CdbSessionService.cs:239): If `.reload` shows `WRONG_SYMBOLS` or `MISSING`, attempts alternative symbol loading strategies with verbose output (`.reload /v`) for diagnostics.
+**Retry Logic** (CdbSessionService.cs): If `.reload` shows `WRONG_SYMBOLS` or `MISSING`, attempts alternative symbol loading strategies with verbose output (`.reload /v`) for diagnostics.
 
-## Configuration Strategy
+## Dependency Injection Architecture (Program.cs)
 
-**Symbol Configuration Priority Order** (per BackgroundService/DebuggerTools.cs):
-1. **Tool Parameters** - Per-call override via prompt (highest priority)
-2. **HTTP Headers** - Per-MCP-client configuration via `.mcp.json` headers
-3. **appsettings.json** - Server-wide defaults (lowest priority)
+**Singleton Services** (shared across all requests):
+- `DebuggerConfiguration` - Server-wide debugger settings from appsettings.json
+- `IPathExpansionService`, `IPathDetectionService` - Infrastructure
+- `IAnalysisService`, `IDiagnosticsService` - Analysis and diagnostics
+- `ICdbSessionFactory`, `ISessionManagerService`, `IJobManagerService` - Core services
 
-**Debugger Path Configuration**:
-1. `appsettings.json` - `Debugger:CdbPath` (recommended for deployment)
-2. Auto-detection from Windows SDK/WinDbg installations
+**Scoped Services** (per HTTP request):
+- `ISymbolConfigurationProvider` → `HttpHeaderSymbolConfigurationProvider` - Reads HTTP headers per request
 
-
-
-## Testing Architecture
-
-**Test Projects**:
-- `BackgroundService.Tests`: Service layer unit tests
-- `McpProxy.Tests`: MCP protocol and API client tests
-
-**Test Patterns**:
-- Mocked dependencies using interfaces (`ISessionManagerService`, etc.)
-- Parameterized tests for analysis types
-- Integration tests for HTTP endpoints
-
-## Code Organization Principles
-
-**Dependency Injection**: Both projects use Microsoft.Extensions.DependencyInjection
-- McpProxy: Scoped services for request handling (Program.cs:16-21)
-- BackgroundService: Singleton for session management (Program.cs:15-17)
-
-**Interface Segregation**: Every service has an interface for testability
-- `ISessionManagerService`, `ICdbSessionService`, `IAnalysisService`, etc.
-
-**Logging**: Structured logging to stderr for MCP compatibility
-- McpProxy: `LogToStandardErrorThreshold = LogLevel.Trace` (Program.cs:28)
-- BackgroundService: Console logging only
-
-## Predefined Analysis Types
-
-`AnalysisService` provides 10 analysis types with WinDbg command sequences:
-- **basic**: !analyze -v, exception context, thread stacks
-- **exception**: Detailed exception record analysis
-- **threads**: Thread enumeration with full stacks
-- **heap**: Heap statistics and validation
-- **modules**: Loaded/unloaded module information
-- **handles**: Process handle enumeration
-- **locks**: Critical sections and deadlock detection
-- **memory**: Virtual memory layout
-- **drivers**: Device driver and kernel analysis
-- **processes**: Process tree and details
+**MCP Server Configuration**:
+```csharp
+builder.Services.AddMcpServer()
+    .WithHttpTransport(options => {
+        options.IdleTimeout = TimeSpan.FromHours(1);
+        options.Stateless = false; // Enable session state for progress notifications
+    })
+    .WithToolsFromAssembly(); // Auto-discovers [McpServerTool] attributes
+```
 
 ## API Architecture - Job-Based Only
 
@@ -279,31 +254,64 @@ GET  /api/jobs?state=Running       → List all jobs (with optional state filter
 POST /api/jobs/{jobId}/cancel      → Cancel running job
 ```
 
+### MCP Tools (DebuggerTools.cs)
+
+All 8 tools follow the same pattern:
+1. Create job via `JobManagerService.CreateJob()`
+2. Start background `Task.Run()` that calls `SessionManager` with `jobId`
+3. Poll job status via `_WaitForJobCompletionAsync()` which reports progress via `IProgress<ProgressNotificationValue>`
+4. Return result or throw exception
+
+**Tools**:
+- `load_dump` - Load dump file and create session
+- `execute_command` - Execute WinDbg/CDB command
+- `basic_analysis` - Run comprehensive basic analysis
+- `predefined_analysis` - Run specialized analysis (heap, threads, modules, etc.)
+- `close_session` - Close session and free resources
+- `list_jobs` - List all jobs with status
+- `list_analyses` - List available predefined analyses
+- `detect_debuggers` - Detect CDB/WinDbg installations
+
 ### Flow:
-1. Client calls POST endpoint → receives `jobId` immediately (202 Accepted)
-2. McpProxy subscribes to SignalR `ProgressHub` for that `jobId`
-3. BackgroundService starts operation in `Task.Run()`, sends progress via SignalR
-4. SignalRClientService receives progress, forwards to MCP client via notifications
-5. McpProxy also polls `GET /api/jobs/{jobId}` every 1 second as fallback
-6. When complete, SignalR sends `Completed` notification
-7. McpProxy unsubscribes and returns final result to MCP client
+1. MCP client calls tool → DebuggerTools creates `jobId` immediately
+2. Background task starts operation, sends progress via job status updates
+3. DebuggerTools polls `JobManagerService.GetJobStatus()` every 1 second
+4. MCP client receives progress via `IProgress<ProgressNotificationValue>`
+5. When complete, return result or throw exception
+
+**CdbDebuggerClient Flow** (for PowerShell/Azure Functions):
+1. Client calls REST API → receives `jobId` (202 Accepted)
+2. `SignalRClientService` subscribes to `ProgressHub` for that `jobId`
+3. BackgroundService sends progress via SignalR `ProgressHub.SendJobProgress()`
+4. Client receives progress callbacks and waits for completion
 
 ### Timeout Configuration
 - Default: 10 minutes (`Constants.Jobs.DefaultMaxWaitTimeMs`)
 - Poll interval: 1 second (`Constants.Jobs.DefaultPollIntervalMs`)
 - Configurable in `Shared/Constants.cs`
 
+## Predefined Analysis Types
+
+`AnalysisService` provides 10 analysis types with WinDbg command sequences:
+- **basic**: !analyze -v, exception context, thread stacks
+- **exception**: Detailed exception record analysis
+- **threads**: Thread enumeration with full stacks
+- **heap**: Heap statistics and validation
+- **modules**: Loaded/unloaded module information
+- **handles**: Process handle enumeration
+- **locks**: Critical sections and deadlock detection
+- **memory**: Virtual memory layout
+- **drivers**: Device driver and kernel analysis
+- **processes**: Process tree and details
+
 ## Common Patterns When Modifying Code
 
 **Adding a new MCP tool**:
-1. Add job-based endpoint to `JobsController` (returns 202 + jobId)
-2. Create background Task.Run() that calls `SessionManager` with jobId
-3. Add method to `IDebuggerApiService` interface
-4. Implement HTTP call + SignalR subscription in `DebuggerApiService`
-5. Add tool registration in `ToolsService`
-6. Add switch case in `McpProxy.HandleToolCallAsync()`
-7. Add constant to `Constants.McpToolNames`
-8. Add `JobOperationType` enum value if needed
+1. Add `[McpServerTool]` method to `DebuggerTools.cs`
+2. Create job with `_jobManager.CreateJob(JobOperationType.NewOperation)`
+3. Start background `Task.Run()` that calls `SessionManager` with `jobId`
+4. Use `_WaitForJobCompletionAsync()` to poll and report progress
+5. Add `JobOperationType` enum value if needed
 
 **Adding a new analysis type**:
 1. Add entry to `AnalysisType` enum (Shared/Models/AnalysisType.cs)
@@ -314,3 +322,9 @@ POST /api/jobs/{jobId}/cancel      → Cancel running job
 - All CDB commands go through `CdbSessionService.ExecuteCommandInternalAsync()`
 - Never bypass the semaphore lock - prevents stdin/stdout corruption
 - Use `IProgress<string>` parameter for long-running commands
+
+**Adding symbol configuration source**:
+1. Implement `ISymbolConfigurationProvider` interface
+2. Register in DI container (Singleton or Scoped)
+3. Inject into `DebuggerTools` constructor
+4. Update priority chain in `LoadDump` tool

@@ -17,7 +17,7 @@ public static class ApplicationPaths
     }
 
     /// <summary>
-    /// Gets the logs directory for McpProxy.
+    /// Gets the logs directory for DumpAnalyser.
     /// Returns: %LOCALAPPDATA%\CdbAnalysisServer\logs
     /// </summary>
     public static string GetLogsDirectory()
