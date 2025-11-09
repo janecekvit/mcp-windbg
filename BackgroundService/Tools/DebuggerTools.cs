@@ -1,12 +1,10 @@
 using System.ComponentModel;
 using System.Text;
-using Microsoft.Extensions.Logging;
+using BackgroundService.Providers;
+using BackgroundService.Services;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
-using BackgroundService.Infrastructure.Detection;
-using BackgroundService.Services;
 using Shared;
-using Shared.Configuration;
 using Shared.Models;
 
 namespace BackgroundService.Tools;
@@ -22,17 +20,20 @@ public class DebuggerTools
     private readonly IJobManagerService _jobManager;
     private readonly ISessionManagerService _sessionManager;
     private readonly IDiagnosticsService _diagnosticsService;
+    private readonly ISymbolConfigurationProvider _symbolConfigProvider;
 
     public DebuggerTools(
         ILogger<DebuggerTools> logger,
         IJobManagerService jobManager,
         ISessionManagerService sessionManager,
-        IDiagnosticsService diagnosticsService)
+        IDiagnosticsService diagnosticsService,
+        ISymbolConfigurationProvider symbolConfigProvider)
     {
         _logger = logger;
         _jobManager = jobManager;
         _sessionManager = sessionManager;
         _diagnosticsService = diagnosticsService;
+        _symbolConfigProvider = symbolConfigProvider;
     }
 
     [McpServerTool]
@@ -53,11 +54,7 @@ public class DebuggerTools
             if (!File.Exists(dump_file_path))
                 throw new FileNotFoundException($"Dump file not found: {dump_file_path}");
 
-            // Read symbol configuration from environment variables
-            var symbols = new SymbolsConfiguration(
-                SymbolCache: Environment.GetEnvironmentVariable("SYMBOL_CACHE"),
-                SymbolPathExtra: Environment.GetEnvironmentVariable("SYMBOL_PATH_EXTRA"),
-                SymbolServers: Environment.GetEnvironmentVariable("SYMBOL_SERVERS"));
+            var symbols = _symbolConfigProvider.GetConfiguration();
 
             // Create job
             var jobId = _jobManager.CreateJob(JobOperationType.LoadDump);

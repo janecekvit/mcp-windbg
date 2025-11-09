@@ -82,11 +82,14 @@ if ($buildSuccess) {
     Write-Host "     $clientExePath load C:\dumps\crash.dmp" -ForegroundColor Cyan
     Write-Host "     $clientExePath exec <session-id> `"!analyze -v`"" -ForegroundColor Cyan
     Write-Host
-    Write-Host "🔧 Environment Variables (optional):" -ForegroundColor Yellow
-    Write-Host "  CDB_PATH          - Custom path to cdb.exe or windbg.exe" -ForegroundColor White
-    Write-Host "  SYMBOL_CACHE      - Custom symbol cache directory" -ForegroundColor White
-    Write-Host "  SYMBOL_PATH_EXTRA - Additional symbol paths (semicolon-separated)" -ForegroundColor White
-    Write-Host "  SYMBOL_SERVERS    - Custom symbol servers (semicolon-separated)" -ForegroundColor White
+    Write-Host "🔧 Symbol Configuration (3 methods, highest to lowest priority):" -ForegroundColor Yellow
+    Write-Host "  1. Tool parameters: Load dump D:\crash.dmp with symbol_cache=`"D:\Symbols`"" -ForegroundColor White
+    Write-Host "  2. HTTP headers in .mcp.json: Per-MCP-client configuration" -ForegroundColor White
+    Write-Host "  3. appsettings.json: Server-wide defaults for all clients" -ForegroundColor White
+    Write-Host "  (See README.md for detailed examples)" -ForegroundColor Gray
+    Write-Host
+    Write-Host "🔧 Optional Environment Variable:" -ForegroundColor Yellow
+    Write-Host "  CDB_PATH - Custom path to cdb.exe or windbg.exe (overrides auto-detection)" -ForegroundColor White
     Write-Host
     Write-Host "📖 For more information, see README.md" -ForegroundColor Gray
 } else {

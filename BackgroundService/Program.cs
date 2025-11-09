@@ -1,8 +1,8 @@
 using BackgroundService.Factories;
 using BackgroundService.Infrastructure.Detection;
 using BackgroundService.Infrastructure.IO;
+using BackgroundService.Providers;
 using BackgroundService.Services;
-using ModelContextProtocol.Server;
 using Shared;
 using Shared.Extensions;
 
@@ -30,6 +30,12 @@ internal class Program
             builder.Services.AddSingleton<ICdbSessionFactory, CdbSessionFactory>();
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
             builder.Services.AddSingleton<IJobManagerService, JobManagerService>();
+
+            // HTTP context accessor for reading request headers
+            builder.Services.AddHttpContextAccessor();
+
+            // Symbol configuration provider (scoped per HTTP request)
+            builder.Services.AddScoped<ISymbolConfigurationProvider, HttpHeaderSymbolConfigurationProvider>();
 
             // Configure SignalR for real-time progress notifications
             builder.Services.AddSignalR();

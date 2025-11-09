@@ -190,10 +190,12 @@ McpError.ServerNotInitialized()
 
 ## Symbol Resolution Architecture
 
-**Symbol Path Priority** (CdbSessionService.cs:70-109):
-1. `SYMBOL_PATH_EXTRA` - Direct local paths (highest priority)
-2. `SYMBOL_SERVERS` - Custom symbol servers (smart formatting)
-3. Default Microsoft servers (lowest priority)
+**Symbol Path Construction** (CdbSessionService.cs:70-109):
+
+Symbol path is built from configuration with the following priority:
+1. **Local paths** from `SymbolPathExtra` - Direct file paths (highest priority)
+2. **Custom servers** from `SymbolServers` - Smart formatted with cache
+3. **Default Microsoft servers** - Always included (lowest priority)
 
 **Symbol Server Formatting**:
 - URLs: `srv*{cache}*{url}` → `srv*C:\symbols*https://msdl.microsoft.com/download/symbols`
@@ -203,7 +205,7 @@ McpError.ServerNotInitialized()
 **Symbol Caching & Performance**:
 - **Cache-Aware Loading**: Uses `.reload` (NOT `.reload /f`) to leverage cached symbols
 - **First dump load**: 10-30 minutes (downloads symbols from Microsoft Symbol Server)
-- **Subsequent loads**: 30-60 seconds (uses cached symbols from `SYMBOL_CACHE`)
+- **Subsequent loads**: 30-60 seconds (uses cached symbols from configured cache directory)
 - **Default cache**: `%LOCALAPPDATA%\CdbMcpServer\symbols`
 - **Timeout**: 15 minutes (configurable via `Constants.Debugging.SymbolLoadingTimeoutMinutes`)
 - **Smart logging**: Detects cache hits vs downloads and logs appropriately
@@ -212,19 +214,16 @@ McpError.ServerNotInitialized()
 
 ## Configuration Strategy
 
-**Priority Order**:
-1. `appsettings.json` (recommended for deployment)
-2. Environment variables (fallback, useful for CI/CD)
-3. Auto-detection (CDB path) or defaults (symbol cache)
+**Symbol Configuration Priority Order** (per BackgroundService/DebuggerTools.cs):
+1. **Tool Parameters** - Per-call override via prompt (highest priority)
+2. **HTTP Headers** - Per-MCP-client configuration via `.mcp.json` headers
+3. **appsettings.json** - Server-wide defaults (lowest priority)
 
-**Key Environment Variables**:
-```bash
-CDB_PATH               # Override auto-detected debugger
-SYMBOL_CACHE           # Default: %LOCALAPPDATA%\CdbMcpServer\symbols
-SYMBOL_PATH_EXTRA      # Additional local symbol directories
-SYMBOL_SERVERS         # Custom symbol servers (;-separated)
-BACKGROUND_SERVICE_URL # Default: http://localhost:8080
-```
+**Debugger Path Configuration**:
+1. `appsettings.json` - `Debugger:CdbPath` (recommended for deployment)
+2. Auto-detection from Windows SDK/WinDbg installations
+
+
 
 ## Testing Architecture
 

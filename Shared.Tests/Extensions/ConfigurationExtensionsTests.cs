@@ -164,58 +164,6 @@ public class ConfigurationExtensionsTests : IDisposable
 
     #endregion
 
-    #region GetBackgroundServiceConfiguration Tests
-
-    [Fact]
-    public void GetBackgroundServiceConfiguration_ConfigExists_ReturnsConfigValue()
-    {
-        // Arrange
-        var customUrl = "http://custom:9999";
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                { "BackgroundService:BaseUrl", customUrl }
-            })
-            .Build();
-
-        // Act
-        var result = config.GetBackgroundServiceConfiguration();
-
-        // Assert
-        Assert.Equal(customUrl, result.BaseUrl);
-    }
-
-    [Fact]
-    public void GetBackgroundServiceConfiguration_ConfigMissing_FallsBackToEnvVar()
-    {
-        // Arrange
-        var config = new ConfigurationBuilder().Build();
-        var customUrl = "http://env:8888";
-        SetTestEnvironmentVariable("BACKGROUND_SERVICE_URL", customUrl);
-
-        // Act
-        var result = config.GetBackgroundServiceConfiguration();
-
-        // Assert
-        Assert.Equal(customUrl, result.BaseUrl);
-    }
-
-    [Fact]
-    public void GetBackgroundServiceConfiguration_BothMissing_ReturnsDefault()
-    {
-        // Arrange
-        var config = new ConfigurationBuilder().Build();
-        SetTestEnvironmentVariable("BACKGROUND_SERVICE_URL", null);
-
-        // Act
-        var result = config.GetBackgroundServiceConfiguration();
-
-        // Assert
-        Assert.Equal(Constants.Network.DefaultBackgroundServiceUrl, result.BaseUrl);
-    }
-
-    #endregion
-
     #region GetDebuggerConfiguration Tests
 
     [Fact]

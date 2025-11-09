@@ -95,8 +95,7 @@ Use the `detect_debuggers` tool to discover available installations.
 
 The server supports multiple configuration methods with the following priority order:
 1. **appsettings.json** (recommended)
-2. **Environment variables** (fallback)
-3. **Default values**
+2. **Default values**
 
 ### Configuration File
 
@@ -153,45 +152,6 @@ C:\MyProject\Debug;srv*D:\SymbolCache*https://symbols.company.com;srv*D:\SymbolC
 }
 ```
 
-### Environment Variables (Optional Fallback)
-
-- `CDB_PATH`: Custom path to cdb.exe/windbg.exe (overrides auto-detection)
-- `SYMBOL_CACHE`: Local symbol download directory (default: `%LOCALAPPDATA%\CdbMcpServer\symbols`)
-- `SYMBOL_PATH_EXTRA`: Additional local symbol directories
-- `SYMBOL_SERVERS`: Custom symbol servers (semicolon-separated)
-
-#### Symbol Configuration Parameters
-
-Understanding the different symbol parameters:
-
-- **`SYMBOL_CACHE`**: 📦 **Local download directory**
-  - Where downloaded symbols are stored permanently
-  - Default: `%LOCALAPPDATA%\CdbMcpServer\symbols`
-  - Used by all `srv*cache*server` entries
-
-- **`SYMBOL_PATH_EXTRA`**: 📁 **Direct local paths**
-  - Raw file paths added directly to symbol path
-  - For local PDB directories: `C:\MyPDBs;D:\ProjectSymbols`
-  - No automatic formatting - added as-is
-
-- **`SYMBOL_SERVERS`**: 🌐 **Remote symbol servers**
-  - Smart formatting for URLs and network paths
-  - URLs become: `srv*{cache}*{url}`
-  - File paths become: direct paths
-  - Example: `https://symbols.company.com;\\server\symbols`
-
-#### Symbol Path Priority Order
-1. **SYMBOL_PATH_EXTRA** (highest priority - local PDBs)
-2. **SYMBOL_SERVERS** (custom remote servers)
-3. **Default Microsoft servers** (lowest priority)
-
-#### Quick Reference Table
-
-| Parameter | Purpose | Example | Result Format |
-|-----------|---------|---------|---------------|
-| `SYMBOL_CACHE` | Download storage | `D:\Symbols` | Used as cache in `srv*` entries |
-| `SYMBOL_PATH_EXTRA` | Local PDB folders | `C:\MyPDBs` | Added as-is: `C:\MyPDBs` |
-| `SYMBOL_SERVERS` | Remote servers | `https://srv.com` | Smart format: `srv*cache*https://srv.com` |
 
 ## MCP Tools
 
@@ -275,7 +235,12 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
   "mcpServers": {
     "dump-analyzer": {
       "type": "http",
-      "url": "http://localhost:7997/mcp"
+      "url": "http://localhost:7997/mcp",
+      "headers": {
+        "X-Symbol-Cache": "D:\\Symbols",
+        "X-Symbol-Path-Extra": "",
+        "X-Symbol-Servers": ""
+      }
     }
   }
 }
@@ -286,11 +251,6 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 # Start the service (keep this running)
 .\publish\BackgroundService.exe
 
-# Optional: Configure via environment variables
-$env:SYMBOL_CACHE = "D:\Symbols"
-$env:CDB_PATH = "C:\Program Files\WindowsApps\Microsoft.WinDbg_1.2506.12002.0_x64__8wekyb3d8bbwe\amd64\cdb.exe"
-.\publish\BackgroundService.exe
-```
 
 **Method B: Project-specific Configuration (Recommended)**
 
@@ -301,7 +261,12 @@ Create `.mcp.json` in your project root:
   "mcpServers": {
     "dump-analyzer": {
       "type": "http",
-      "url": "http://localhost:7997/mcp"
+      "url": "http://localhost:7997/mcp",
+      "headers": {
+        "X-Symbol-Cache": "D:\\Symbols",
+        "X-Symbol-Path-Extra": "",
+        "X-Symbol-Servers": ""
+      }
     }
   }
 }
@@ -312,6 +277,54 @@ Start BackgroundService separately:
 # In a separate terminal/PowerShell window
 cd D:\Git\mcp-windbg\publish
 .\BackgroundService.exe
+```
+
+**Symbol Configuration Options:**
+
+The `load_dump` tool supports three configuration methods with priority order:
+
+**1. Tool Parameters (Highest Priority - Per-Call)**
+
+Pass symbol configuration directly in your prompt:
+```
+Load dump file D:\crash.dmp with symbol_cache="D:\Symbols" and symbol_servers="https://symbols.company.com"
+```
+
+Optional parameters:
+- `symbol_cache` - Symbol cache directory
+- `symbol_path_extra` - Additional local symbol directories (semicolon-separated)
+- `symbol_servers` - Custom symbol servers (semicolon-separated)
+
+**2. HTTP Headers (Per-MCP-Client Configuration)**
+
+Configure in your `.mcp.json` to set defaults for your MCP client:
+```json
+{
+  "mcpServers": {
+    "dump-analyzer": {
+      "type": "http",
+      "url": "http://localhost:7997/mcp",
+      "headers": {
+        "X-Symbol-Cache": "D:\\Symbols",
+        "X-Symbol-Path-Extra": "C:\\MyProject\\Debug",
+        "X-Symbol-Servers": "https://symbols.company.com"
+      }
+    }
+  }
+}
+```
+
+**3. appsettings.json (Server-Wide Defaults)**
+
+Edit `publish/appsettings.json` or `BackgroundService/appsettings.json` to set defaults for all MCP clients:
+```json
+{
+  "Debugger": {
+    "DefaultSymbolCache": "D:\\Symbols",
+    "DefaultSymbolPathExtra": "C:\\MyProject\\Debug",
+    "DefaultSymbolServers": "https://symbols.company.com"
+  }
+}
 ```
 
 #### 3. Usage in Claude Code
@@ -328,28 +341,58 @@ After starting BackgroundService and configuring Claude Code, you can use:
 1. Start BackgroundService.exe
 2. Open Claude Code
 3. "Use detect_debuggers to verify configuration"
-4. "Load dump file D:\\crash.dmp using load_dump"
+4. "Load dump file D:\\crash.dmp with symbol_cache='D:\\Symbols'"
 5. "Perform basic_analysis on session"
 6. "Run predefined_analysis of type heap"
 
 #### 4. Advanced Configuration
 
-For production deployment, you can customize configuration by:
+**Configuration Priority (from highest to lowest):**
+1. **Tool Parameters** - Per-call override via prompt
+2. **HTTP Headers** - Per-MCP-client configuration via `.mcp.json`
+3. **appsettings.json** - Server-wide defaults for all clients
 
-1. **Environment Variables:**
-```powershell
-$env:CDB_PATH = "C:\path\to\your\cdb.exe"
-$env:SYMBOL_CACHE = "C:\your\symbol\cache"
-$env:SYMBOL_PATH_EXTRA = "C:\additional\symbols"
-$env:SYMBOL_SERVERS = "https://internal.company.com/symbols;\\fileserver\symbols"
-.\BackgroundService.exe
-```
+**Use Cases:**
 
-2. **Modifying appsettings.json after publishing:**
-   - Edit `publish/appsettings.json`
+- **Tool Parameters**: Override symbol configuration for a specific dump file
+  ```
+  Load dump D:\crash.dmp with symbol_servers="https://internal.company.com/symbols;\\fileserver\symbols"
+  ```
 
-3. **Development appsettings:**
-   - Create `appsettings.Development.json` files for development-specific settings
+- **HTTP Headers**: Configure defaults for your MCP client instance (e.g., your Claude Code)
+  ```json
+  {
+    "mcpServers": {
+      "dump-analyzer": {
+        "type": "http",
+        "url": "http://localhost:7997/mcp",
+        "headers": {
+          "X-Symbol-Cache": "D:\\MySymbols",
+          "X-Symbol-Path-Extra": "C:\\MyProject\\Debug;D:\\ThirdParty\\Symbols",
+          "X-Symbol-Servers": "https://internal.company.com/symbols"
+        }
+      }
+    }
+  }
+  ```
+
+- **appsettings.json**: Set server-wide defaults for all MCP clients
+  ```json
+  {
+    "Debugger": {
+      "DefaultSymbolCache": "D:\\SymbolCache",
+      "DefaultSymbolPathExtra": "C:\\CommonSymbols",
+      "DefaultSymbolServers": "https://company-symbols.com"
+    }
+  }
+  ```
+
+**Example Scenario:**
+- Server (`appsettings.json`): Default cache `D:\ServerSymbols`
+- Your MCP client (`.mcp.json` headers): Override to `D:\MySymbols`
+- Specific call (tool parameter): Override to `D:\ProjectSymbols` for one dump
+
+Create `appsettings.Development.json` for development-specific settings.
 
 ## Command-Line Client (CdbDebuggerClient)
 
@@ -396,11 +439,6 @@ cd .\publish
 ```powershell
 # Via command line parameters
 .\CdbDebuggerClient.exe --symbol-cache "D:\Symbols" load "C:\dumps\crash.dmp"
-
-# Via environment variables
-$env:SYMBOL_CACHE = "D:\Symbols"
-$env:SYMBOL_SERVERS = "https://company.com/symbols"
-.\CdbDebuggerClient.exe load "C:\dumps\crash.dmp"
 ```
 
 ### Azure Functions Integration
@@ -463,7 +501,7 @@ For standalone usage without MCP:
 ### Symbol loading is slow
 - First load downloads symbols (10-30 min)
 - Subsequent loads use cache (30-60 sec)
-- Configure `SYMBOL_CACHE` for persistent cache
+- Configure symbol cache in appsettings.json for persistent cache
 
 ### Claude Code can't connect
 - Ensure BackgroundService.exe is running
