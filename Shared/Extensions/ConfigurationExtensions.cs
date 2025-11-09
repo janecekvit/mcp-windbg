@@ -27,7 +27,7 @@ public static class ConfigurationExtensions
         try
         {
             var configValue = configuration.GetValue<T>(key);
-            if (configValue != null && !EqualityComparer<T>.Default.Equals(configValue, default(T)))
+            if (configValue != null && !EqualityComparer<T>.Default.Equals(configValue, default))
                 return configValue;
         }
         catch
@@ -57,22 +57,6 @@ public static class ConfigurationExtensions
 
         // Return default value
         return defaultValue;
-    }
-
-    /// <summary>
-    /// Gets background service configuration with environment variable fallback
-    /// </summary>
-    /// <param name="configuration">The configuration instance</param>
-    /// <returns>BackgroundServiceConfiguration with values from config or environment variables</returns>
-    public static BackgroundServiceConfiguration GetBackgroundServiceConfiguration(this IConfiguration configuration)
-    {
-        return new BackgroundServiceConfiguration
-        {
-            BaseUrl = configuration.GetValueWithEnvironmentFallback<string>(
-                "BackgroundService:BaseUrl",
-                "BACKGROUND_SERVICE_URL",
-                Constants.Network.DefaultBackgroundServiceUrl)!
-        };
     }
 
     /// <summary>

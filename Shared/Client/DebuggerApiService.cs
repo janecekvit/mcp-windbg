@@ -1,15 +1,13 @@
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using Shared;
 using Shared.Configuration;
-using Shared.Extensions;
 using Shared.Models;
 
-namespace McpProxy.Services;
+namespace Shared.Client;
 
 /// <summary>
 /// Service for interacting with the BackgroundService HTTP API
@@ -21,6 +19,7 @@ public class DebuggerApiService : IDebuggerApiService
     private readonly HttpClient _httpClient;
     private readonly ISignalRClientService _signalRClient;
     private readonly string _baseUrl;
+    private readonly SymbolsConfiguration? _symbols;
 
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -31,14 +30,14 @@ public class DebuggerApiService : IDebuggerApiService
         ILogger<DebuggerApiService> logger,
         HttpClient httpClient,
         ISignalRClientService signalRClient,
-        IConfiguration configuration)
+        string baseUrl = Constants.Network.DefaultBackgroundServiceUrl,
+        SymbolsConfiguration? symbols = null)
     {
         _logger = logger;
         _httpClient = httpClient;
         _signalRClient = signalRClient;
-
-        var backgroundServiceConfig = configuration.GetBackgroundServiceConfiguration();
-        _baseUrl = backgroundServiceConfig.BaseUrl;
+        _baseUrl = baseUrl;
+        _symbols = symbols;
 
         _logger.LogInformation("Configured API client for: {BaseUrl}", _baseUrl);
     }
@@ -69,13 +68,7 @@ public class DebuggerApiService : IDebuggerApiService
         if (!File.Exists(dumpFilePath))
             throw new FileNotFoundException($"Dump file not found: {dumpFilePath}");
 
-        // Read symbol configuration from environment variables
-        var symbols = new SymbolsConfiguration(
-            SymbolCache: Environment.GetEnvironmentVariable("SYMBOL_CACHE"),
-            SymbolPathExtra: Environment.GetEnvironmentVariable("SYMBOL_PATH_EXTRA"),
-            SymbolServers: Environment.GetEnvironmentVariable("SYMBOL_SERVERS"));
-
-        var request = new LoadDumpRequest(dumpFilePath, symbols);
+        var request = new LoadDumpRequest(dumpFilePath, _symbols);
 
         // Start the job
         var response = await _httpClient.PostAsJsonAsync(

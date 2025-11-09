@@ -1,6 +1,6 @@
 using Shared.Models;
 
-namespace McpProxy.Services;
+namespace Shared.Client;
 
 public interface ISignalRClientService : IAsyncDisposable
 {
