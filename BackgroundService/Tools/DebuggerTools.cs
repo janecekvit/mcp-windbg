@@ -82,9 +82,24 @@ public class DebuggerTools
             // Wait for job completion with progress reporting
             return await _WaitForJobCompletionAsync(jobId, progress, cancellationToken);
         }
-        catch (Exception ex)
+        catch (ArgumentException ex)
         {
-            _logger.LogError(ex, "Error loading dump: {Message}", ex.Message);
+            _logger.LogError(ex, "Invalid argument: {Message}", ex.Message);
+            throw new InvalidOperationException($"Failed to load dump: {ex.Message}", ex);
+        }
+        catch (FileNotFoundException ex)
+        {
+            _logger.LogError(ex, "File not found: {Message}", ex.Message);
+            throw new InvalidOperationException($"Failed to load dump: {ex.Message}", ex);
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogWarning(ex, "Operation was canceled: {Message}", ex.Message);
+            throw;
+        }
+        catch (Exception ex) when (!(ex is OutOfMemoryException) && !(ex is StackOverflowException) && !(ex is ThreadAbortException))
+        {
+            _logger.LogError(ex, "Unexpected error loading dump: {Message}", ex.Message);
             throw new InvalidOperationException($"Failed to load dump: {ex.Message}", ex);
         }
     }
