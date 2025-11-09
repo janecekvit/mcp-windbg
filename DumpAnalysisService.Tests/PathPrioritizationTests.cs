@@ -1,11 +1,11 @@
 using System.Runtime.InteropServices;
-using BackgroundService.Infrastructure.Detection;
-using BackgroundService.Infrastructure.IO;
+using DumpAnalysisService.Infrastructure.Detection;
+using DumpAnalysisService.Infrastructure.IO;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
-namespace BackgroundService.Tests;
+namespace DumpAnalysisService.Tests;
 
 public class PathPrioritizationTests
 {

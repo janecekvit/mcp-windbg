@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace BackgroundService.Infrastructure.Debugger;
+namespace DumpAnalysisService.Infrastructure.Debugger;
 
 /// <summary>
 /// Infrastructure implementation for managing CDB debugger processes.

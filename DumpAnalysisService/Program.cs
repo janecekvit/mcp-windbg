@@ -1,12 +1,12 @@
-using BackgroundService.Factories;
-using BackgroundService.Infrastructure.Detection;
-using BackgroundService.Infrastructure.IO;
-using BackgroundService.Providers;
-using BackgroundService.Services;
+using DumpAnalysisService.Factories;
+using DumpAnalysisService.Infrastructure.Detection;
+using DumpAnalysisService.Infrastructure.IO;
+using DumpAnalysisService.Providers;
+using DumpAnalysisService.Services;
 using Shared;
 using Shared.Extensions;
 
-namespace BackgroundService;
+namespace DumpAnalysisService;
 
 internal class Program
 {

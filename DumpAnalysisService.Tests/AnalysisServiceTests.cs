@@ -1,7 +1,7 @@
-using BackgroundService.Services;
+using DumpAnalysisService.Services;
 using Shared.Models;
 
-namespace BackgroundService.Tests;
+namespace DumpAnalysisService.Tests;
 
 public class AnalysisServiceTests
 {

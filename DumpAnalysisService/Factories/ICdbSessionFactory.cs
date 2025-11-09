@@ -1,6 +1,6 @@
-using BackgroundService.Services;
+using DumpAnalysisService.Services;
 
-namespace BackgroundService.Factories;
+namespace DumpAnalysisService.Factories;
 
 /// <summary>
 /// Factory for creating CDB session instances with proper infrastructure dependencies.

@@ -1,4 +1,4 @@
-namespace BackgroundService.Infrastructure.Detection;
+namespace DumpAnalysisService.Infrastructure.Detection;
 
 /// <summary>
 /// Infrastructure service for detecting CDB installations on the system.

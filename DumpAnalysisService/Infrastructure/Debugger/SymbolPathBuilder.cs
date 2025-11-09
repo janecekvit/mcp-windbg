@@ -1,6 +1,6 @@
 using Shared.Configuration;
 
-namespace BackgroundService.Infrastructure.Debugger;
+namespace DumpAnalysisService.Infrastructure.Debugger;
 
 /// <summary>
 /// Infrastructure service for building WinDbg symbol paths.

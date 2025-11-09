@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
-using BackgroundService.Hubs;
+using DumpAnalysisService.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Shared.Models;
 
-namespace BackgroundService.Services;
+namespace DumpAnalysisService.Services;
 
 public sealed class JobManagerService : IJobManagerService, IDisposable
 {

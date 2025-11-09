@@ -1,8 +1,8 @@
-using BackgroundService.Services;
+using DumpAnalysisService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Models;
 
-namespace BackgroundService.Controllers;
+namespace DumpAnalysisService.Controllers;
 
 [ApiController]
 [Route("api/jobs")]

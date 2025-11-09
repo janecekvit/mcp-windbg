@@ -1,10 +1,10 @@
 using System.Text;
-using BackgroundService.Infrastructure.Debugger;
+using DumpAnalysisService.Infrastructure.Debugger;
 using Shared;
 using Shared.Extensions;
 using Shared.Models;
 
-namespace BackgroundService.Services;
+namespace DumpAnalysisService.Services;
 
 /// <summary>
 /// Service for managing CDB debugging sessions.

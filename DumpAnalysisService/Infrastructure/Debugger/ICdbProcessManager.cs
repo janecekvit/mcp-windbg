@@ -1,4 +1,4 @@
-namespace BackgroundService.Infrastructure.Debugger;
+namespace DumpAnalysisService.Infrastructure.Debugger;
 
 /// <summary>
 /// Infrastructure interface for managing CDB debugger processes.

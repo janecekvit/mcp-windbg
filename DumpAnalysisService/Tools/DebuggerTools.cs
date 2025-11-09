@@ -1,13 +1,13 @@
 using System.ComponentModel;
 using System.Text;
-using BackgroundService.Providers;
-using BackgroundService.Services;
+using DumpAnalysisService.Providers;
+using DumpAnalysisService.Services;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using Shared;
 using Shared.Models;
 
-namespace BackgroundService.Tools;
+namespace DumpAnalysisService.Tools;
 
 /// <summary>
 /// MCP Tools for Windows memory dump debugging using WinDbg/CDB

@@ -1,4 +1,4 @@
-namespace BackgroundService.Models;
+namespace DumpAnalysisService.Models;
 
 public class SessionInfo
 {

@@ -1,6 +1,6 @@
 using Shared.Configuration;
 
-namespace BackgroundService.Providers;
+namespace DumpAnalysisService.Providers;
 
 /// <summary>
 /// Reads symbol configuration from HTTP headers with fallback to environment variables

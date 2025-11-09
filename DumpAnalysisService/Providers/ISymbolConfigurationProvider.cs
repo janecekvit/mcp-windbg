@@ -1,5 +1,5 @@
 using Shared.Configuration;
-namespace BackgroundService.Providers;
+namespace DumpAnalysisService.Providers;
 
 /// <summary>
 /// Provider for symbol configuration that can read from different sources

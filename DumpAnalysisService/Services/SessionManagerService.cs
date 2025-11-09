@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
-using BackgroundService.Factories;
+using DumpAnalysisService.Factories;
 using Shared;
 using Shared.Models;
 
-namespace BackgroundService.Services;
+namespace DumpAnalysisService.Services;
 
 public sealed class SessionManagerService : ISessionManagerService
 {

@@ -1,9 +1,9 @@
-using BackgroundService.Infrastructure.Debugger;
-using BackgroundService.Infrastructure.Detection;
-using BackgroundService.Services;
+using DumpAnalysisService.Infrastructure.Debugger;
+using DumpAnalysisService.Infrastructure.Detection;
+using DumpAnalysisService.Services;
 using Shared.Configuration;
 
-namespace BackgroundService.Factories;
+namespace DumpAnalysisService.Factories;
 
 /// <summary>
 /// Factory for creating CDB session instances with infrastructure dependencies injected.

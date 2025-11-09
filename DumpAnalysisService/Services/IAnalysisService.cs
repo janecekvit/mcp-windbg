@@ -1,6 +1,6 @@
 using Shared.Models;
 
-namespace BackgroundService.Services;
+namespace DumpAnalysisService.Services;
 
 public interface IAnalysisService
 {

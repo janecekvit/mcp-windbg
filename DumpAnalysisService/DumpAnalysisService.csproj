@@ -12,7 +12,7 @@
 		<PublishSingleFile>true</PublishSingleFile>
 		<SelfContained>true</SelfContained>
 		<PublishTrimmed>false</PublishTrimmed>
-		<StartupObject>BackgroundService.Program</StartupObject>
+		<StartupObject>DumpAnalysisService.Program</StartupObject>
 	</PropertyGroup>
 
 	<ItemGroup>

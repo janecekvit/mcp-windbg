@@ -1,10 +1,10 @@
-using BackgroundService.Infrastructure.IO;
+using DumpAnalysisService.Infrastructure.IO;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace BackgroundService.Tests;
+namespace DumpAnalysisService.Tests;
 
 /// <summary>
 /// Tests for general-purpose path expansion service with wildcard support

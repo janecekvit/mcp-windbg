@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using BackgroundService.Infrastructure.IO;
+using DumpAnalysisService.Infrastructure.IO;
 
-namespace BackgroundService.Infrastructure.Detection;
+namespace DumpAnalysisService.Infrastructure.Detection;
 
 /// <summary>
 /// Infrastructure service for detecting CDB installations.

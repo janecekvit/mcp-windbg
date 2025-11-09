@@ -1,10 +1,10 @@
-using BackgroundService.Factories;
-using BackgroundService.Services;
+using DumpAnalysisService.Factories;
+using DumpAnalysisService.Services;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Shared.Models;
 
-namespace BackgroundService.Tests;
+namespace DumpAnalysisService.Tests;
 
 public sealed class SessionManagerServiceTests : IDisposable
 {

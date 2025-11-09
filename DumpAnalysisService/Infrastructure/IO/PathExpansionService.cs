@@ -1,4 +1,4 @@
-namespace BackgroundService.Infrastructure.IO;
+namespace DumpAnalysisService.Infrastructure.IO;
 
 /// <summary>
 /// Service for expanding file system path patterns containing wildcards (* and ?).

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 
-namespace BackgroundService.Hubs;
+namespace DumpAnalysisService.Hubs;
 
 /// <summary>
 /// SignalR Hub for real-time progress notifications

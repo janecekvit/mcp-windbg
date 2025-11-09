@@ -1,7 +1,7 @@
-using BackgroundService.Infrastructure.Detection;
+using DumpAnalysisService.Infrastructure.Detection;
 using Shared.Models;
 
-namespace BackgroundService.Services;
+namespace DumpAnalysisService.Services;
 
 /// <summary>
 /// Business service for diagnostic operations (debugger detection, analysis listing).
