@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
-using Shared;
 using Shared.Configuration;
 using Shared.Models;
 

@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
-using Shared;
 using Shared.Models;
 
 namespace Shared.Client;

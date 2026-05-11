@@ -8,7 +8,7 @@ using Shared.Extensions;
 
 namespace DumpAnalysisService;
 
-internal class Program
+public partial class Program
 {
     private static async Task<int> Main(string[] args)
     {

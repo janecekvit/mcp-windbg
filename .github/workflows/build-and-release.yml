@@ -33,6 +33,38 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
+    - name: Install Windows Debugging Tools (cdb.exe)
+      shell: pwsh
+      run: |
+        $cdb = Get-ChildItem `
+          -Path "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" `
+          -ErrorAction SilentlyContinue
+        if ($cdb) {
+          Write-Host "cdb.exe already present: $($cdb.FullName)"
+        } else {
+          Write-Host "Installing Windows Debugging Tools via choco..."
+          choco install windbg -y --no-progress
+          if ($LASTEXITCODE -ne 0) {
+            throw "choco install windbg failed with exit code $LASTEXITCODE"
+          }
+        }
+
+        $debuggersDir = "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64"
+        if (Test-Path $debuggersDir) {
+          echo $debuggersDir >> $env:GITHUB_PATH
+          Write-Host "Added $debuggersDir to PATH"
+        } else {
+          Write-Warning "Debuggers directory not found after install"
+        }
+
+    - name: Cache Microsoft Symbol Server downloads
+      uses: actions/cache@v4
+      with:
+        path: C:\Users\runneradmin\AppData\Local\CdbMcpServer\symbols
+        key: symcache-${{ runner.os }}-${{ hashFiles('DumpAnalysisService.TestCrasher/**/*.cs') }}
+        restore-keys: |
+          symcache-${{ runner.os }}-
+
     - name: Get version from tag or branch
       id: version
       shell: pwsh
@@ -54,33 +86,35 @@ jobs:
     - name: Build solution  
       run: dotnet build DumpAnalyzer.sln --no-restore --configuration ${{ env.BUILD_CONFIGURATION }}
 
-    - name: Run tests
-      run: |
-        Write-Host "🧪 Running .NET tests..." -ForegroundColor Cyan
-
-        try {
-          dotnet test DumpAnalyzer.sln `
-            --no-build `
-            --configuration ${{ env.BUILD_CONFIGURATION }} `
-            --verbosity normal `
-            --logger trx `
-            --logger "console;verbosity=detailed" `
-            --results-directory TestResults `
-            --collect:"XPlat Code Coverage" `
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
-
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ All tests passed!" -ForegroundColor Green
-          } else {
-            Write-Host "❌ Some tests failed!" -ForegroundColor Red
-            exit $LASTEXITCODE
-          }
-        }
-        catch {
-          Write-Host "❌ Test execution failed: $($_.Exception.Message)" -ForegroundColor Red
-          throw
-        }
+    - name: Run unit tests
       shell: pwsh
+      run: |
+        Write-Host "Running unit tests..." -ForegroundColor Cyan
+        dotnet test DumpAnalyzer.sln `
+          --no-build `
+          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --filter "Category!=Integration" `
+          --verbosity normal `
+          --logger trx `
+          --logger "console;verbosity=detailed" `
+          --results-directory TestResults `
+          --collect:"XPlat Code Coverage" `
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Run integration tests
+      shell: pwsh
+      run: |
+        Write-Host "Running integration tests..." -ForegroundColor Cyan
+        dotnet test DumpAnalysisService.IntegrationTests/DumpAnalysisService.IntegrationTests.csproj `
+          --no-build `
+          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --filter "Category=Integration" `
+          --verbosity normal `
+          --logger trx `
+          --logger "console;verbosity=detailed" `
+          --results-directory TestResults
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Generate test summary
       if: always()
