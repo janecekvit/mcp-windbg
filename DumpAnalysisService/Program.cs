@@ -31,6 +31,11 @@ internal class Program
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
             builder.Services.AddSingleton<IJobManagerService, JobManagerService>();
 
+            // MCP task store backed by JobManager (experimental MCP Tasks API)
+#pragma warning disable MCPEXP001
+            builder.Services.AddSingleton<ModelContextProtocol.IMcpTaskStore, Tasks.JobManagerBackedTaskStore>();
+#pragma warning restore MCPEXP001
+
             // HTTP context accessor for reading request headers
             builder.Services.AddHttpContextAccessor();
 
@@ -60,7 +65,7 @@ internal class Program
             {
                 options.AddDefaultPolicy(policy =>
                 {
-                    policy.WithOrigins($"http://localhost:{Constants.Network.DefaultBackgroundServicePort}")
+                    policy.WithOrigins($"http://localhost:{Constants.Network.DefaultPort}")
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();
@@ -92,10 +97,10 @@ internal class Program
             app.MapHub<Hubs.ProgressHub>("/hubs/progress");
 
             // Start the service
-            var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : Constants.Network.DefaultBackgroundServicePort;
+            var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : Constants.Network.DefaultPort;
             app.Urls.Add($"http://localhost:{port}");
 
-            logger.LogInformation("CDB Background Service listening on port {Port}", port);
+            logger.LogInformation("Dump Analysis Service listening on port {Port}", port);
             logger.LogInformation("MCP HTTP endpoint available at http://localhost:{Port}/mcp", port);
             logger.LogInformation("REST API available at http://localhost:{Port}/api", port);
             logger.LogInformation("SignalR hub available at http://localhost:{Port}/hubs/progress", port);

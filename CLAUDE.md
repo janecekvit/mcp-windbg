@@ -34,11 +34,11 @@ curl http://localhost:7997/api/diagnostics/analyses
 
 **Problem**: CDB dump loading and symbol resolution can take **several minutes**. MCP clients expect immediate responses and need progress updates.
 
-**Solution**: Single ASP.NET Core service with dual interfaces (MCP HTTP + REST API) and job-based async operations:
+**Solution**: Single ASP.NET Core service with dual interfaces (MCP Streamable HTTP + REST API) and job-based async operations:
 
 ```
 ┌─────────────┐
-│ Claude Code │  MCP HTTP
+│ Claude Code │  MCP Streamable HTTP
 │ (MCP Client)│
 └──────┬──────┘
        │ http://localhost:7997/mcp
@@ -284,6 +284,21 @@ All 8 tools follow the same pattern:
 2. `SignalRClientService` subscribes to `ProgressHub` for that `jobId`
 3. DumpAnalysisService sends progress via SignalR `ProgressHub.SendJobProgress()`
 4. Client receives progress callbacks and waits for completion
+
+### MCP-Native Tasks (Adapter)
+
+The MCP layer also exposes the standard `tasks/list`, `tasks/get`,
+`tasks/result`, and `tasks/cancel` protocol methods via
+`JobManagerBackedTaskStore` (`IMcpTaskStore`). One MCP TaskId
+maps 1:1 to one JobId in `JobManagerService` — the underlying
+state model is shared with the REST API. Clients can choose
+streaming (`IProgress<ProgressNotificationValue>` notifications)
+or polling (`tasks/get`); both paths read the same job state.
+
+`IMcpTaskStore` is marked experimental in SDK 1.3.0 (diagnostic
+`MCPEXP001`). The adapter pattern keeps the experimental surface
+to a single file
+(`DumpAnalysisService/Tasks/JobManagerBackedTaskStore.cs`).
 
 ### Timeout Configuration
 - Default: 10 minutes (`Constants.Jobs.DefaultMaxWaitTimeMs`)
