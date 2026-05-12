@@ -6,7 +6,7 @@ using Shared.Models;
 
 namespace Shared.Tests.Client;
 
-public class SignalRClientServiceTests : IAsyncDisposable
+public sealed class SignalRClientServiceTests : IAsyncDisposable
 {
     private readonly Mock<ILogger<SignalRClientService>> _mockLogger;
     private readonly string _hubUrl = "http://localhost:7997/hubs/progress";

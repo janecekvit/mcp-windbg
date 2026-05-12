@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOTNET_VERSION: '9.0.x'
+  DOTNET_VERSION: '10.0.x'
   BUILD_CONFIGURATION: 'Release'
 
 jobs:
@@ -81,16 +81,16 @@ jobs:
         }
 
     - name: Restore dependencies
-      run: dotnet restore DumpAnalyzer.sln
+      run: dotnet restore DumpAnalyzer.slnx
 
     - name: Build solution  
-      run: dotnet build DumpAnalyzer.sln --no-restore --configuration ${{ env.BUILD_CONFIGURATION }}
+      run: dotnet build DumpAnalyzer.slnx --no-restore --configuration ${{ env.BUILD_CONFIGURATION }}
 
     - name: Run unit tests
       shell: pwsh
       run: |
         Write-Host "Running unit tests..." -ForegroundColor Cyan
-        dotnet test DumpAnalyzer.sln `
+        dotnet test DumpAnalyzer.slnx `
           --no-build `
           --configuration ${{ env.BUILD_CONFIGURATION }} `
           --filter "Category!=Integration" `
@@ -371,7 +371,7 @@ jobs:
 
         ### Requirements
         - Windows 10/11
-        - .NET 9.0 runtime (included in single-file executable)
+        - .NET 10.0 runtime (included in single-file executable)
         - Windows SDK Debuggers (cdb.exe) or WinDbg from Microsoft Store
 
         For detailed documentation, see [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md).

@@ -12,7 +12,7 @@ using Shared.Models;
 
 namespace Shared.Tests.Client;
 
-public class DebuggerApiServiceTests : IDisposable
+public sealed class DebuggerApiServiceTests : IDisposable
 {
     private readonly Mock<ILogger<DebuggerApiService>> _mockLogger;
     private readonly Mock<ISignalRClientService> _mockSignalRClient;

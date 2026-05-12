@@ -1,0 +1,17 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Solution Items/">
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="CommandLineClient/CommandLineClient.csproj" />
+  <Project Path="DumpAnalysisService.IntegrationTests/DumpAnalysisService.IntegrationTests.csproj" />
+  <Project Path="DumpAnalysisService.TestCrasher/DumpAnalysisService.TestCrasher.csproj" />
+  <Project Path="DumpAnalysisService.Tests/DumpAnalysisService.Tests.csproj" />
+  <Project Path="DumpAnalysisService/DumpAnalysisService.csproj" />
+  <Project Path="Shared.Tests/Shared.Tests.csproj" />
+  <Project Path="Shared/Shared.csproj" />
+</Solution>

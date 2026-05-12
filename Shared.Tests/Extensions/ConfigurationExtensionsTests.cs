@@ -4,7 +4,7 @@ using Shared.Extensions;
 
 namespace Shared.Tests.Extensions;
 
-public class ConfigurationExtensionsTests : IDisposable
+public sealed class ConfigurationExtensionsTests : IDisposable
 {
     private readonly List<string> _environmentVariablesToCleanup = new();
 
