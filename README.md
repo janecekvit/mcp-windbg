@@ -81,6 +81,76 @@ dotnet build
 dotnet run --project DumpAnalysisService
 ```
 
+## Running via Docker
+
+Pre-built Windows container images are published to GitHub Container Registry on every release tag. Lets you run `DumpAnalysisService` as a sidecar without manually downloading the Release ZIP.
+
+### Prerequisites
+
+- **Windows host** with one of:
+  - Docker Desktop in **Windows-containers** mode (Windows 10/11 Pro/Enterprise), or
+  - Containers role on Windows Server 2019/2022.
+- **Linux hosts cannot run Windows containers.** The image is Windows Server Core ltsc2022 — no Linux variant exists because `cdb.exe` is Windows-native.
+
+### Quick start
+
+```powershell
+docker run -d --name windbg `
+  -p 7997:7997 `
+  -v C:\dumps:C:\dumps:ro `
+  -v cdb-symbols:C:\symcache `
+  -e Debugger__DefaultSymbolCache=C:\symcache `
+  ghcr.io/janecekvit/mcp-windbg:latest
+```
+
+Then call the REST API:
+
+```powershell
+Invoke-RestMethod http://localhost:7997/api/jobs   # empty array []
+```
+
+### docker-compose example
+
+```yaml
+services:
+  windbg:
+    image: ghcr.io/janecekvit/mcp-windbg:v1.0.0   # pin a version, not :latest
+    ports:
+      - "7997:7997"
+    volumes:
+      - C:\dumps:C:\dumps:ro
+      - cdb-symbols:C:\symcache
+    environment:
+      Debugger__DefaultSymbolCache: C:\symcache
+      Debugger__DefaultSymbolPathExtra: ""
+      Debugger__DefaultSymbolServers: ""
+    restart: unless-stopped
+
+volumes:
+  cdb-symbols:
+```
+
+### Environment variables
+
+ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so the three debugger settings are:
+
+| Env var | Maps to | Purpose |
+|---|---|---|
+| `Debugger__DefaultSymbolCache` | `Debugger:DefaultSymbolCache` | Local symbol cache directory inside the container (default `%LOCALAPPDATA%\CdbMcpServer\symbols` — override to a mounted volume so symbols persist across container restarts) |
+| `Debugger__DefaultSymbolPathExtra` | `Debugger:DefaultSymbolPathExtra` | Semicolon-separated extra local symbol paths (e.g. `C:\my-pdbs;\\server\symbols`) |
+| `Debugger__DefaultSymbolServers` | `Debugger:DefaultSymbolServers` | Semicolon-separated extra symbol servers; Microsoft public symbol server is always included |
+
+### Pin a version
+
+Always pin to `:vX.Y.Z` in production / scripted use. `:latest` is convenient locally but will silently roll forward when a new tag is pushed.
+
+### Known limitations
+
+- **First pull is ~3 GB** (Windows Server Core base + Debugging Tools + service binaries). Subsequent pulls only fetch changed layers.
+- **First `load_dump` against a new symbol cache takes 10-30 minutes** while Microsoft Symbol Server downloads PDBs. Second run from the cached volume: 30-60 seconds.
+- **Dump file paths must be visible inside the container** — mount the host directory containing dumps (e.g. `-v C:\dumps:C:\dumps:ro`) and pass that *container* path in `DumpPath`, not the host path.
+- Symbol cache is intentionally **not pre-baked** into the image — symbols rotate every Patch Tuesday, so a baked cache would just rot. Mount a named volume (`cdb-symbols`) to make the cache survive container restarts.
+
 ## Automatic Debugger Detection
 
 Server automatically detects available CDB/WinDbg installations:
