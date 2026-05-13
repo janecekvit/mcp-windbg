@@ -199,42 +199,32 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
 
     - name: Login to GHCR
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/us/updates'
+      if: startsWith(github.ref, 'refs/tags/v')
       shell: pwsh
       run: |
         echo "${{ secrets.GITHUB_TOKEN }}" | `
           docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
     - name: Build Docker image
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/us/updates'
+      if: startsWith(github.ref, 'refs/tags/v')
       shell: pwsh
       run: |
+        $version = "${{ steps.version.outputs.version }}"
         $image = "ghcr.io/${{ github.repository_owner }}/mcp-windbg"
-        if ($env:GITHUB_REF -like 'refs/tags/v*') {
-          $version = "${{ steps.version.outputs.version }}"
-          docker build `
-            -t "${image}:v$version" `
-            -t "${image}:latest" `
-            .
-        } else {
-          $sha = $env:GITHUB_SHA.Substring(0, 7)
-          docker build -t "${image}:branch-test-$sha" .
-        }
+        docker build `
+          -t "${image}:v$version" `
+          -t "${image}:latest" `
+          .
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Push Docker image
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/us/updates'
+      if: startsWith(github.ref, 'refs/tags/v')
       shell: pwsh
       run: |
+        $version = "${{ steps.version.outputs.version }}"
         $image = "ghcr.io/${{ github.repository_owner }}/mcp-windbg"
-        if ($env:GITHUB_REF -like 'refs/tags/v*') {
-          $version = "${{ steps.version.outputs.version }}"
-          docker push "${image}:v$version"
-          docker push "${image}:latest"
-        } else {
-          $sha = $env:GITHUB_SHA.Substring(0, 7)
-          docker push "${image}:branch-test-$sha"
-        }
+        docker push "${image}:v$version"
+        docker push "${image}:latest"
 
     - name: Create portable package
       shell: pwsh
