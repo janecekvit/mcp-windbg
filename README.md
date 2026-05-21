@@ -581,21 +581,52 @@ public static async Task<IActionResult> Run(
 }
 ```
 
-## Direct MCP Usage
+## Manual REST API testing
 
-```json
-// Load dump
-{"method": "tools/call", "params": {"name": "load_dump", "arguments": {"dump_file_path": "C:\\dumps\\crash.dmp"}}}
+Quick PowerShell snippets for poking the REST API without an MCP client — useful for smoke tests, scripting, and debugging. For end-to-end testing against a real, reproducible dump, build and run `DumpAnalysisService.TestCrasher`, which self-mini-dumps via `dbghelp!MiniDumpWriteDump` (no third-party crashing app required):
 
-// Run basic analysis
-{"method": "tools/call", "params": {"name": "basic_analysis", "arguments": {"session_id": "abc12345"}}}
-
-// Custom command
-{"method": "tools/call", "params": {"name": "execute_command", "arguments": {"session_id": "abc12345", "command": "!heap -s"}}}
-
-// Specialized analysis
-{"method": "tools/call", "params": {"name": "predefined_analysis", "arguments": {"session_id": "abc12345", "analysis_type": "heap"}}}
+```powershell
+# Generate a fresh, hermetic dump (TestCrasher dumps itself, then exits)
+dotnet run --project DumpAnalysisService.TestCrasher -- C:\dumps\crash.dmp
 ```
+
+Service must be running at `http://localhost:7997`. All operations are job-based: `POST` returns `202 Accepted` with a `jobId`; poll `GET /api/jobs/{jobId}` until `state` is `Completed`, `Failed`, or `Cancelled`.
+
+```powershell
+# 1. Load the dump → returns { jobId, statusEndpoint, message }
+$create = Invoke-RestMethod -Method Post `
+  -Uri http://localhost:7997/api/jobs/load-dump `
+  -ContentType application/json `
+  -Body (@{ dumpFilePath = 'C:\dumps\crash.dmp' } | ConvertTo-Json)
+
+# 2. Poll until the load-dump job completes; the resulting sessionId is what every later call needs
+do {
+    Start-Sleep -Seconds 1
+    $job = Invoke-RestMethod http://localhost:7997/api/jobs/$($create.jobId)
+} until ($job.state -in 'Completed','Failed','Cancelled')
+$sessionId = $job.sessionId
+```
+
+Once you have a `sessionId`, the other three operations follow the same pattern (POST → poll the returned `jobId` → read `result` from the final job status):
+
+```powershell
+# Run !analyze -v + thread stacks + module list
+Invoke-RestMethod -Method Post -Uri http://localhost:7997/api/jobs/basic-analysis `
+  -ContentType application/json `
+  -Body (@{ sessionId = $sessionId } | ConvertTo-Json)
+
+# Execute an arbitrary CDB command
+Invoke-RestMethod -Method Post -Uri http://localhost:7997/api/jobs/execute-command `
+  -ContentType application/json `
+  -Body (@{ sessionId = $sessionId; command = '!heap -s' } | ConvertTo-Json)
+
+# Run a named predefined analysis (basic | exception | threads | heap | modules | handles | locks | memory | drivers | processes)
+Invoke-RestMethod -Method Post -Uri http://localhost:7997/api/jobs/predefined-analysis `
+  -ContentType application/json `
+  -Body (@{ sessionId = $sessionId; analysisType = 'heap' } | ConvertTo-Json)
+```
+
+`DumpAnalysisService.IntegrationTests` automates this exact flow against a `TestCrasher`-generated dump and is the recommended pattern for verifying any change end-to-end.
 
 ## PowerShell Script Usage
 
