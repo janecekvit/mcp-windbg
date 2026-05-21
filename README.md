@@ -57,7 +57,7 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 
 ## Requirements
 
-- .NET 9.0+
+- .NET 10
 - Windows SDK Debuggers (cdb.exe)
 - Access to Microsoft symbol server (for downloading symbols)
 
@@ -69,10 +69,10 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 .\Scripts\Publish.ps1
 
 # Start the MCP server
-.\publish\DumpAnalysisService.exe
+.\publish\win-x64\DumpAnalysisService.exe
 
 # Or use the command-line client
-.\publish\CommandLineClient.exe help
+.\publish\win-x64\CommandLineClient.exe help
 ```
 
 ### Development build
@@ -114,7 +114,7 @@ Invoke-RestMethod http://localhost:7997/api/jobs   # empty array []
 ```yaml
 services:
   windbg:
-    image: ghcr.io/janecekvit/mcp-windbg:v1.0.0   # pin a version, not :latest
+    image: ghcr.io/janecekvit/mcp-windbg:vX.Y.Z   # pin a real release tag, not :latest
     ports:
       - "7997:7997"
     volumes:
@@ -163,9 +163,11 @@ Use the `detect_debuggers` tool to discover available installations.
 
 ## Configuration
 
-The server supports multiple configuration methods with the following priority order:
-1. **appsettings.json** (recommended)
-2. **Default values**
+The server supports multiple configuration methods with the following priority order (highest to lowest):
+1. **Tool Parameters** — per-call overrides passed as MCP tool arguments (e.g. `load_dump` `symbol_cache`)
+2. **HTTP Headers** — per-MCP-client defaults via `.mcp.json` (`X-Symbol-Cache`, `X-Symbol-Path-Extra`, `X-Symbol-Servers`)
+3. **appsettings.json** — server-wide defaults (`Debugger:DefaultSymbolCache`, …)
+4. **Built-in defaults**
 
 ### Configuration File
 
@@ -230,6 +232,9 @@ Loads a memory dump and creates a new debugging session.
 
 **Parameters:**
 - `dump_file_path`: Path to .dmp file
+- `symbol_cache` *(optional)*: Symbol cache directory (overrides HTTP header and `appsettings.json` defaults)
+- `symbol_path_extra` *(optional)*: Semicolon-separated additional local symbol paths
+- `symbol_servers` *(optional)*: Semicolon-separated extra symbol servers (Microsoft public symbol server is always included)
 
 ### execute_command
 Executes a WinDbg/CDB command in an existing session.
@@ -269,6 +274,46 @@ Closes a debugging session and releases resources.
 **Parameters:**
 - `session_id`: ID of debugging session to close
 
+## API Reference
+
+In addition to MCP, `DumpAnalysisService` exposes the same job-based operations over a plain REST API (for PowerShell, Azure Functions, or any HTTP client) and the standard MCP `tasks/*` protocol methods.
+
+### REST endpoints
+
+All job-creating endpoints return `202 Accepted` with `{ jobId, statusEndpoint }`; poll `GET /api/jobs/{jobId}` until `state` is `Completed`, `Failed`, or `Cancelled`. Authoritative routes live in `JobsController.cs` and `DiagnosticsController.cs`.
+
+| Method | Route | Purpose |
+|---|---|---|
+| `POST` | `/api/jobs/load-dump` | Create session by loading a dump file |
+| `POST` | `/api/jobs/execute-command` | Run a WinDbg/CDB command in an existing session |
+| `POST` | `/api/jobs/basic-analysis` | Run the comprehensive basic analysis |
+| `POST` | `/api/jobs/predefined-analysis` | Run a named specialised analysis (heap, threads, …) |
+| `POST` | `/api/jobs/close-session` | Close a session and release CDB |
+| `GET`  | `/api/jobs` | List jobs (optional `?state=Running`) |
+| `GET`  | `/api/jobs/{jobId}` | Job status + progress |
+| `POST` | `/api/jobs/{jobId}/cancel` | Cancel a running job |
+| `GET`  | `/api/diagnostics/health` | Liveness probe (used by Docker `HEALTHCHECK`) |
+| `GET`  | `/api/diagnostics/detect-debuggers` | Enumerate installed CDB/WinDbg installations |
+| `GET`  | `/api/diagnostics/analyses` | List available predefined analysis types |
+
+### MCP `tasks/*` adapter
+
+The service implements `IMcpTaskStore` (`DumpAnalysisService/Tasks/JobManagerBackedTaskStore.cs`), so MCP clients can use the standard `tasks/list`, `tasks/get`, `tasks/result`, and `tasks/cancel` protocol methods instead of polling REST. One MCP task ID maps 1:1 to one REST job ID — both surfaces read from the same underlying `JobManagerService`, so streaming clients (`IProgress<ProgressNotificationValue>` notifications) and polling clients see identical state.
+
+> `IMcpTaskStore` is experimental in MCP SDK 1.3.0 (diagnostic `MCPEXP001`). The experimental surface is isolated to the adapter file.
+
+### SignalR progress hub
+
+For real-time progress (instead of polling), connect to the SignalR hub at `/hubs/progress` and subscribe to a `jobId`. `CommandLineClient` uses this path via `Shared.Client.SignalRClientService`; the same approach works from any SignalR-capable client. Minimal C# example:
+
+```csharp
+using Shared.Client;
+var signalR = new SignalRClientService(logger, "http://localhost:7997/hubs/progress");
+await signalR.ConnectAsync();
+var api = new DebuggerApiService(logger, new HttpClient(), signalR, "http://localhost:7997");
+var sessionId = await api.LoadDumpAsync(@"C:\dumps\crash.dmp"); // polls REST; SignalR delivers progress callbacks
+```
+
 ## Predefined Analyses
 
 1. **basic** - Complete basic analysis (exception context, analyze -v, thread stacks)
@@ -291,7 +336,7 @@ Closes a debugging session and releases resources.
 # Build single-file executable
 .\Scripts\Publish.ps1
 # or
-dotnet publish DumpAnalysisService\DumpAnalysisService.csproj -c Release -r win-x64 -o publish --self-contained true -p:PublishSingleFile=true
+dotnet publish DumpAnalysisService\DumpAnalysisService.csproj -c Release -r win-x64 -o publish\win-x64 --self-contained true -p:PublishSingleFile=true
 ```
 
 #### 2. Configuration Options
@@ -319,7 +364,9 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 **Important:** You must start DumpAnalysisService.exe manually before using Claude Code:
 ```powershell
 # Start the service (keep this running)
-.\publish\DumpAnalysisService.exe
+.\publish\win-x64\DumpAnalysisService.exe
+```
+
 **Method B: Project-specific Configuration (Recommended)**
 
 Create `.mcp.json` in your project root:
@@ -343,7 +390,7 @@ Create `.mcp.json` in your project root:
 Start DumpAnalysisService separately:
 ```powershell
 # In a separate terminal/PowerShell window
-cd D:\Git\mcp-windbg\publish
+cd D:\Git\mcp-windbg\publish\win-x64
 .\DumpAnalysisService.exe
 ```
 
@@ -384,7 +431,7 @@ Configure in your `.mcp.json` to set defaults for your MCP client:
 
 **3. appsettings.json (Server-Wide Defaults)**
 
-Edit `publish/appsettings.json` or `DumpAnalysisService/appsettings.json` to set defaults for all MCP clients:
+Edit `publish\win-x64\appsettings.json` or `DumpAnalysisService/appsettings.json` to set defaults for all MCP clients:
 ```json
 {
   "Debugger": {
@@ -471,7 +518,7 @@ Standalone command-line client for scripting, Azure Functions, and automation.
 # Build with Publish.ps1
 .\Scripts\Publish.ps1
 
-# Client is in publish\CommandLineClient.exe
+# Client is in publish\win-x64\CommandLineClient.exe
 ```
 
 ### Usage
@@ -479,13 +526,13 @@ Standalone command-line client for scripting, Azure Functions, and automation.
 **Start DumpAnalysisService first:**
 ```powershell
 # Terminal 1: Start the service
-.\publish\DumpAnalysisService.exe
+.\publish\win-x64\DumpAnalysisService.exe
 ```
 
 **Then use the client:**
 ```powershell
 # Terminal 2: Use the client
-cd .\publish
+cd .\publish\win-x64
 
 # Load dump
 .\CommandLineClient.exe load "C:\dumps\crash.dmp"
@@ -574,7 +621,7 @@ For standalone usage without MCP:
 ### Claude Code can't connect
 - Ensure DumpAnalysisService.exe is running
 - Verify configuration in `.mcp.json` or Claude config
-- Check http://localhost:7997/api/health in browser
+- Check http://localhost:7997/api/diagnostics/health in browser
 
 ## License
 

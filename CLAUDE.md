@@ -106,8 +106,22 @@ curl http://localhost:7997/api/diagnostics/analyses
    - Uses Shared.Client libraries to communicate with DumpAnalysisService
 
 4. **Test Projects**
-   - `DumpAnalysisService.Tests`: Service layer unit tests (45 tests)
-   - `Shared.Tests`: Shared library tests (88 tests, 16 skipped SignalR tests)
+   - `DumpAnalysisService.Tests`: Service-layer unit tests for `DumpAnalysisService` (session manager, job manager, analysis service, controllers).
+   - `Shared.Tests`: Unit tests for the `Shared` project (configuration providers, client libraries, constants). Some SignalR-dependent tests are skipped under xUnit when no host is running.
+   - `DumpAnalysisService.IntegrationTests`: Integration suite that boots `DumpAnalysisService` in-process via `WebApplicationFactory` and exercises the REST + SignalR flow against a real `TestCrasher` dump.
+   - `DumpAnalysisService.TestCrasher`: Tiny console app that deliberately faults to produce a dump file consumed by the integration tests (copied next to the test output via a `CopyTestCrasher` MSBuild target).
+
+### Docker Distribution
+
+Pre-built Windows container images are published to **`ghcr.io/janecekvit/mcp-windbg`** on every `v*.*.*` release tag (workflow: `.github/workflows/build-and-release.yml`).
+
+- **Base image:** `mcr.microsoft.com/windows/servercore:ltsc2022` (Linux containers cannot run `cdb.exe`).
+- **Debugging tools:** installed during image build via the Windows SDK web setup (`fwlink/?linkid=2237387 /features OptionId.WindowsDesktopDebuggers`).
+- **Build input:** the existing `publish/win-x64/` self-contained publish output — Docker layer simply `COPY`s the same artefacts the Release ZIP ships. No second build path.
+- **Health probe:** `HEALTHCHECK` polls `GET /api/jobs` (returns `200` with an empty array once the service is ready). The dedicated `/api/diagnostics/health` route exists but is not currently the probe target.
+- **CI gate:** Docker build/push steps only run on tag refs (`startsWith(github.ref, 'refs/tags/v')`); branch pushes skip Docker entirely.
+
+See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" for the user-facing flow.
 
 ## Critical Implementation Details
 
