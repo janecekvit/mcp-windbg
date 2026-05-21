@@ -4,7 +4,7 @@ using Shared.Models;
 namespace Shared.Client;
 
 /// <summary>
-/// Service for interacting with the BackgroundService HTTP API
+/// Service for interacting with the Dump Analysis Service HTTP API
 /// </summary>
 public interface IDebuggerApiService
 {

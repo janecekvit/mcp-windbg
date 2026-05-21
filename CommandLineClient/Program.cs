@@ -7,7 +7,7 @@ namespace CdbDebuggerClient;
 
 internal class Program
 {
-    private const string _baseUrl = Constants.Network.DefaultBackgroundServiceUrl;
+    private const string _baseUrl = Constants.Network.DefaultServiceUrl;
 
     private static async Task<int> Main(string[] args)
     {
@@ -40,7 +40,7 @@ internal class Program
 
             // Connect to SignalR hub
             await signalRClient.ConnectAsync();
-            Console.WriteLine($"Connected to BackgroundService at {_baseUrl}");
+            Console.WriteLine($"Connected to Dump Analysis Service at {_baseUrl}");
 
             // Setup debugger API service
             var apiLogger = loggerFactory.CreateLogger<DebuggerApiService>();
@@ -276,7 +276,7 @@ internal class Program
 
     private static int _PrintUsage()
     {
-        Console.WriteLine("CdbDebuggerClient - Command line client for BackgroundService HTTP API");
+        Console.WriteLine("CdbDebuggerClient - Command line client for Dump Analysis Service HTTP API");
         Console.WriteLine("Uses SignalR for real-time progress monitoring");
         Console.WriteLine();
         Console.WriteLine("Usage:");

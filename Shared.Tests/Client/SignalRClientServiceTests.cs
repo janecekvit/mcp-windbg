@@ -6,7 +6,7 @@ using Shared.Models;
 
 namespace Shared.Tests.Client;
 
-public class SignalRClientServiceTests : IAsyncDisposable
+public sealed class SignalRClientServiceTests : IAsyncDisposable
 {
     private readonly Mock<ILogger<SignalRClientService>> _mockLogger;
     private readonly string _hubUrl = "http://localhost:7997/hubs/progress";
@@ -23,7 +23,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
 
     #region Connection Tests
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task ConnectAsync_ValidUrl_EstablishesConnection()
     {
         // Arrange
@@ -39,7 +39,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         await service.DisposeAsync();
     }
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task ConnectAsync_AlreadyConnected_DoesNothing()
     {
         // Arrange
@@ -57,7 +57,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         await service.DisposeAsync();
     }
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task DisposeAsync_DisconnectsAndCleanup()
     {
         // Arrange
@@ -76,7 +76,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
 
     #region Subscription Tests
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task SubscribeToJobProgress_ValidJobId_InvokesCallbackOnProgress()
     {
         // Arrange
@@ -99,7 +99,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         Assert.True(true);
     }
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task UnsubscribeFromJobProgress_RemovesCallback()
     {
         // Arrange
@@ -126,7 +126,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         await service.DisposeAsync();
     }
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task SubscribeToJobAsync_CallsHubMethod()
     {
         // Arrange
@@ -142,7 +142,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         await service.DisposeAsync();
     }
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task UnsubscribeFromJobAsync_CallsHubMethod()
     {
         // Arrange
@@ -163,7 +163,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
 
     #region Job Completion Tests
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task WaitForJobCompletionAsync_TimesOut_ThrowsTimeoutException()
     {
         // Arrange
@@ -181,7 +181,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         await service.DisposeAsync();
     }
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task WaitForJobCompletionAsync_NotConnected_ThrowsInvalidOperationException()
     {
         // Arrange
@@ -197,7 +197,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
 
     #region Concurrent Job Tracking Tests
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task MultipleJobSubscriptions_TrackedIndependently()
     {
         // Arrange
@@ -223,7 +223,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         await service.DisposeAsync();
     }
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task SubscribeToJobProgress_SameJobTwice_ReplacesCallback()
     {
         // Arrange
@@ -250,7 +250,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
 
     #region Error Handling Tests
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task ConnectAsync_InvalidUrl_ThrowsException()
     {
         // Arrange
@@ -263,7 +263,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         await Assert.ThrowsAsync<Exception>(async () => await service.ConnectAsync());
     }
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task DisposeAsync_DisconnectedService_DoesNotThrow()
     {
         // Arrange
@@ -274,7 +274,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         Assert.True(true);
     }
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task UnsubscribeFromJobProgress_NonExistentJob_DoesNotThrow()
     {
         // Arrange
@@ -293,7 +293,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
 
     #region Integration-Like Tests (with real SignalR client)
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task FullLifecycle_ConnectSubscribeUnsubscribeDisconnect()
     {
         // Arrange
@@ -318,7 +318,7 @@ public class SignalRClientServiceTests : IAsyncDisposable
         Assert.Empty(notifications); // No notifications received in unit test
     }
 
-    [Fact(Skip = "Integration test - requires BackgroundService running on localhost:7997")]
+    [Fact(Skip = "Integration test - requires DumpAnalysisService running on localhost:7997")]
     public async Task Reconnection_AfterDispose_RequiresNewConnect()
     {
         // Arrange

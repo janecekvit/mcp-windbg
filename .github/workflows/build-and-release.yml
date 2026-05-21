@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOTNET_VERSION: '9.0.x'
+  DOTNET_VERSION: '10.0.x'
   BUILD_CONFIGURATION: 'Release'
 
 jobs:
@@ -18,6 +18,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+      packages: write
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -32,6 +33,38 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Install Windows Debugging Tools (cdb.exe)
+      shell: pwsh
+      run: |
+        $cdb = Get-ChildItem `
+          -Path "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe" `
+          -ErrorAction SilentlyContinue
+        if ($cdb) {
+          Write-Host "cdb.exe already present: $($cdb.FullName)"
+        } else {
+          Write-Host "Installing Windows Debugging Tools via choco..."
+          choco install windbg -y --no-progress
+          if ($LASTEXITCODE -ne 0) {
+            throw "choco install windbg failed with exit code $LASTEXITCODE"
+          }
+        }
+
+        $debuggersDir = "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64"
+        if (Test-Path $debuggersDir) {
+          echo $debuggersDir >> $env:GITHUB_PATH
+          Write-Host "Added $debuggersDir to PATH"
+        } else {
+          Write-Warning "Debuggers directory not found after install"
+        }
+
+    - name: Cache Microsoft Symbol Server downloads
+      uses: actions/cache@v4
+      with:
+        path: C:\Users\runneradmin\AppData\Local\CdbMcpServer\symbols
+        key: symcache-${{ runner.os }}-${{ hashFiles('DumpAnalysisService.TestCrasher/**/*.cs') }}
+        restore-keys: |
+          symcache-${{ runner.os }}-
 
     - name: Get version from tag or branch
       id: version
@@ -49,38 +82,40 @@ jobs:
         }
 
     - name: Restore dependencies
-      run: dotnet restore DumpAnalyzer.sln
+      run: dotnet restore DumpAnalyzer.slnx
 
     - name: Build solution  
-      run: dotnet build DumpAnalyzer.sln --no-restore --configuration ${{ env.BUILD_CONFIGURATION }}
+      run: dotnet build DumpAnalyzer.slnx --no-restore --configuration ${{ env.BUILD_CONFIGURATION }}
 
-    - name: Run tests
-      run: |
-        Write-Host "🧪 Running .NET tests..." -ForegroundColor Cyan
-
-        try {
-          dotnet test DumpAnalyzer.sln `
-            --no-build `
-            --configuration ${{ env.BUILD_CONFIGURATION }} `
-            --verbosity normal `
-            --logger trx `
-            --logger "console;verbosity=detailed" `
-            --results-directory TestResults `
-            --collect:"XPlat Code Coverage" `
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
-
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ All tests passed!" -ForegroundColor Green
-          } else {
-            Write-Host "❌ Some tests failed!" -ForegroundColor Red
-            exit $LASTEXITCODE
-          }
-        }
-        catch {
-          Write-Host "❌ Test execution failed: $($_.Exception.Message)" -ForegroundColor Red
-          throw
-        }
+    - name: Run unit tests
       shell: pwsh
+      run: |
+        Write-Host "Running unit tests..." -ForegroundColor Cyan
+        dotnet test DumpAnalyzer.slnx `
+          --no-build `
+          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --filter "Category!=Integration" `
+          --verbosity normal `
+          --logger trx `
+          --logger "console;verbosity=detailed" `
+          --results-directory TestResults `
+          --collect:"XPlat Code Coverage" `
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Run integration tests
+      shell: pwsh
+      run: |
+        Write-Host "Running integration tests..." -ForegroundColor Cyan
+        dotnet test DumpAnalysisService.IntegrationTests/DumpAnalysisService.IntegrationTests.csproj `
+          --no-build `
+          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --filter "Category=Integration" `
+          --verbosity normal `
+          --logger trx `
+          --logger "console;verbosity=detailed" `
+          --results-directory TestResults
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Generate test summary
       if: always()
@@ -162,6 +197,34 @@ jobs:
           -p:PublishTrimmed=false `
           -p:PublishReadyToRun=false `
           -p:Version=${{ steps.version.outputs.version }}
+
+    - name: Login to GHCR
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: pwsh
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | `
+          docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+    - name: Build Docker image
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: pwsh
+      run: |
+        $version = "${{ steps.version.outputs.version }}"
+        $image = "ghcr.io/${{ github.repository_owner }}/mcp-windbg"
+        docker build `
+          -t "${image}:v$version" `
+          -t "${image}:latest" `
+          .
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Push Docker image
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: pwsh
+      run: |
+        $version = "${{ steps.version.outputs.version }}"
+        $image = "ghcr.io/${{ github.repository_owner }}/mcp-windbg"
+        docker push "${image}:v$version"
+        docker push "${image}:latest"
 
     - name: Create portable package
       shell: pwsh
@@ -337,7 +400,7 @@ jobs:
 
         ### Requirements
         - Windows 10/11
-        - .NET 9.0 runtime (included in single-file executable)
+        - .NET 10.0 runtime (included in single-file executable)
         - Windows SDK Debuggers (cdb.exe) or WinDbg from Microsoft Store
 
         For detailed documentation, see [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md).

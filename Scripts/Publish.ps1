@@ -7,7 +7,7 @@ param(
     [string]$Runtime = "win-x64",
 
     [Parameter(Mandatory=$false)]
-    [string]$OutputDir = "..\publish"
+    [string]$OutputDir = "..\publish\win-x64"
 )
 
 Write-Host "🚀 Publishing Dump Analysis Service Projects..." -ForegroundColor Green

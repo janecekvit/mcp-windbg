@@ -10,8 +10,8 @@ public static class Constants
     /// </summary>
     public static class Network
     {
-        public const int DefaultBackgroundServicePort = 7997;
-        public const string DefaultBackgroundServiceUrl = "http://localhost:7997";
+        public const int DefaultPort = 7997;
+        public const string DefaultServiceUrl = "http://localhost:7997";
 
         public const string DefaultProgressHubUrl = "http://localhost:7997/hubs/progress";
 

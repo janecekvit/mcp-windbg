@@ -34,11 +34,11 @@ curl http://localhost:7997/api/diagnostics/analyses
 
 **Problem**: CDB dump loading and symbol resolution can take **several minutes**. MCP clients expect immediate responses and need progress updates.
 
-**Solution**: Single ASP.NET Core service with dual interfaces (MCP HTTP + REST API) and job-based async operations:
+**Solution**: Single ASP.NET Core service with dual interfaces (MCP Streamable HTTP + REST API) and job-based async operations:
 
 ```
 ┌─────────────┐
-│ Claude Code │  MCP HTTP
+│ Claude Code │  MCP Streamable HTTP
 │ (MCP Client)│
 └──────┬──────┘
        │ http://localhost:7997/mcp
@@ -106,8 +106,22 @@ curl http://localhost:7997/api/diagnostics/analyses
    - Uses Shared.Client libraries to communicate with DumpAnalysisService
 
 4. **Test Projects**
-   - `DumpAnalysisService.Tests`: Service layer unit tests (45 tests)
-   - `Shared.Tests`: Shared library tests (88 tests, 16 skipped SignalR tests)
+   - `DumpAnalysisService.Tests`: Service-layer unit tests for `DumpAnalysisService` (session manager, job manager, analysis service, controllers).
+   - `Shared.Tests`: Unit tests for the `Shared` project (configuration providers, client libraries, constants). Some SignalR-dependent tests are skipped under xUnit when no host is running.
+   - `DumpAnalysisService.IntegrationTests`: Integration suite that boots `DumpAnalysisService` in-process via `WebApplicationFactory` and exercises the REST + SignalR flow against a real `TestCrasher` dump.
+   - `DumpAnalysisService.TestCrasher`: Tiny console app that deliberately faults to produce a dump file consumed by the integration tests (copied next to the test output via a `CopyTestCrasher` MSBuild target).
+
+### Docker Distribution
+
+Pre-built Windows container images are published to **`ghcr.io/janecekvit/mcp-windbg`** on every `v*.*.*` release tag (workflow: `.github/workflows/build-and-release.yml`).
+
+- **Base image:** `mcr.microsoft.com/windows/servercore:ltsc2022` (Linux containers cannot run `cdb.exe`).
+- **Debugging tools:** installed during image build via the Windows SDK web setup (`fwlink/?linkid=2237387 /features OptionId.WindowsDesktopDebuggers`).
+- **Build input:** the existing `publish/win-x64/` self-contained publish output — Docker layer simply `COPY`s the same artefacts the Release ZIP ships. No second build path.
+- **Health probe:** `HEALTHCHECK` polls `GET /api/jobs` (returns `200` with an empty array once the service is ready). The dedicated `/api/diagnostics/health` route exists but is not currently the probe target.
+- **CI gate:** Docker build/push steps only run on tag refs (`startsWith(github.ref, 'refs/tags/v')`); branch pushes skip Docker entirely.
+
+See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" for the user-facing flow.
 
 ## Critical Implementation Details
 
@@ -284,6 +298,21 @@ All 8 tools follow the same pattern:
 2. `SignalRClientService` subscribes to `ProgressHub` for that `jobId`
 3. DumpAnalysisService sends progress via SignalR `ProgressHub.SendJobProgress()`
 4. Client receives progress callbacks and waits for completion
+
+### MCP-Native Tasks (Adapter)
+
+The MCP layer also exposes the standard `tasks/list`, `tasks/get`,
+`tasks/result`, and `tasks/cancel` protocol methods via
+`JobManagerBackedTaskStore` (`IMcpTaskStore`). One MCP TaskId
+maps 1:1 to one JobId in `JobManagerService` — the underlying
+state model is shared with the REST API. Clients can choose
+streaming (`IProgress<ProgressNotificationValue>` notifications)
+or polling (`tasks/get`); both paths read the same job state.
+
+`IMcpTaskStore` is marked experimental in SDK 1.3.0 (diagnostic
+`MCPEXP001`). The adapter pattern keeps the experimental surface
+to a single file
+(`DumpAnalysisService/Tasks/JobManagerBackedTaskStore.cs`).
 
 ### Timeout Configuration
 - Default: 10 minutes (`Constants.Jobs.DefaultMaxWaitTimeMs`)

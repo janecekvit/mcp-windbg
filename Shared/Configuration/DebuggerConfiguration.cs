@@ -1,7 +1,7 @@
 namespace Shared.Configuration;
 
 /// <summary>
-/// Configuration for CDB debugger and symbol handling in BackgroundService.
+/// Configuration for CDB debugger and symbol handling in DumpAnalysisService.
 /// These are server-side defaults that can be overridden by per-request SymbolsConfiguration.
 /// </summary>
 public class DebuggerConfiguration

@@ -3,14 +3,13 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
-using Shared;
 using Shared.Configuration;
 using Shared.Models;
 
 namespace Shared.Client;
 
 /// <summary>
-/// Service for interacting with the BackgroundService HTTP API
+/// Service for interacting with the Dump Analysis Service HTTP API
 /// Simplified implementation using MCP SDK progress reporting
 /// </summary>
 public class DebuggerApiService : IDebuggerApiService
@@ -30,7 +29,7 @@ public class DebuggerApiService : IDebuggerApiService
         ILogger<DebuggerApiService> logger,
         HttpClient httpClient,
         ISignalRClientService signalRClient,
-        string baseUrl = Constants.Network.DefaultBackgroundServiceUrl,
+        string baseUrl = Constants.Network.DefaultServiceUrl,
         SymbolsConfiguration? symbols = null)
     {
         _logger = logger;
@@ -306,7 +305,7 @@ public class DebuggerApiService : IDebuggerApiService
             progress?.Report(new ProgressNotificationValue
             {
                 Progress = (float)notification.Progress,
-                Total = 100.0f, // BackgroundService reports 0-100
+                Total = 100.0f, // Dump Analysis Service reports 0-100
                 Message = notification.Message
             });
         });
