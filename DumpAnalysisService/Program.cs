@@ -96,14 +96,24 @@ public partial class Program
             // Map SignalR hub
             app.MapHub<Hubs.ProgressHub>("/hubs/progress");
 
-            // Start the service
-            var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : Constants.Network.DefaultPort;
-            app.Urls.Add($"http://localhost:{port}");
+            // Start the service.
+            // Docker/Azure set ASPNETCORE_URLS (e.g. http://+:7997) and WebApplication
+            // binds from it natively. Programmatic app.Urls.Add OVERRIDES ASPNETCORE_URLS,
+            // so only add an explicit loopback URL for local runs where the env var is
+            // absent. To bind elsewhere (different port or interface), set ASPNETCORE_URLS.
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+                app.Urls.Add($"http://localhost:{Constants.Network.DefaultPort}");
 
-            logger.LogInformation("Dump Analysis Service listening on port {Port}", port);
-            logger.LogInformation("MCP HTTP endpoint available at http://localhost:{Port}/mcp", port);
-            logger.LogInformation("REST API available at http://localhost:{Port}/api", port);
-            logger.LogInformation("SignalR hub available at http://localhost:{Port}/hubs/progress", port);
+            app.Lifetime.ApplicationStarted.Register(() =>
+            {
+                foreach (var boundUrl in app.Urls)
+                {
+                    logger.LogInformation("Dump Analysis Service listening on {Url}", boundUrl);
+                    logger.LogInformation("MCP HTTP endpoint available at {Url}/mcp", boundUrl);
+                    logger.LogInformation("REST API available at {Url}/api", boundUrl);
+                    logger.LogInformation("SignalR hub available at {Url}/hubs/progress", boundUrl);
+                }
+            });
 
             await app.RunAsync();
             return 0;

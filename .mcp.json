@@ -8,7 +8,7 @@
       "type": "http",
       "url": "http://localhost:7997/mcp",
       "headers": {
-        "X-Symbol-Cache": "D:\\Symbols",
+        "X-Symbol-Cache": "C:\\symbols",
         "X-Symbol-Path-Extra": "",
         "X-Symbol-Servers": ""
       }

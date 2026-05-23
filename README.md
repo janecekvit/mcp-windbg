@@ -98,16 +98,28 @@ Pre-built Windows container images are published to GitHub Container Registry on
 docker run -d --name windbg `
   -p 7997:7997 `
   -v C:\dumps:C:\dumps:ro `
-  -v cdb-symbols:C:\symcache `
-  -e Debugger__DefaultSymbolCache=C:\symcache `
+  -v cdb-symbols:C:\symbols `
   ghcr.io/janecekvit/mcp-windbg:latest
 ```
+
+No `-e Debugger__DefaultSymbolCache` is needed — the image already defaults the cache to `C:\symbols`, so you only mount a volume there. To override the location, see [Environment variables](#environment-variables).
 
 Then call the REST API:
 
 ```powershell
 Invoke-RestMethod http://localhost:7997/api/jobs   # empty array []
 ```
+
+### Connecting an MCP client / AI from outside the container
+
+The service binds to all interfaces (`ASPNETCORE_URLS=http://+:7997`, baked into
+the image), so the published port is reachable from the host or another machine.
+Point your MCP client at:
+
+- **Local host:** `http://localhost:7997/mcp`
+- **Remote / Azure:** `http://<public-host-or-ip>:7997/mcp`
+
+REST API and SignalR live under the same host at `/api` and `/hubs/progress`.
 
 ### docker-compose example
 
@@ -119,9 +131,9 @@ services:
       - "7997:7997"
     volumes:
       - C:\dumps:C:\dumps:ro
-      - cdb-symbols:C:\symcache
+      - cdb-symbols:C:\symbols
     environment:
-      Debugger__DefaultSymbolCache: C:\symcache
+      Debugger__DefaultSymbolCache: C:\symbols
       Debugger__DefaultSymbolPathExtra: ""
       Debugger__DefaultSymbolServers: ""
     restart: unless-stopped
@@ -136,7 +148,7 @@ ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so t
 
 | Env var | Maps to | Purpose |
 |---|---|---|
-| `Debugger__DefaultSymbolCache` | `Debugger:DefaultSymbolCache` | Local symbol cache directory inside the container (default `%LOCALAPPDATA%\CdbMcpServer\symbols` — override to a mounted volume so symbols persist across container restarts) |
+| `Debugger__DefaultSymbolCache` | `Debugger:DefaultSymbolCache` | Local symbol cache directory inside the container (default in the container image: `C:\symbols` — mount a volume there so symbols persist across restarts; outside Docker the .exe defaults to `%LOCALAPPDATA%\DumpAnalysisService\symbols`) |
 | `Debugger__DefaultSymbolPathExtra` | `Debugger:DefaultSymbolPathExtra` | Semicolon-separated extra local symbol paths (e.g. `C:\my-pdbs;\\server\symbols`) |
 | `Debugger__DefaultSymbolServers` | `Debugger:DefaultSymbolServers` | Semicolon-separated extra symbol servers; Microsoft public symbol server is always included |
 
@@ -150,6 +162,32 @@ Always pin to `:vX.Y.Z` in production / scripted use. `:latest` is convenient lo
 - **First `load_dump` against a new symbol cache takes 10-30 minutes** while Microsoft Symbol Server downloads PDBs. Second run from the cached volume: 30-60 seconds.
 - **Dump file paths must be visible inside the container** — mount the host directory containing dumps (e.g. `-v C:\dumps:C:\dumps:ro`) and pass that *container* path in `DumpPath`, not the host path.
 - Symbol cache is intentionally **not pre-baked** into the image — symbols rotate every Patch Tuesday, so a baked cache would just rot. Mount a named volume (`cdb-symbols`) to make the cache survive container restarts.
+
+### Deploying to Azure
+
+The same image runs in Azure with configuration supplied entirely through app
+settings (which Azure exposes as environment variables) — no rebuild, no
+ENTRYPOINT edits. Pick a **Windows-container-capable** service:
+
+| Service | Fit |
+|---|---|
+| Azure Container Instances (ACI) | Cheapest; good for a single instance or one instance per customer; no load balancer or autoscaling. |
+| App Service for Containers (Windows) | Simplest managed option; built-in scale-out + load balancer (requires a Windows-container-capable plan, e.g. Premium v3). |
+| AKS (Windows node pool) | Full orchestrator: autoscaling, load balancing, health probes across replicas. |
+
+> **Azure Container Apps is NOT an option** — it does not support Windows
+> containers, and `cdb.exe` is Windows-native (no Linux build exists).
+
+**Shared symbol cache across replicas:** for the autoscaled options (App Service,
+AKS), mount an **Azure Files** SMB share on `C:\symbols` in *every* replica.
+Symbols download once and are shared behind the load balancer instead of each
+replica re-downloading them. Azure Files supports concurrent multi-mount access;
+the symsrv cache is read-mostly and uses file locking, so concurrent-write risk
+is low. Set `Debugger__DefaultSymbolCache=C:\symbols` (already the image default)
+and point the mount at it.
+
+Deployment manifests themselves live in a separate repository — this section
+documents only the image contract those manifests rely on.
 
 ## Automatic Debugger Detection
 

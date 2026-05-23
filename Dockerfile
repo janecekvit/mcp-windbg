@@ -19,9 +19,21 @@ WORKDIR /app
 COPY publish/win-x64/ ./
 
 EXPOSE 7997
+
+# Bind on all interfaces so the published port is reachable from the host,
+# another machine, or Azure. WebApplication reads ASPNETCORE_URLS natively;
+# Program.cs only falls back to a loopback URL when this is unset.
 ENV ASPNETCORE_URLS=http://+:7997
+
+# Fixed, mount-friendly symbol-cache default. Persistence is provided by the
+# mount, not the app: -v C:\hostsymbols:C:\symbols locally, or an Azure Files
+# share mounted on C:\symbols shared across autoscaled replicas. Override with
+# -e Debugger__DefaultSymbolCache=... or the per-request X-Symbol-Cache header.
+ENV Debugger__DefaultSymbolCache=C:\symbols
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 `
   CMD powershell -Command "try { Invoke-WebRequest http://localhost:7997/api/jobs -UseBasicParsing | Out-Null; exit 0 } catch { exit 1 }"
 
+# All configuration is via environment variables
+# so, image works locally and in Azure.
 ENTRYPOINT ["DumpAnalysisService.exe"]
