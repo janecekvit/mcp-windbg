@@ -34,6 +34,6 @@ ENV Debugger__DefaultSymbolCache=C:\symbols
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 `
   CMD powershell -Command "try { Invoke-WebRequest http://localhost:7997/api/jobs -UseBasicParsing | Out-Null; exit 0 } catch { exit 1 }"
 
-# All configuration is via environment variables (see ENV above) so the same
-# image works locally and in Azure without command/ENTRYPOINT edits.
+# All configuration is via environment variables
+# so, image works locally and in Azure.
 ENTRYPOINT ["DumpAnalysisService.exe"]
