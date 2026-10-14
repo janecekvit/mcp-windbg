@@ -694,4 +694,4 @@ For standalone usage without MCP:
 
 ## License
 
-MIT License - see LICENSE file for details
+[Apache-2.0](./LICENSE), copyright Vít Janeček; see [NOTICE](./NOTICE).

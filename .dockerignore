@@ -1,3 +1,5 @@
 **
 !publish/win-x64/**
 !Dockerfile
+!LICENSE
+!NOTICE

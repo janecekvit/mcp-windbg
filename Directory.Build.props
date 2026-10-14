@@ -6,6 +6,13 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup Label="Package metadata">
+    <Authors>Vít Janeček</Authors>
+    <Copyright>Copyright 2025-2026 Vít Janeček</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/janecekvit/mcp-windbg</RepositoryUrl>
+  </PropertyGroup>
+
   <!--
     Supply-chain hygiene: audit direct AND transitive packages on every restore
     and fail the build on High/Critical advisories (NU1903/NU1904), so a

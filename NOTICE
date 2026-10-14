@@ -1,0 +1,4 @@
+WinDbg MCP Server
+Copyright 2025-2026 Vít Janeček
+
+MCP server and REST API for interactive Windows memory dump analysis with CDB/WinDbg.

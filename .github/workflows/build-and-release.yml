@@ -254,7 +254,8 @@ jobs:
         
         # Copy documentation
         Copy-Item "README.md" "package/" -Force -ErrorAction Stop
-        Copy-Item "LICENSE" "package/" -Force -ErrorAction SilentlyContinue
+        Copy-Item "LICENSE" "package/" -Force -ErrorAction Stop
+        Copy-Item "NOTICE" "package/" -Force -ErrorAction Stop
         Copy-Item "CLAUDE.md" "package/" -Force -ErrorAction Stop
         
         # Copy configuration examples
@@ -305,7 +306,7 @@ jobs:
         }
         
         # Validate required files exist
-        $requiredFiles = @("DumpAnalysisService.exe", "CommandLineClient.exe", "README.md", "CLAUDE.md")
+        $requiredFiles = @("DumpAnalysisService.exe", "CommandLineClient.exe", "README.md", "CLAUDE.md", "LICENSE", "NOTICE")
         foreach ($file in $requiredFiles) {
           if (Test-Path "package/$file") {
             Write-Host "✅ Found required file: $file"

@@ -1,6 +1,9 @@
 # escape=`
 FROM mcr.microsoft.com/windows/servercore:ltsc2022
 
+LABEL org.opencontainers.image.source="https://github.com/janecekvit/mcp-windbg" `
+      org.opencontainers.image.licenses="Apache-2.0"
+
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';"]
 
 # Install Windows Debugging Tools (cdb.exe + symsrv) via Windows SDK web setup.
@@ -17,6 +20,7 @@ ENV PATH="C:\Program Files (x86)\Windows Kits\10\Debuggers\x64;C:\Windows\system
 
 WORKDIR /app
 COPY publish/win-x64/ ./
+COPY LICENSE NOTICE ./
 
 EXPOSE 7997
 
