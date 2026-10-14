@@ -94,7 +94,7 @@ package metadata) live in `Directory.Build.props`. Licence: Apache-2.0 (`LICENSE
    - Entry Point: `Program.cs` - ASP.NET Core Web API (port 7997)
    - **MCP Integration**: ModelContextProtocol.AspNetCore SDK
      - HTTP Transport: `/mcp/sse` (GET), `/mcp/messages` (POST)
-     - Tools: `DebuggerTools.cs` with 8 [McpServerTool] methods
+     - Tools: `DebuggerTools.cs` with 9 [McpServerTool] methods
    - **Services**: Session management, job tracking, CDB process orchestration
    - **Controllers**: REST API for PowerShell/Azure Functions integration
    - **SignalR Hub**: Real-time progress notifications at `/hubs/progress`
@@ -220,6 +220,17 @@ CancelSessionAsync() (SessionManagerService.cs)
   → Remove from dictionary, Dispose()
 ```
 
+### Dump Triage (Infrastructure/Minidump/, Services/DumpTriageService.cs)
+
+`MinidumpParser` reads the minidump header, stream directory and the system info,
+misc info, exception, thread list and module list streams by offset (memory ranges
+are never loaded); for kernel dumps only the `PAGEDU64`/`PAGEDUMP` header. Every
+offset and count is bounds-checked and malformed files raise `InvalidDataException`.
+`DumpTriageService.Build` is a pure mapping to `Shared.Models.DumpTriageResult`
+(plus hints) and is unit-tested with synthetic dumps from
+`DumpAnalysisService.Tests/Minidump/MinidumpBuilder.cs`. `DumpPathPolicy` enforces
+`Security:AllowedDumpDirectories` for both triage and `load_dump`.
+
 ### Error Handling Pattern
 
 **Exception-based flow** (NOT boolean returns):
@@ -294,6 +305,7 @@ POST /api/jobs/execute-command     → 202 Accepted, returns { jobId, statusEndp
 POST /api/jobs/basic-analysis      → 202 Accepted, returns { jobId, statusEndpoint }
 POST /api/jobs/predefined-analysis → 202 Accepted, returns { jobId, statusEndpoint }
 POST /api/jobs/close-session       → 202 Accepted, returns { jobId, statusEndpoint }
+POST /api/jobs/triage-dump         → 202 Accepted; job result = DumpTriageResult as JSON
 GET  /api/jobs/{jobId}             → Job status with progress
 GET  /api/jobs?state=Running       → List all jobs (with optional state filter)
 POST /api/jobs/{jobId}/cancel      → Cancel running job
@@ -301,7 +313,7 @@ POST /api/jobs/{jobId}/cancel      → Cancel running job
 
 ### MCP Tools (DebuggerTools.cs)
 
-All 8 tools follow the same pattern:
+All 9 tools follow the same pattern:
 1. Create job via `JobManagerService.CreateJob()`
 2. Start background `Task.Run()` that calls `SessionManager` with `jobId`
 3. Poll job status via `_WaitForJobCompletionAsync()` which reports progress via `IProgress<ProgressNotificationValue>`
@@ -316,6 +328,7 @@ All 8 tools follow the same pattern:
 - `list_jobs` - List all jobs with status
 - `list_analyses` - List available predefined analyses
 - `detect_debuggers` - Detect CDB/WinDbg installations
+- `triage_dump` - Read a dump's minidump streams without cdb (structured content): fault, process, modules with PDB keys, runtime, hints
 
 ### Flow:
 1. MCP client calls tool → DebuggerTools creates `jobId` immediately

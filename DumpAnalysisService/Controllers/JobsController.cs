@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DumpAnalysisService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Models;
@@ -12,15 +13,18 @@ public class JobsController : ControllerBase
     private readonly ILogger<JobsController> _logger;
     private readonly IJobManagerService _jobManager;
     private readonly ISessionManagerService _sessionManager;
+    private readonly IDumpTriageService _triage;
 
     public JobsController(
         ILogger<JobsController> logger,
         IJobManagerService jobManager,
-        ISessionManagerService sessionManager)
+        ISessionManagerService sessionManager,
+        IDumpTriageService triage)
     {
         _logger = logger;
         _jobManager = jobManager;
         _sessionManager = sessionManager;
+        _triage = triage;
     }
 
     /// <summary>
@@ -244,6 +248,35 @@ public class JobsController : ControllerBase
         });
 
         return _AcceptedJobResponse(jobId, "closing session");
+    }
+
+    /// <summary>
+    /// Creates a job that reads a dump's minidump streams without the debugger.
+    /// The job result is the triage result as JSON.
+    /// </summary>
+    [HttpPost("triage-dump")]
+    [ProducesResponseType<JobCreatedResponse>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ErrorResponse>(StatusCodes.Status400BadRequest)]
+    public IActionResult TriageDumpAsync([FromBody] TriageDumpRequest request)
+    {
+        var jobId = _jobManager.CreateJob(JobOperationType.TriageDump);
+        _logger.LogInformation("Created job {JobId} for triaging dump: {DumpFile}", jobId, request.DumpFilePath);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await _triage.TriageAsync(request.DumpFilePath);
+                await _jobManager.CompleteJobAsync(jobId, JsonSerializer.Serialize(result, JsonSerializerOptions.Web));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Job {JobId} failed", jobId);
+                await _jobManager.FailJobAsync(jobId, ex.Message);
+            }
+        });
+
+        return _AcceptedJobResponse(jobId, "dump triage");
     }
 
     /// <summary>

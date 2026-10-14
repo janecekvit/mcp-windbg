@@ -299,6 +299,28 @@ The debugger runs with the service's permissions and reads whatever dump path it
 
 ## MCP Tools
 
+### triage_dump
+Instant first look at a dump, read straight from its minidump streams: no debugger, no symbols, typically well under a second. Run it before `load_dump`, which can take minutes while symbols download.
+
+**Parameters:**
+- `dump_file_path`: Path to .dmp file
+
+**Returns** structured content (with an output schema):
+
+| Section | Content |
+|---|---|
+| `dump` | size, SHA-256 (files up to 1 GB), full-memory flag, creation time |
+| `system` | architecture, processor count, Windows version, product type |
+| `process` | image name and path, PID, bitness, start time and uptime |
+| `fault` | exception code and name, faulting thread, address, module + offset; for access violations the access type and target address. `null` for a snapshot |
+| `threads` | thread count, faulting thread |
+| `modules` | count, how many belong to Windows, and the faulting module plus every non-Windows module with version, timestamp, PDB name, GUID/age and the symbol-server key |
+| `runtime` | .NET / .NET Framework and its version, when loaded |
+| `kernel` | for kernel dumps: bug check code, name and parameters (header only) |
+| `hints` | plain-language next steps, e.g. "Null-pointer read (target 0x0) in app.exe+0x1a2b. Run basic_analysis for the faulting stack." |
+
+Subject to `Security:AllowedDumpDirectories` like `load_dump`.
+
 ### load_dump
 Loads a memory dump and creates a new debugging session.
 
@@ -361,6 +383,7 @@ All job-creating endpoints return `202 Accepted` with `{ jobId, statusEndpoint }
 | `POST` | `/api/jobs/basic-analysis` | Run the comprehensive basic analysis |
 | `POST` | `/api/jobs/predefined-analysis` | Run a named specialised analysis (heap, threads, …) |
 | `POST` | `/api/jobs/close-session` | Close a session and release CDB |
+| `POST` | `/api/jobs/triage-dump` | Read a dump's minidump streams without the debugger; the job result is the triage result as JSON |
 | `GET`  | `/api/jobs` | List jobs (optional `?state=Running`) |
 | `GET`  | `/api/jobs/{jobId}` | Job status + progress |
 | `POST` | `/api/jobs/{jobId}/cancel` | Cancel a running job |

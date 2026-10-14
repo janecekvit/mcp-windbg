@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using System.Text.Json;
 using DumpAnalysisService.Providers;
 using DumpAnalysisService.Services;
 using ModelContextProtocol;
@@ -22,19 +23,55 @@ public class DebuggerTools
     private readonly ISessionManagerService _sessionManager;
     private readonly IDiagnosticsService _diagnosticsService;
     private readonly ISymbolConfigurationProvider _symbolConfigProvider;
+    private readonly IDumpTriageService _triage;
 
     public DebuggerTools(
         ILogger<DebuggerTools> logger,
         IJobManagerService jobManager,
         ISessionManagerService sessionManager,
         IDiagnosticsService diagnosticsService,
-        ISymbolConfigurationProvider symbolConfigProvider)
+        ISymbolConfigurationProvider symbolConfigProvider,
+        IDumpTriageService triage)
     {
         _logger = logger;
         _jobManager = jobManager;
         _sessionManager = sessionManager;
         _diagnosticsService = diagnosticsService;
         _symbolConfigProvider = symbolConfigProvider;
+        _triage = triage;
+    }
+
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true)]
+    [Description("Instant first look at a dump without the debugger or symbols: dump type, OS, process, exception and faulting module, threads, non-Windows modules with their PDB keys, .NET runtime, and suggested next steps. Run it before load_dump, which can take minutes.")]
+    public async Task<DumpTriageResult> TriageDump(
+        [Description("Path to the memory dump file (.dmp)")] string dump_file_path,
+        IProgress<ProgressNotificationValue>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Tool triage_dump called with dump_file_path: {DumpFilePath}", dump_file_path);
+
+        if (string.IsNullOrWhiteSpace(dump_file_path))
+            throw new ArgumentException("Dump file path is required", nameof(dump_file_path));
+
+        var jobId = _jobManager.CreateJob(JobOperationType.TriageDump);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await _triage.TriageAsync(dump_file_path, cancellationToken);
+                await _jobManager.CompleteJobAsync(jobId, JsonSerializer.Serialize(result, JsonSerializerOptions.Web));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Job {JobId} failed", jobId);
+                await _jobManager.FailJobAsync(jobId, ex.Message);
+            }
+        }, cancellationToken);
+
+        var json = await _WaitForJobCompletionAsync(jobId, progress, cancellationToken);
+        return JsonSerializer.Deserialize<DumpTriageResult>(json, JsonSerializerOptions.Web)
+            ?? throw new InvalidOperationException("Triage returned no result");
     }
 
     [McpServerTool]

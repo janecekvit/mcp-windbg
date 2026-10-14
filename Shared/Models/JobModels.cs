@@ -42,7 +42,8 @@ public enum JobOperationType
     BasicAnalysis,
     PredefinedAnalysis,
     BatchCommands,
-    CloseSession
+    CloseSession,
+    TriageDump
 }
 
 /// <summary>

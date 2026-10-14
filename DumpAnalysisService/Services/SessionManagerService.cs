@@ -220,20 +220,15 @@ public sealed class SessionManagerService : ISessionManagerService
 
     private void _EnsureDumpPathAllowed(string dumpFilePath)
     {
-        var allowedDirectories = _securityOptions.AllowedDumpDirectories;
-        if (allowedDirectories.Count == 0)
-            return;
-
-        var fullPath = Path.GetFullPath(dumpFilePath);
-        foreach (var directory in allowedDirectories.Where(d => !string.IsNullOrWhiteSpace(d)))
+        try
         {
-            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)) + Path.DirectorySeparatorChar;
-            if (fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                return;
+            DumpPathPolicy.EnsureAllowed(dumpFilePath, _securityOptions);
         }
-
-        _logger.LogWarning("Rejected dump outside Security:AllowedDumpDirectories: {DumpFile}", dumpFilePath);
-        throw new UnauthorizedAccessException("Dump file is outside the directories allowed by Security:AllowedDumpDirectories");
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Rejected dump outside Security:AllowedDumpDirectories: {DumpFile}", dumpFilePath);
+            throw;
+        }
     }
 
     public void Dispose()
