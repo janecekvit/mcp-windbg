@@ -99,15 +99,19 @@ docker run -d --name windbg `
   -p 7997:7997 `
   -v C:\dumps:C:\dumps:ro `
   -v cdb-symbols:C:\symbols `
+  -e Security__ApiKey=<long-random-secret> `
+  -e Security__AllowedDumpDirectories__0=C:\dumps `
   ghcr.io/janecekvit/mcp-windbg:latest
 ```
+
+The container listens on all interfaces, so **always set `Security__ApiKey`** when the port is reachable from other machines; clients then send it as the `X-Api-Key` header (see [Security](#security)). Without a key the service logs a startup warning.
 
 No `-e Debugger__DefaultSymbolCache` is needed — the image already defaults the cache to `C:\symbols`, so you only mount a volume there. To override the location, see [Environment variables](#environment-variables).
 
 Then call the REST API:
 
 ```powershell
-Invoke-RestMethod http://localhost:7997/api/jobs   # empty array []
+Invoke-RestMethod http://localhost:7997/api/jobs -Headers @{ 'X-Api-Key' = '<secret>' }   # empty array []
 ```
 
 ### Connecting an MCP client / AI from outside the container
@@ -120,6 +124,15 @@ Point your MCP client at:
 - **Remote / Azure:** `http://<public-host-or-ip>:7997/mcp`
 
 REST API and SignalR live under the same host at `/api` and `/hubs/progress`.
+With `Security__ApiKey` set, add the key to the client's MCP configuration:
+
+```json
+"dump-analyzer": {
+  "type": "http",
+  "url": "http://<host>:7997/mcp",
+  "headers": { "X-Api-Key": "${DUMP_ANALYSIS_API_KEY}" }
+}
+```
 
 ### docker-compose example
 
@@ -133,6 +146,8 @@ services:
       - C:\dumps:C:\dumps:ro
       - cdb-symbols:C:\symbols
     environment:
+      Security__ApiKey: ${DUMP_ANALYSIS_API_KEY}
+      Security__AllowedDumpDirectories__0: C:\dumps
       Debugger__DefaultSymbolCache: C:\symbols
       Debugger__DefaultSymbolPathExtra: ""
       Debugger__DefaultSymbolServers: ""
@@ -151,6 +166,9 @@ ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so t
 | `Debugger__DefaultSymbolCache` | `Debugger:DefaultSymbolCache` | Local symbol cache directory inside the container (default in the container image: `C:\symbols` — mount a volume there so symbols persist across restarts; outside Docker the .exe defaults to `%LOCALAPPDATA%\DumpAnalysisService\symbols`) |
 | `Debugger__DefaultSymbolPathExtra` | `Debugger:DefaultSymbolPathExtra` | Semicolon-separated extra local symbol paths (e.g. `C:\my-pdbs;\\server\symbols`) |
 | `Debugger__DefaultSymbolServers` | `Debugger:DefaultSymbolServers` | Semicolon-separated extra symbol servers; Microsoft public symbol server is always included |
+| `Security__ApiKey` | `Security:ApiKey` | Shared secret required on REST, MCP and SignalR (see [Security](#security)) |
+| `Security__AllowedDumpDirectories__0` | `Security:AllowedDumpDirectories[0]` | Directory dumps may be loaded from (add `__1`, `__2`, … for more) |
+| `AllowedHosts` | `AllowedHosts` | Accepted `Host` headers; the image sets `*`, `appsettings.json` defaults to localhost only |
 
 ### Pin a version
 
@@ -263,6 +281,22 @@ C:\MyProject\Debug;srv*D:\SymbolCache*https://symbols.company.com;srv*D:\SymbolC
 ```
 
 
+## Security
+
+The debugger runs with the service's permissions and reads whatever dump path it is given, so the service is locked down by default. All settings live in the `Security` section of `appsettings.json` (or `Security__*` environment variables):
+
+| Setting | Default | Effect |
+|---|---|---|
+| `ApiKey` | none | When set, every REST, MCP and SignalR request needs `X-Api-Key: <key>` or `Authorization: Bearer <key>`; `GET /api/diagnostics/health` stays open for probes. **Required whenever the port is reachable from another machine.** |
+| `AllowUnsafeCommands` | `false` | `execute_command` refuses debugger meta-commands that act outside the dump: `.shell`, `.load`/`.loadby`, `.create`/`.attach`, `.writemem`/`.dump`/`.logopen`, `$<` script files, `.sympath`/`.srcpath` changes, `.server`, … Multi-line commands and `q`/`qq` are always refused (use `close_session`). cdb.exe additionally runs with `-noshell`. |
+| `AllowClientSymbolOverrides` | `true` | When `false`, `X-Symbol-*` headers and the REST `symbols` body are ignored and only the server-side `Debugger:*` defaults are used (prevents clients from pointing the debugger at arbitrary UNC shares). Client values are always validated (no quotes, control characters, or extra path elements in the cache). |
+| `AllowedDumpDirectories` | `[]` (any) | When non-empty, dumps can only be loaded from these directories. |
+| `MaxConcurrentSessions` | `10` | Upper bound on open sessions (each one is a `cdb.exe` process). |
+
+`AllowedHosts` in `appsettings.json` accepts only `localhost`, `127.0.0.1` and `[::1]`, which blocks DNS-rebinding attacks from a browser against a locally running service. The Docker image overrides it with `*` and relies on the API key instead.
+
+`CommandLineClient` reads the key from the `DUMP_ANALYSIS_API_KEY` environment variable (it is deliberately not a command-line argument, which other users on the machine can list).
+
 ## MCP Tools
 
 ### load_dump
@@ -279,7 +313,7 @@ Executes a WinDbg/CDB command in an existing session.
 
 **Parameters:**
 - `session_id`: Debugging session ID
-- `command`: Command to execute (e.g., "kb", "!analyze -v")
+- `command`: Command to execute (e.g., "kb", "!analyze -v"); one line, subject to the [command policy](#security)
 
 ### predefined_analysis
 Runs a predefined analysis.
@@ -314,7 +348,7 @@ Closes a debugging session and releases resources.
 
 ## API Reference
 
-In addition to MCP, `DumpAnalysisService` exposes the same job-based operations over a plain REST API (for PowerShell, Azure Functions, or any HTTP client) and the standard MCP `tasks/*` protocol methods.
+In addition to MCP, `DumpAnalysisService` exposes the same job-based operations over a plain REST API (for PowerShell, Azure Functions, or any HTTP client) and supports the MCP Tasks extension.
 
 ### REST endpoints
 
@@ -334,11 +368,11 @@ All job-creating endpoints return `202 Accepted` with `{ jobId, statusEndpoint }
 | `GET`  | `/api/diagnostics/detect-debuggers` | Enumerate installed CDB/WinDbg installations |
 | `GET`  | `/api/diagnostics/analyses` | List available predefined analysis types |
 
-### MCP `tasks/*` adapter
+### MCP Tasks extension
 
-The service implements `IMcpTaskStore` (`DumpAnalysisService/Tasks/JobManagerBackedTaskStore.cs`), so MCP clients can use the standard `tasks/list`, `tasks/get`, `tasks/result`, and `tasks/cancel` protocol methods instead of polling REST. One MCP task ID maps 1:1 to one REST job ID — both surfaces read from the same underlying `JobManagerService`, so streaming clients (`IProgress<ProgressNotificationValue>` notifications) and polling clients see identical state.
+The MCP server enables the Tasks extension (SEP-2663) from `ModelContextProtocol.Extensions.Tasks` with the SDK's in-memory task store. A client that declares the extension can run any tool call as a task and poll `tasks/get` (or cancel with `tasks/cancel`) instead of holding the request open; other clients keep receiving `notifications/progress` while the call runs. Every tool call still creates a job in `JobManagerService`, so the same work is visible through `GET /api/jobs`.
 
-> `IMcpTaskStore` is experimental in MCP SDK 1.3.0 (diagnostic `MCPEXP001`). The experimental surface is isolated to the adapter file.
+> MCP SDK 2.x replaced the experimental 1.x `IMcpTaskStore` API that the former `JobManagerBackedTaskStore` adapter implemented; `tasks/list` no longer exists in the protocol.
 
 ### SignalR progress hub
 
@@ -694,4 +728,4 @@ For standalone usage without MCP:
 
 ## License
 
-MIT License - see LICENSE file for details
+[Apache-2.0](./LICENSE), copyright Vít Janeček; see [NOTICE](./NOTICE).

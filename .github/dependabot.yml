@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      microsoft-dotnet:
+        patterns: ["Microsoft.*", "System.*"]
+      mcp-sdk:
+        patterns: ["ModelContextProtocol*"]
+      test-stack:
+        patterns: ["xunit*", "Xunit.*", "coverlet.*", "Moq", "RichardSzalay.MockHttp", "Microsoft.NET.Test.Sdk"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

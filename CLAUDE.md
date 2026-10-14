@@ -86,6 +86,10 @@ curl http://localhost:7997/api/diagnostics/analyses
 
 ### Projects Structure
 
+Package versions are managed centrally in `Directory.Packages.props`; shared build
+settings (TFM, nullable, NuGetAudit with High/Critical advisories as errors, Apache-2.0
+package metadata) live in `Directory.Build.props`. Licence: Apache-2.0 (`LICENSE`, `NOTICE`).
+
 1. **DumpAnalysisService** - All-in-One: MCP Server + REST API + Debugging Engine
    - Entry Point: `Program.cs` - ASP.NET Core Web API (port 7997)
    - **MCP Integration**: ModelContextProtocol.AspNetCore SDK
@@ -118,10 +122,33 @@ Pre-built Windows container images are published to **`ghcr.io/janecekvit/mcp-wi
 - **Base image:** `mcr.microsoft.com/windows/servercore:ltsc2022` (Linux containers cannot run `cdb.exe`).
 - **Debugging tools:** installed during image build via the Windows SDK web setup (`fwlink/?linkid=2237387 /features OptionId.WindowsDesktopDebuggers`).
 - **Build input:** the existing `publish/win-x64/` self-contained publish output — Docker layer simply `COPY`s the same artefacts the Release ZIP ships. No second build path.
-- **Health probe:** `HEALTHCHECK` polls `GET /api/jobs` (returns `200` with an empty array once the service is ready). The dedicated `/api/diagnostics/health` route exists but is not currently the probe target.
+- **Health probe:** `HEALTHCHECK` polls `GET /api/diagnostics/health`, the one route `ApiKeyMiddleware` leaves open, so the probe keeps working when `Security__ApiKey` is set.
+- **Exposure:** the image sets `AllowedHosts=*`; set `Security__ApiKey` whenever the port is reachable from other machines.
 - **CI gate:** Docker build/push steps only run on tag refs (`startsWith(github.ref, 'refs/tags/v')`); branch pushes skip Docker entirely.
 
 See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" for the user-facing flow.
+
+## Security Model (DumpAnalysisService/Security/)
+
+`SecurityOptions` is bound from the `Security` configuration section:
+- **`ApiKeyMiddleware`**: when `Security:ApiKey` is set, every request except
+  `GET /api/diagnostics/health` needs `X-Api-Key` or `Authorization: Bearer`
+  (SignalR may use `?access_token=` on `/hubs`). Constant-time comparison.
+- **`CdbCommandPolicy`**: applied to user commands in
+  `SessionManagerService.ExecuteCommandAsync` only (never to internal init or
+  predefined-analysis commands). Single line, no `q`/`qq`, and unless
+  `AllowUnsafeCommands` no `.shell`/`.load`/`.create`/`.writemem`/`$<`/… anywhere
+  in the line. cdb.exe also starts with `-noshell`.
+- **`SymbolInputValidator`**: client symbol values (headers or REST body) are
+  validated in `CdbSessionFactory`; `AllowClientSymbolOverrides=false` drops them.
+- **`AllowedDumpDirectories`**, **`MaxConcurrentSessions`**: enforced in
+  `SessionManagerService.CreateSessionWithDumpAsync`.
+- `AllowedHosts` defaults to localhost (DNS-rebinding protection); the Docker
+  image sets `AllowedHosts=*` and expects `Security__ApiKey`.
+
+When adding a new way to send text to cdb.exe, route user input through
+`CdbCommandPolicy` and never build a command line by string concatenation:
+`CdbProcessManager.CreateStartInfo` uses `ProcessStartInfo.ArgumentList`.
 
 ## Critical Implementation Details
 
@@ -152,12 +179,16 @@ var symbols = new SymbolsConfiguration(
 CDB commands execute asynchronously with **marker-based output parsing**:
 
 ```csharp
-// Command: !analyze -v; .echo __END_COMMAND_abc123__
-// Read stdout until marker found, timeout after 5 minutes
-// Progress reporting every 2 seconds for long commands
+// CdbProcessManager.ExecuteCommandAsync writes three stdin lines:
+//   .echo __START_COMMAND_<guid>__
+//   <command>
+//   .echo __END_COMMAND_<guid>__
+// A background pump drains stdout into a Channel; CdbOutputCollector keeps only
+// the text between the markers and strips CDB prompts. stderr is drained to the log.
+// Timeout: 15 minutes (Constants.Debugging.SymbolLoadingTimeoutMinutes)
 ```
 
-**Why markers?** CDB output is continuous and unpredictable. Markers provide reliable command completion detection.
+**Why markers?** CDB output is continuous and unpredictable. Markers provide reliable command completion detection; the START marker discards output left over from an earlier timed-out command, and separate lines keep a `*` comment or unbalanced quote in the command from swallowing the END marker.
 
 **Thread Safety**:
 - `SemaphoreSlim` (CdbSessionService.cs:20) ensures only 1 command per session at a time
@@ -174,12 +205,11 @@ CreateSessionWithDumpAsync() (SessionManagerService.cs)
     → InitializeSessionAsync() - symbol setup
       → Configure symbol options, add symbol servers
       → .reload with retry logic for symbol failures
-  → Store in _sessions dictionary
+  → Store in _sessions dictionary (limit-checked; removed + disposed if loading fails)
 
 ExecuteCommandAsync() (CdbSessionService.cs)
   → Acquire semaphore lock
-  → Write command + marker to stdin
-  → Read stdout until marker (with timeout & progress)
+  → CdbProcessManager.ExecuteCommandAsync (start/end markers, timeout)
   → Release semaphore
 
 CancelSessionAsync() (SessionManagerService.cs)
@@ -299,20 +329,16 @@ All 8 tools follow the same pattern:
 3. DumpAnalysisService sends progress via SignalR `ProgressHub.SendJobProgress()`
 4. Client receives progress callbacks and waits for completion
 
-### MCP-Native Tasks (Adapter)
+### MCP Tasks extension
 
-The MCP layer also exposes the standard `tasks/list`, `tasks/get`,
-`tasks/result`, and `tasks/cancel` protocol methods via
-`JobManagerBackedTaskStore` (`IMcpTaskStore`). One MCP TaskId
-maps 1:1 to one JobId in `JobManagerService` — the underlying
-state model is shared with the REST API. Clients can choose
-streaming (`IProgress<ProgressNotificationValue>` notifications)
-or polling (`tasks/get`); both paths read the same job state.
-
-`IMcpTaskStore` is marked experimental in SDK 1.3.0 (diagnostic
-`MCPEXP001`). The adapter pattern keeps the experimental surface
-to a single file
-(`DumpAnalysisService/Tasks/JobManagerBackedTaskStore.cs`).
+`Program.cs` enables `.WithTasks(new InMemoryMcpTaskStore())` from
+`ModelContextProtocol.Extensions.Tasks` (SEP-2663, MCP SDK 2.x). A
+task-aware client can run any tool call as a task and poll `tasks/get`;
+the SDK owns the task state, while each tool call still creates a job in
+`JobManagerService` (visible over REST). The HTTP transport runs in
+`HttpServerSessionMode.StatefulForInitializeClients`: clients on protocol
+2025-11-25 and older keep a stateful session, 2026-07-28+ clients are
+served statelessly.
 
 ### Timeout Configuration
 - Default: 10 minutes (`Constants.Jobs.DefaultMaxWaitTimeMs`)
@@ -348,7 +374,7 @@ to a single file
 3. Add description to `AnalysisService._analysisDescriptions` dictionary
 
 **Modifying CDB command execution**:
-- All CDB commands go through `CdbSessionService.ExecuteCommandInternalAsync()`
+- All CDB commands go through `CdbSessionService._ExecuteCommandInternalAsync()` → `CdbProcessManager.ExecuteCommandAsync()`
 - Never bypass the semaphore lock - prevents stdin/stdout corruption
 - Use `IProgress<string>` parameter for long-running commands
 

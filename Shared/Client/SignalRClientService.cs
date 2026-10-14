@@ -9,6 +9,7 @@ public class SignalRClientService : ISignalRClientService
 {
     private readonly ILogger<SignalRClientService> _logger;
     private readonly string _hubUrl;
+    private readonly string? _apiKey;
     private HubConnection? _connection;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JobCompletedNotification>> _jobCompletions = new();
     private readonly ConcurrentDictionary<string, Action<ProgressNotification>> _progressCallbacks = new();
@@ -17,10 +18,12 @@ public class SignalRClientService : ISignalRClientService
 
     public SignalRClientService(
         ILogger<SignalRClientService> logger,
-        string hubUrl = Constants.Network.DefaultProgressHubUrl)
+        string hubUrl = Constants.Network.DefaultProgressHubUrl,
+        string? apiKey = null)
     {
         _logger = logger;
         _hubUrl = hubUrl;
+        _apiKey = apiKey;
     }
 
     public void SubscribeToJobProgress(string jobId, Action<ProgressNotification> progressCallback)
@@ -46,7 +49,11 @@ public class SignalRClientService : ISignalRClientService
         _logger.LogInformation("Connecting to SignalR hub: {HubUrl}", _hubUrl);
 
         _connection = new HubConnectionBuilder()
-            .WithUrl(_hubUrl)
+            .WithUrl(_hubUrl, options =>
+            {
+                if (!string.IsNullOrEmpty(_apiKey))
+                    options.Headers[Constants.Network.ApiKeyHeader] = _apiKey;
+            })
             .WithAutomaticReconnect()
             .Build();
 

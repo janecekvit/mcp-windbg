@@ -2,7 +2,10 @@ using DumpAnalysisService.Factories;
 using DumpAnalysisService.Infrastructure.Detection;
 using DumpAnalysisService.Infrastructure.IO;
 using DumpAnalysisService.Providers;
+using DumpAnalysisService.Security;
 using DumpAnalysisService.Services;
+using ModelContextProtocol.AspNetCore;
+using ModelContextProtocol.Extensions.Tasks;
 using Shared;
 using Shared.Extensions;
 
@@ -19,6 +22,7 @@ public partial class Program
             // Configuration
             var debuggerConfig = builder.Configuration.GetDebuggerConfiguration();
             builder.Services.AddSingleton(debuggerConfig);
+            builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.SectionName));
 
             // Infrastructure services
             builder.Services.AddSingleton<IPathExpansionService, PathExpansionService>();
@@ -30,11 +34,6 @@ public partial class Program
             builder.Services.AddSingleton<ICdbSessionFactory, CdbSessionFactory>();
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
             builder.Services.AddSingleton<IJobManagerService, JobManagerService>();
-
-            // MCP task store backed by JobManager (experimental MCP Tasks API)
-#pragma warning disable MCPEXP001
-            builder.Services.AddSingleton<ModelContextProtocol.IMcpTaskStore, Tasks.JobManagerBackedTaskStore>();
-#pragma warning restore MCPEXP001
 
             // HTTP context accessor for reading request headers
             builder.Services.AddHttpContextAccessor();
@@ -49,10 +48,16 @@ public partial class Program
             builder.Services.AddMcpServer()
                 .WithHttpTransport(options =>
                 {
-                    options.IdleTimeout = TimeSpan.FromHours(1);
-                    options.Stateless = false; // Enable session state for progress notifications
+                    // Clients on protocol 2025-11-25 and older (initialize handshake) keep a
+                    // stateful session, as with SDK 1.x; clients on 2026-07-28+ are served
+                    // statelessly on the same endpoint (SEP-2567).
+                    options.SessionMode = HttpServerSessionMode.StatefulForInitializeClients;
                 })
-                .WithToolsFromAssembly();
+                .WithToolsFromAssembly()
+                // MCP Tasks extension (SEP-2663): a task-aware client can run any tool call
+                // as a task and poll tasks/get instead of holding the request open.
+                // Tool calls still create REST-visible jobs in JobManagerService.
+                .WithTasks(new InMemoryMcpTaskStore());
 
             // Configure controllers
             builder.Services.AddControllers();
@@ -87,6 +92,9 @@ public partial class Program
             // Enable CORS
             app.UseCors();
 
+            // Shared-secret authentication for REST, MCP and SignalR (no-op without Security:ApiKey)
+            app.UseMiddleware<ApiKeyMiddleware>();
+
             // Configure controllers
             app.MapControllers();
 
@@ -106,6 +114,8 @@ public partial class Program
 
             app.Lifetime.ApplicationStarted.Register(() =>
             {
+                _WarnIfExposedWithoutApiKey(app, logger);
+
                 foreach (var boundUrl in app.Urls)
                 {
                     logger.LogInformation("Dump Analysis Service listening on {Url}", boundUrl);
@@ -125,4 +135,25 @@ public partial class Program
         }
     }
 
+    /// <summary>
+    /// Logs a warning when the service listens on a non-loopback address without an API key:
+    /// anyone who can reach the port can then load dumps and run debugger commands.
+    /// </summary>
+    private static void _WarnIfExposedWithoutApiKey(WebApplication app, ILogger logger)
+    {
+        var security = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SecurityOptions>>().Value;
+        if (!string.IsNullOrWhiteSpace(security.ApiKey))
+            return;
+
+        foreach (var url in app.Urls)
+        {
+            if (!Uri.TryCreate(url.Replace("://+", "://0.0.0.0").Replace("://*", "://0.0.0.0"), UriKind.Absolute, out var uri)
+                || !uri.IsLoopback)
+            {
+                logger.LogWarning(
+                    "Listening on {Url} without Security:ApiKey - every client that can reach this port can use the debugger. " +
+                    "Set Security__ApiKey (and send it as X-Api-Key) when the service is reachable from other machines.", url);
+            }
+        }
+    }
 }

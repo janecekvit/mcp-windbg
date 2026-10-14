@@ -31,12 +31,17 @@ internal class Program
             // Setup logging
             using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
 
+            // API key for a service started with Security:ApiKey
+            var apiKey = Environment.GetEnvironmentVariable(Constants.Network.ApiKeyEnvironmentVariable);
+
             // Setup HTTP client
             var httpClient = new HttpClient();
+            if (!string.IsNullOrEmpty(apiKey))
+                httpClient.DefaultRequestHeaders.Add(Constants.Network.ApiKeyHeader, apiKey);
 
             // Setup SignalR client
             var signalRLogger = loggerFactory.CreateLogger<SignalRClientService>();
-            var signalRClient = new SignalRClientService(signalRLogger, Constants.Network.DefaultProgressHubUrl);
+            var signalRClient = new SignalRClientService(signalRLogger, Constants.Network.DefaultProgressHubUrl, apiKey);
 
             // Connect to SignalR hub
             await signalRClient.ConnectAsync();
@@ -289,6 +294,9 @@ internal class Program
         Console.WriteLine("                              (falls back to SYMBOL_PATH_EXTRA env var)");
         Console.WriteLine("  --symbol-servers <servers>  Symbol servers (semicolon-separated)");
         Console.WriteLine("                              (falls back to SYMBOL_SERVERS env var)");
+        Console.WriteLine();
+        Console.WriteLine("Environment:");
+        Console.WriteLine($"  {Constants.Network.ApiKeyEnvironmentVariable,-27} API key, when the service runs with Security:ApiKey");
         Console.WriteLine();
         Console.WriteLine("Commands:");
         Console.WriteLine("  load <dump-file-path>       Load a memory dump");
