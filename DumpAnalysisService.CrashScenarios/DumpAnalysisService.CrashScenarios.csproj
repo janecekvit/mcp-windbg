@@ -13,6 +13,12 @@
     <RootNamespace>DumpAnalysisService.CrashScenarios</RootNamespace>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishAot>true</PublishAot>
+    <!--
+      `dotnet publish` sets this for PublishAot, but the integration tests publish through
+      the MSBuild Publish target, which does not (NETSDK1102). Setting it here also keeps
+      the solution restore and the publish evaluation identical.
+    -->
+    <SelfContained>true</SelfContained>
     <InvariantGlobalization>true</InvariantGlobalization>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
