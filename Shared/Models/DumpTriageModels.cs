@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+
 namespace Shared.Models;
 
 /// <summary>
@@ -97,6 +100,6 @@ public record DumpKernelInfo(
     int ProcessorCount);
 
 public record TriageDumpRequest(
-    [property: System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Dump file path is required")]
-    [property: System.Text.Json.Serialization.JsonPropertyName("dumpFilePath")]
+    [Required(ErrorMessage = "Dump file path is required")]
+    [property: JsonPropertyName("dumpFilePath")]
     string DumpFilePath);
