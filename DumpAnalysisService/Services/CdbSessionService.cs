@@ -225,18 +225,9 @@ public sealed class CdbSessionService : ICdbSessionService
 
         try
         {
-            // Use unique marker to identify end of output
-            var marker = $"__END_COMMAND_{Guid.NewGuid():N}__";
-            var fullCommand = $"{command}; .echo {marker}";
-
-            // Write command using infrastructure manager
-            await _processManager.WriteCommandAsync(fullCommand);
-
-            // Read output until marker using infrastructure manager
+            // The process manager frames the command with unique start/end markers
             var timeoutMs = (int)TimeSpan.FromMinutes(Constants.Debugging.SymbolLoadingTimeoutMinutes).TotalMilliseconds;
-            var result = await _processManager.ReadUntilMarkerAsync(marker, timeoutMs, cancellationToken);
-
-            return result;
+            return await _processManager.ExecuteCommandAsync(command, timeoutMs, cancellationToken);
         }
         catch (TimeoutException ex)
         {

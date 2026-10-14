@@ -1,6 +1,8 @@
 using DumpAnalysisService.Infrastructure.Debugger;
 using DumpAnalysisService.Infrastructure.Detection;
+using DumpAnalysisService.Security;
 using DumpAnalysisService.Services;
+using Microsoft.Extensions.Options;
 using Shared.Configuration;
 
 namespace DumpAnalysisService.Factories;
@@ -18,6 +20,8 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
     private readonly IAnalysisService _analysisService;
     private readonly IPathDetectionService _pathDetectionService;
     private readonly DebuggerConfiguration _debuggerConfig;
+    private readonly SecurityOptions _securityOptions;
+    private readonly ILogger<CdbSessionFactory> _factoryLogger;
     private readonly string _cdbPath;
 
     public CdbSessionFactory(
@@ -27,6 +31,7 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
         IAnalysisService analysisService,
         IPathDetectionService pathDetectionService,
         DebuggerConfiguration debuggerConfig,
+        IOptions<SecurityOptions> securityOptions,
         ILogger<CdbSessionFactory> factoryLogger)
     {
         _sessionLogger = sessionLogger;
@@ -35,6 +40,8 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
         _analysisService = analysisService;
         _pathDetectionService = pathDetectionService;
         _debuggerConfig = debuggerConfig;
+        _securityOptions = securityOptions.Value;
+        _factoryLogger = factoryLogger;
 
         // Detect or validate CDB path during factory construction
         var path = _pathDetectionService.GetBestDebuggerPath();
@@ -52,6 +59,15 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
         string sessionId,
         SymbolsConfiguration? symbols = null)
     {
+        if (!_securityOptions.AllowClientSymbolOverrides && _HasAnyValue(symbols))
+        {
+            _factoryLogger.LogWarning("Ignoring client symbol configuration for session {SessionId} (Security:AllowClientSymbolOverrides=false)", sessionId);
+            symbols = null;
+        }
+
+        // Client values end up inside the cdb.exe symbol path argument
+        SymbolInputValidator.Validate(symbols);
+
         // Create infrastructure components for this session
         var processManager = new CdbProcessManager(sessionId, _processLogger);
 
@@ -76,4 +92,10 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
             symbolPathBuilder,
             _cdbPath);
     }
+
+    private static bool _HasAnyValue(SymbolsConfiguration? symbols) =>
+        symbols != null
+        && (!string.IsNullOrEmpty(symbols.SymbolCache)
+            || !string.IsNullOrEmpty(symbols.SymbolPathExtra)
+            || !string.IsNullOrEmpty(symbols.SymbolServers));
 }

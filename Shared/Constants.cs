@@ -15,6 +15,17 @@ public static class Constants
 
         public const string DefaultProgressHubUrl = "http://localhost:7997/hubs/progress";
 
+        /// <summary>
+        /// Header carrying the shared secret configured as Security:ApiKey on the service.
+        /// </summary>
+        public const string ApiKeyHeader = "X-Api-Key";
+
+        /// <summary>
+        /// Environment variable the command-line client reads the API key from
+        /// (kept out of command-line arguments, which other users can list).
+        /// </summary>
+        public const string ApiKeyEnvironmentVariable = "DUMP_ANALYSIS_API_KEY";
+
     }
 
     /// <summary>

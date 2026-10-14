@@ -29,6 +29,12 @@ EXPOSE 7997
 # Program.cs only falls back to a loopback URL when this is unset.
 ENV ASPNETCORE_URLS=http://+:7997
 
+# appsettings.json only accepts localhost Host headers (DNS-rebinding protection for
+# local runs). A container is reached by other host names, so accept any Host here and
+# protect the port with an API key instead: -e Security__ApiKey=<secret>, sent by
+# clients as the X-Api-Key header. Without a key the service logs a startup warning.
+ENV AllowedHosts=*
+
 # Fixed, mount-friendly symbol-cache default. Persistence is provided by the
 # mount, not the app: -v C:\hostsymbols:C:\symbols locally, or an Azure Files
 # share mounted on C:\symbols shared across autoscaled replicas. Override with
@@ -36,7 +42,7 @@ ENV ASPNETCORE_URLS=http://+:7997
 ENV Debugger__DefaultSymbolCache=C:\symbols
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 `
-  CMD powershell -Command "try { Invoke-WebRequest http://localhost:7997/api/jobs -UseBasicParsing | Out-Null; exit 0 } catch { exit 1 }"
+  CMD powershell -Command "try { Invoke-WebRequest http://localhost:7997/api/diagnostics/health -UseBasicParsing | Out-Null; exit 0 } catch { exit 1 }"
 
 # All configuration is via environment variables
 # so, image works locally and in Azure.

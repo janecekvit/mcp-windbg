@@ -1,4 +1,3 @@
-using System.Reflection;
 using DumpAnalysisService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
@@ -33,10 +32,6 @@ public class DiagnosticsController : ControllerBase
     [ProducesResponseType<object>(StatusCodes.Status200OK)]
     public IActionResult Health()
     {
-        var assembly = Assembly.GetExecutingAssembly();
-        var version = assembly.GetName().Version?.ToString() ?? "Unknown";
-        var buildDate = System.IO.File.GetLastWriteTime(AppContext.BaseDirectory);
-
         return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
     }
 

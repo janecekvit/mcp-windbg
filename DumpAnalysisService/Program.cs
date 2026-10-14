@@ -2,6 +2,7 @@ using DumpAnalysisService.Factories;
 using DumpAnalysisService.Infrastructure.Detection;
 using DumpAnalysisService.Infrastructure.IO;
 using DumpAnalysisService.Providers;
+using DumpAnalysisService.Security;
 using DumpAnalysisService.Services;
 using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Extensions.Tasks;
@@ -21,6 +22,7 @@ public partial class Program
             // Configuration
             var debuggerConfig = builder.Configuration.GetDebuggerConfiguration();
             builder.Services.AddSingleton(debuggerConfig);
+            builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.SectionName));
 
             // Infrastructure services
             builder.Services.AddSingleton<IPathExpansionService, PathExpansionService>();
@@ -90,6 +92,9 @@ public partial class Program
             // Enable CORS
             app.UseCors();
 
+            // Shared-secret authentication for REST, MCP and SignalR (no-op without Security:ApiKey)
+            app.UseMiddleware<ApiKeyMiddleware>();
+
             // Configure controllers
             app.MapControllers();
 
@@ -109,6 +114,8 @@ public partial class Program
 
             app.Lifetime.ApplicationStarted.Register(() =>
             {
+                _WarnIfExposedWithoutApiKey(app, logger);
+
                 foreach (var boundUrl in app.Urls)
                 {
                     logger.LogInformation("Dump Analysis Service listening on {Url}", boundUrl);
@@ -128,4 +135,25 @@ public partial class Program
         }
     }
 
+    /// <summary>
+    /// Logs a warning when the service listens on a non-loopback address without an API key:
+    /// anyone who can reach the port can then load dumps and run debugger commands.
+    /// </summary>
+    private static void _WarnIfExposedWithoutApiKey(WebApplication app, ILogger logger)
+    {
+        var security = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SecurityOptions>>().Value;
+        if (!string.IsNullOrWhiteSpace(security.ApiKey))
+            return;
+
+        foreach (var url in app.Urls)
+        {
+            if (!Uri.TryCreate(url.Replace("://+", "://0.0.0.0").Replace("://*", "://0.0.0.0"), UriKind.Absolute, out var uri)
+                || !uri.IsLoopback)
+            {
+                logger.LogWarning(
+                    "Listening on {Url} without Security:ApiKey - every client that can reach this port can use the debugger. " +
+                    "Set Security__ApiKey (and send it as X-Api-Key) when the service is reachable from other machines.", url);
+            }
+        }
+    }
 }

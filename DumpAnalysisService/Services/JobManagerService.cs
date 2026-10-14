@@ -28,6 +28,8 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         public string? Result { get; set; }
         public string? Error { get; set; }
 
+        public bool IsTerminal => State is JobState.Completed or JobState.Failed or JobState.Cancelled;
+
         public JobStatus ToJobStatus()
         {
             var estimatedTime = _EstimateTimeRemaining(Phase, Progress, StartedAt);
@@ -110,7 +112,10 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         if (!_jobs.TryGetValue(jobId, out var job))
             throw new ArgumentException($"Job {jobId} not found", nameof(jobId));
 
-        return job.ToJobStatus();
+        lock (job)
+        {
+            return job.ToJobStatus();
+        }
     }
 
     public async Task UpdateProgressAsync(string jobId, JobPhase phase, double progress, string? message = null)
@@ -121,21 +126,30 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
             return;
         }
 
-        // Update job state
-        if (job.State == JobState.Queued)
+        double clampedProgress;
+        lock (job)
         {
-            job.State = JobState.Running;
-            job.StartedAt = DateTime.UtcNow;
-        }
+            // Progress reports are delivered asynchronously and may arrive after the job
+            // finished; they must not move a terminal job back to a running state.
+            if (job.IsTerminal)
+                return;
 
-        job.Phase = phase;
-        job.Progress = Math.Clamp(progress, 0.0, 1.0);
-        job.Message = message;
+            if (job.State == JobState.Queued)
+            {
+                job.State = JobState.Running;
+                job.StartedAt = DateTime.UtcNow;
+            }
+
+            job.Phase = phase;
+            job.Progress = Math.Clamp(progress, 0.0, 1.0);
+            job.Message = message;
+            clampedProgress = job.Progress;
+        }
 
         _logger.LogDebug("Job {JobId} phase: {Phase}, progress: {Progress:P0} - {Message}",
             jobId, phase, progress, message ?? "(no message)");
 
-        await _SendProgressNotificationAsync(jobId, phase, job.Progress, message);
+        await _SendProgressNotificationAsync(jobId, phase, clampedProgress, message);
     }
 
     public async Task CompleteJobAsync(string jobId, string result)
@@ -146,12 +160,22 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
             return;
         }
 
-        job.State = JobState.Completed;
-        job.Progress = 1.0;
-        job.CompletedAt = DateTime.UtcNow;
-        job.Result = result;
+        TimeSpan duration;
+        lock (job)
+        {
+            if (job.IsTerminal)
+            {
+                _logger.LogInformation("Job {JobId} already {State}; completion result discarded", jobId, job.State);
+                return;
+            }
 
-        var duration = job.CompletedAt.Value - job.CreatedAt;
+            job.State = JobState.Completed;
+            job.Progress = 1.0;
+            job.CompletedAt = DateTime.UtcNow;
+            job.Result = result;
+            duration = job.CompletedAt.Value - job.CreatedAt;
+        }
+
         _logger.LogInformation("Job {JobId} completed successfully in {Duration:mm\\:ss}",
             jobId, duration);
 
@@ -166,11 +190,21 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
             return;
         }
 
-        job.State = JobState.Failed;
-        job.CompletedAt = DateTime.UtcNow;
-        job.Error = error;
+        TimeSpan duration;
+        lock (job)
+        {
+            if (job.IsTerminal)
+            {
+                _logger.LogInformation("Job {JobId} already {State}; failure discarded: {Error}", jobId, job.State, error);
+                return;
+            }
 
-        var duration = job.CompletedAt.Value - job.CreatedAt;
+            job.State = JobState.Failed;
+            job.CompletedAt = DateTime.UtcNow;
+            job.Error = error;
+            duration = job.CompletedAt.Value - job.CreatedAt;
+        }
+
         _logger.LogError("Job {JobId} failed after {Duration:mm\\:ss}: {Error}",
             jobId, duration, error);
 
@@ -185,9 +219,18 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
             return;
         }
 
-        job.State = JobState.Cancelled;
-        job.CompletedAt = DateTime.UtcNow;
-        job.Error = "Job was cancelled by user";
+        lock (job)
+        {
+            if (job.IsTerminal)
+            {
+                _logger.LogInformation("Job {JobId} already {State}; cancel ignored", jobId, job.State);
+                return;
+            }
+
+            job.State = JobState.Cancelled;
+            job.CompletedAt = DateTime.UtcNow;
+            job.Error = "Job was cancelled by user";
+        }
 
         _logger.LogInformation("Job {JobId} was cancelled", jobId);
 
@@ -196,7 +239,13 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
 
     public IEnumerable<JobStatus> GetAllJobs(JobState? filterByState = null)
     {
-        var jobs = _jobs.Values.Select(j => j.ToJobStatus());
+        var jobs = _jobs.Values.Select(j =>
+        {
+            lock (j)
+            {
+                return j.ToJobStatus();
+            }
+        });
 
         if (filterByState.HasValue)
             jobs = jobs.Where(j => j.State == filterByState.Value);
@@ -208,8 +257,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
     {
         var cutoff = DateTime.UtcNow - maxAge;
         var jobsToRemove = _jobs.Values
-            .Where(j => j.State is JobState.Completed or JobState.Failed or JobState.Cancelled)
-            .Where(j => j.CompletedAt < cutoff)
+            .Where(j => j.IsTerminal && j.CompletedAt < cutoff)
             .Select(j => j.JobId)
             .ToList();
 

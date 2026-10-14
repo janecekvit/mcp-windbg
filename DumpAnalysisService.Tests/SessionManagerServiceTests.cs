@@ -1,6 +1,8 @@
 using DumpAnalysisService.Factories;
+using DumpAnalysisService.Security;
 using DumpAnalysisService.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Shared.Models;
 
@@ -34,7 +36,8 @@ public sealed class SessionManagerServiceTests : IDisposable
         _sessionManager = new SessionManagerService(
             _mockLogger.Object,
             _mockSessionFactory.Object,
-            _mockJobManager.Object);
+            _mockJobManager.Object,
+            Options.Create(new SecurityOptions()));
     }
 
     public void Dispose()
