@@ -113,7 +113,8 @@ package metadata) live in `Directory.Build.props`. Licence: Apache-2.0 (`LICENSE
    - `DumpAnalysisService.Tests`: Service-layer unit tests for `DumpAnalysisService` (session manager, job manager, analysis service, controllers).
    - `Shared.Tests`: Unit tests for the `Shared` project (configuration providers, client libraries, constants). Some SignalR-dependent tests are skipped under xUnit when no host is running.
    - `DumpAnalysisService.IntegrationTests`: Integration suite that boots `DumpAnalysisService` in-process via `WebApplicationFactory` and exercises the REST + SignalR flow against a real `TestCrasher` dump.
-   - `DumpAnalysisService.TestCrasher`: Tiny console app that deliberately faults to produce a dump file consumed by the integration tests (copied next to the test output via a `CopyTestCrasher` MSBuild target).
+   - `DumpAnalysisService.TestCrasher`: Tiny console app that writes a snapshot dump of itself (heap, threads) for the integration tests (copied next to the test output via a `CopyTestCrasher` MSBuild target).
+   - `DumpAnalysisService.CrashScenarios`: NativeAOT program with one real crash per scenario (access violation via two call paths, divide by zero, stack overflow, custom `RaiseException` code, fail-fast, unhandled .NET exception, critical-section deadlock). NativeAOT gives native frames with our own PDB, so cdb shows our function names. It writes no dumps: `CrashDumpFixture` runs it under cdb with `sxe -c ".dump /ma ..."` for each scenario-ending event. Published next to the tests by the Windows-only `PublishCrashScenarios` target (NativeAOT cannot cross-compile); elsewhere the crash tests skip.
 
 ### Docker Distribution
 

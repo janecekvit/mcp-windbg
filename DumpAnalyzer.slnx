@@ -8,6 +8,7 @@
     <File Path="README.md" />
   </Folder>
   <Project Path="CommandLineClient/CommandLineClient.csproj" />
+  <Project Path="DumpAnalysisService.CrashScenarios/DumpAnalysisService.CrashScenarios.csproj" />
   <Project Path="DumpAnalysisService.IntegrationTests/DumpAnalysisService.IntegrationTests.csproj" />
   <Project Path="DumpAnalysisService.TestCrasher/DumpAnalysisService.TestCrasher.csproj" />
   <Project Path="DumpAnalysisService.Tests/DumpAnalysisService.Tests.csproj" />

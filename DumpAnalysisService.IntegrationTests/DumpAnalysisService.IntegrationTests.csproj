@@ -41,4 +41,15 @@
           SkipUnchangedFiles="true" />
   </Target>
 
+  <!--
+    Publish the NativeAOT crash scenarios next to the test assembly. NativeAOT cannot
+    cross-compile from another OS, so this runs on Windows only; elsewhere the crash
+    scenario tests skip. The solution restore already restored the project for win-x64.
+  -->
+  <Target Name="PublishCrashScenarios" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+    <MSBuild Projects="..\DumpAnalysisService.CrashScenarios\DumpAnalysisService.CrashScenarios.csproj"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);PublishDir=$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(OutDir)', 'CrashScenarios'))" />
+  </Target>
+
 </Project>
