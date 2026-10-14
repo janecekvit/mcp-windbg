@@ -31,7 +31,8 @@ public class CrashScenarioTests
         ["stack-overflow", "c00000fd", new[] { "RecurseWithoutLimit" }],
         ["custom-exception", "e0001234", new[] { "ReportInvalidState" }],
         ["fail-fast", "c0000409", new[] { "AbortOnCorruption" }],
-        ["managed-unhandled", "c0000409", new[] { "ParseConfiguration" }],
+        // NativeAOT raises the thrown exception as SEH e0434352; the dump is taken at the throw.
+        ["managed-unhandled", "e0434352", new[] { "ParseConfiguration" }],
     ];
 
     [SkippableTheory]

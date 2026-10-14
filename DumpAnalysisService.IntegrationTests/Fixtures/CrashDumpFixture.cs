@@ -17,11 +17,12 @@ public sealed class CrashDumpFixture : IAsyncLifetime
 {
     /// <summary>
     /// Debugger events that end a scenario: access violation, integer divide by zero,
-    /// stack overflow, break instruction (deadlock scenario), fail-fast, and the
-    /// scenario's application-defined exception code.
+    /// stack overflow, break instruction (deadlock scenario), fail-fast, the scenario's
+    /// application-defined code, and the .NET exception code (NativeAOT raises a thrown
+    /// managed exception as SEH 0xe0434352).
     /// </summary>
     private static readonly string[] _dumpOnEvents =
-        ["av", "dz", "sov", "bpe", "0xc0000409", "0xe0001234"];
+        ["av", "dz", "sov", "bpe", "0xc0000409", "0xe0001234", "0xe0434352"];
 
     private static readonly TimeSpan _scenarioTimeout = TimeSpan.FromMinutes(3);
 
@@ -78,7 +79,9 @@ public sealed class CrashDumpFixture : IAsyncLifetime
         var scriptPath = Path.Combine(_workDir, name + ".cdb.txt");
 
         // At the initial breakpoint: dump and quit on any of the scenario-ending events, then run.
-        var dumpCommand = $".dump /ma /o {dumpPath}; q";
+        // Inside a quoted sx command string cdb treats '\' as an escape character
+        // ("\r" in C:\Users\runneradmin would become a carriage return), so double it.
+        var dumpCommand = $".dump /ma /o {dumpPath.Replace(@"\", @"\\")}; q";
         var script = new StringBuilder();
         foreach (var debuggerEvent in _dumpOnEvents)
             script.AppendLine($"sxe -c \"{dumpCommand}\" -c2 \"{dumpCommand}\" {debuggerEvent}");

@@ -97,7 +97,7 @@ internal static unsafe class Scenarios
     private static void AbortOnCorruption() =>
         Environment.FailFast("CrashScenarios: fail-fast scenario");
 
-    // ---- managed-unhandled: unhandled .NET exception (NativeAOT turns it into a fail-fast)
+    // ---- managed-unhandled: unhandled .NET exception (NativeAOT raises it as SEH 0xE0434352)
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ManagedUnhandledEntry() => ParseConfiguration();
