@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Deliberately faulting program for crash-dump integration tests.
+    Published with NativeAOT so the faulting frames are native code with a PDB:
+    cdb then shows our own function names, which a JIT-compiled process cannot give.
+    It writes no dumps itself; the integration fixture runs it under cdb, which dumps
+    at the exception (see CrashDumpFixture). Publishing works on Windows only.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>CrashScenarios</AssemblyName>
+    <RootNamespace>DumpAnalysisService.CrashScenarios</RootNamespace>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>
