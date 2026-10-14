@@ -3,6 +3,8 @@ using DumpAnalysisService.Infrastructure.Detection;
 using DumpAnalysisService.Infrastructure.IO;
 using DumpAnalysisService.Providers;
 using DumpAnalysisService.Services;
+using ModelContextProtocol.AspNetCore;
+using ModelContextProtocol.Extensions.Tasks;
 using Shared;
 using Shared.Extensions;
 
@@ -31,11 +33,6 @@ public partial class Program
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
             builder.Services.AddSingleton<IJobManagerService, JobManagerService>();
 
-            // MCP task store backed by JobManager (experimental MCP Tasks API)
-#pragma warning disable MCPEXP001
-            builder.Services.AddSingleton<ModelContextProtocol.IMcpTaskStore, Tasks.JobManagerBackedTaskStore>();
-#pragma warning restore MCPEXP001
-
             // HTTP context accessor for reading request headers
             builder.Services.AddHttpContextAccessor();
 
@@ -49,10 +46,16 @@ public partial class Program
             builder.Services.AddMcpServer()
                 .WithHttpTransport(options =>
                 {
-                    options.IdleTimeout = TimeSpan.FromHours(1);
-                    options.Stateless = false; // Enable session state for progress notifications
+                    // Clients on protocol 2025-11-25 and older (initialize handshake) keep a
+                    // stateful session, as with SDK 1.x; clients on 2026-07-28+ are served
+                    // statelessly on the same endpoint (SEP-2567).
+                    options.SessionMode = HttpServerSessionMode.StatefulForInitializeClients;
                 })
-                .WithToolsFromAssembly();
+                .WithToolsFromAssembly()
+                // MCP Tasks extension (SEP-2663): a task-aware client can run any tool call
+                // as a task and poll tasks/get instead of holding the request open.
+                // Tool calls still create REST-visible jobs in JobManagerService.
+                .WithTasks(new InMemoryMcpTaskStore());
 
             // Configure controllers
             builder.Services.AddControllers();
