@@ -1,5 +1,8 @@
 # WinDbg MCP Server
 
+[![Build and Release](https://github.com/janecekvit/mcp-windbg/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/janecekvit/mcp-windbg/actions/workflows/build-and-release.yml)
+[![codecov](https://codecov.io/gh/janecekvit/mcp-windbg/graph/badge.svg)](https://codecov.io/gh/janecekvit/mcp-windbg)
+
 MCP (Model Context Protocol) server for interactive debugging of Windows memory dump files using Microsoft Command Line Debugger (cdb.exe) or WinDbg.
 
 ## Features

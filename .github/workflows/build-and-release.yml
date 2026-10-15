@@ -2,6 +2,8 @@ name: Build and Release
 
 on:
   push:
+    # main too, so Codecov has a base report to compare pull requests against
+    branches: [ main ]
     tags:
       - 'v*.*.*'
   pull_request:
@@ -19,6 +21,7 @@ jobs:
       contents: read
       checks: write
       packages: write
+      id-token: write   # Codecov upload via GitHub OIDC, no stored token
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -340,10 +343,8 @@ jobs:
       if: always()
       with:
         directory: TestResults
+        use_oidc: true
         fail_ci_if_error: false
-        verbose: true
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v7
