@@ -125,7 +125,7 @@ Pre-built Windows container images are published to **`ghcr.io/janecekvit/mcp-wi
 - **Build input:** the existing `publish/win-x64/` self-contained publish output — Docker layer simply `COPY`s the same artefacts the Release ZIP ships. No second build path.
 - **Health probe:** `HEALTHCHECK` polls `GET /api/diagnostics/health`, the one route `ApiKeyMiddleware` leaves open, so the probe keeps working when `Security__ApiKey` is set.
 - **Exposure:** the image sets `AllowedHosts=*`; set `Security__ApiKey` whenever the port is reachable from other machines.
-- **CI gate:** Docker build/push steps only run on tag refs (`startsWith(github.ref, 'refs/tags/v')`); branch pushes skip Docker entirely.
+- **CI gate:** the image is built and pushed by the separate `docker` job, on tag refs only (`startsWith(github.ref, 'refs/tags/v')`), on `windows-2022` (`windows-latest` has no running Docker engine; the ltsc2022 base matches that host). It downloads the build job's `publish/win-x64` artifact, and a Docker failure never blocks the release ZIP.
 
 See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" for the user-facing flow.
 

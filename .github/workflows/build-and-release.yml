@@ -20,7 +20,6 @@ jobs:
     permissions:
       contents: read
       checks: write
-      packages: write
       id-token: write   # Codecov upload via GitHub OIDC, no stored token
 
     outputs:
@@ -203,34 +202,6 @@ jobs:
           -p:PublishReadyToRun=false `
           -p:Version=${{ steps.version.outputs.version }}
 
-    - name: Login to GHCR
-      if: startsWith(github.ref, 'refs/tags/v')
-      shell: pwsh
-      run: |
-        echo "${{ secrets.GITHUB_TOKEN }}" | `
-          docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-    - name: Build Docker image
-      if: startsWith(github.ref, 'refs/tags/v')
-      shell: pwsh
-      run: |
-        $version = "${{ steps.version.outputs.version }}"
-        $image = "ghcr.io/${{ github.repository_owner }}/mcp-windbg"
-        docker build `
-          -t "${image}:v$version" `
-          -t "${image}:latest" `
-          .
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-    - name: Push Docker image
-      if: startsWith(github.ref, 'refs/tags/v')
-      shell: pwsh
-      run: |
-        $version = "${{ steps.version.outputs.version }}"
-        $image = "ghcr.io/${{ github.repository_owner }}/mcp-windbg"
-        docker push "${image}:v$version"
-        docker push "${image}:latest"
-
     - name: Create portable package
       shell: pwsh
       run: |
@@ -250,6 +221,8 @@ jobs:
           exit 1
         }
         Copy-Item "publish/win-x64/*.pdb" "package/" -Force -ErrorAction SilentlyContinue
+        # appsettings.json carries AllowedHosts=localhost (DNS-rebinding protection) and the Security defaults
+        Copy-Item "publish/win-x64/appsettings.json" "package/" -Force -ErrorAction Stop
         
         # Copy scripts
         if (Test-Path "Scripts/") {
@@ -311,7 +284,7 @@ jobs:
         }
         
         # Validate required files exist
-        $requiredFiles = @("DumpAnalysisService.exe", "CommandLineClient.exe", "README.md", "CLAUDE.md", "LICENSE", "NOTICE")
+        $requiredFiles = @("DumpAnalysisService.exe", "CommandLineClient.exe", "appsettings.json", "README.md", "CLAUDE.md", "LICENSE", "NOTICE")
         foreach ($file in $requiredFiles) {
           if (Test-Path "package/$file") {
             Write-Host "✅ Found required file: $file"
@@ -353,6 +326,76 @@ jobs:
         path: |
           *.zip
           package/
+
+    - name: Upload publish output for the Docker image
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/upload-artifact@v7
+      with:
+        name: publish-win-x64-${{ steps.version.outputs.version }}
+        path: publish/win-x64/
+        retention-days: 1
+
+  # The image is built on windows-2022: windows-latest has no running Docker engine, and the
+  # servercore:ltsc2022 base image matches this host build. A failure here never blocks the
+  # release ZIP, which the release job publishes from the build job alone.
+  docker:
+    needs: build
+    runs-on: windows-2022
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Download publish output
+      uses: actions/download-artifact@v4
+      with:
+        name: publish-win-x64-${{ needs.build.outputs.version }}
+        path: publish/win-x64
+
+    # The hosted Windows images can start with the Docker engine down
+    # (actions/runner-images#13729), which is what broke the v1.1.0 image build.
+    - name: Start Docker engine
+      shell: pwsh
+      run: |
+        Restart-Service docker -ErrorAction Stop
+        for ($i = 0; $i -lt 30; $i++) {
+          docker version *> $null
+          if ($LASTEXITCODE -eq 0) { break }
+          Start-Sleep -Seconds 2
+        }
+        docker version
+        if ($LASTEXITCODE -ne 0) { throw "The Docker engine did not start" }
+
+    - name: Login to GHCR
+      shell: pwsh
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | `
+          docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+    - name: Build Docker image
+      shell: pwsh
+      run: |
+        $version = "${{ needs.build.outputs.version }}"
+        $image = "ghcr.io/${{ github.repository_owner }}/mcp-windbg"
+        docker build `
+          -t "${image}:v$version" `
+          -t "${image}:latest" `
+          .
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Push Docker image
+      shell: pwsh
+      run: |
+        $version = "${{ needs.build.outputs.version }}"
+        $image = "ghcr.io/${{ github.repository_owner }}/mcp-windbg"
+        docker push "${image}:v$version"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        docker push "${image}:latest"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   release:
     needs: build
