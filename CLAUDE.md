@@ -93,7 +93,7 @@ package metadata) live in `Directory.Build.props`. Licence: Apache-2.0 (`LICENSE
 1. **DumpAnalysisService** - All-in-One: MCP Server + REST API + Debugging Engine
    - Entry Point: `Program.cs` - ASP.NET Core Web API (port 7997)
    - **MCP Integration**: ModelContextProtocol.AspNetCore SDK
-     - HTTP Transport: `/mcp/sse` (GET), `/mcp/messages` (POST)
+     - Streamable HTTP transport at `/mcp` (`app.MapMcp("/mcp")`)
      - Tools: `DebuggerTools.cs` with 11 [McpServerTool] methods
    - **Services**: Session management, job tracking, CDB process orchestration
    - **Controllers**: REST API for PowerShell/Azure Functions integration
@@ -278,23 +278,19 @@ catch (Exception) → 500 Internal Server Error
 
 ## Symbol Resolution Architecture
 
-**Symbol Path Construction** (CdbSessionService.cs:70-109):
+**Symbol Path Construction** (`Infrastructure/Debugger/SymbolPathBuilder.cs`):
 
-Symbol path is built from configuration with the following priority:
-1. **Local paths** from `SymbolPathExtra` - Direct file paths (highest priority)
-2. **Custom servers** from `SymbolServers` - Smart formatted with cache
-3. **Default Microsoft servers** - Always included (lowest priority)
-
-**Symbol Server Formatting**:
-- URLs: `srv*{cache}*{url}` → `srv*C:\symbols*https://msdl.microsoft.com/download/symbols`
-- UNC paths: Added directly → `\\server\symbols`
-- Local paths: Added directly → `C:\MySymbols`
+`cache*{cache};{extra paths};{client servers};{DefaultSymbolServers}`:
+1. **Cache directive** `cache*{cache}` - applies to every `srv*` entry
+2. **Local paths** from `SymbolPathExtra` (client) or `Debugger:DefaultSymbolPathExtra`
+3. **Client servers** from `SymbolServers` (tool parameter / `X-Symbol-Servers`): URLs become `srv*{url}`, UNC and local paths are added as is
+4. **`Debugger:DefaultSymbolServers`** - added verbatim (so written as `srv*https://...`); when unset, the built-in Microsoft/NuGet list. Setting it replaces that list.
 
 **Symbol Caching & Performance**:
 - **Cache-Aware Loading**: Uses `.reload` (NOT `.reload /f`) to leverage cached symbols
 - **First dump load**: 10-30 minutes (downloads symbols from Microsoft Symbol Server)
 - **Subsequent loads**: 30-60 seconds (uses cached symbols from configured cache directory)
-- **Default cache**: `%LOCALAPPDATA%\CdbMcpServer\symbols`
+- **Default cache**: `%LOCALAPPDATA%\DumpAnalysisService\symbols`
 - **Timeout**: 15 minutes (configurable via `Constants.Debugging.SymbolLoadingTimeoutMinutes`)
 - **Smart logging**: Detects cache hits vs downloads and logs appropriately
 

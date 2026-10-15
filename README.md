@@ -4,13 +4,17 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 
 ## Features
 
-- **Interactive debugging**: Persistent CDB sessions for each dump file
-- **Predefined analyses**: 10 types of specialized analyses (basic, exception, threads, heap, etc.)
-- **Custom commands**: Ability to execute custom WinDbg/CDB commands
-- **Session management**: Concurrent work with multiple dump files
-- **MCP HTTP protocol**: Standard MCP over HTTP for seamless integration
-- **Real-time progress**: SignalR-based progress notifications
-- **Command-line client**: Standalone client for scripting and Azure Functions
+- **Instant dump triage** (`triage_dump`): reads the minidump streams without the debugger or symbols, usually in well under a second. It returns a classified fault (null pointer, unloaded DLL, fill patterns, fail-fast code, C++ exception type and message, …), registers, threads, modules, memory, handles, a kernel bug check summary and next-step hints.
+- **Crash fingerprints** (`fingerprint_crash`, `list_crash_groups`): give the same defect the same fingerprint across machines, ASLR layouts and rebuilds, and count dumps per crash group.
+- **Interactive debugging**: a persistent CDB session for each dump file
+- **Predefined analyses**: 10 specialised analyses (basic, exception, threads, heap, etc.)
+- **Custom commands**: any WinDbg/CDB command, filtered by a [command policy](#security)
+- **Session management**: several dump files open at once
+- **MCP Streamable HTTP**, with progress notifications and the MCP Tasks extension
+- **REST API** with the same job-based operations, plus SignalR progress notifications
+- **Secure by default**: optional API key, localhost-only host filter, restricted dump directories, a limit on concurrent sessions
+- **Docker image**: Windows Server Core with the Debugging Tools preinstalled (`ghcr.io/janecekvit/mcp-windbg`)
+- **Command-line client**: a standalone client for scripting and Azure Functions
 
 ## Architecture
 
@@ -165,7 +169,8 @@ ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so t
 |---|---|---|
 | `Debugger__DefaultSymbolCache` | `Debugger:DefaultSymbolCache` | Local symbol cache directory inside the container (default in the container image: `C:\symbols` — mount a volume there so symbols persist across restarts; outside Docker the .exe defaults to `%LOCALAPPDATA%\DumpAnalysisService\symbols`) |
 | `Debugger__DefaultSymbolPathExtra` | `Debugger:DefaultSymbolPathExtra` | Semicolon-separated extra local symbol paths (e.g. `C:\my-pdbs;\\server\symbols`) |
-| `Debugger__DefaultSymbolServers` | `Debugger:DefaultSymbolServers` | Semicolon-separated extra symbol servers; Microsoft public symbol server is always included |
+| `Debugger__DefaultSymbolServers` | `Debugger:DefaultSymbolServers` | Semicolon-separated base symbol servers (`srv*https://…`). An empty value keeps the built-in Microsoft/NuGet list; a value replaces it, so keep `srv*https://msdl.microsoft.com/download/symbols` in it |
+| `Fingerprint__RegistryPath` | `Fingerprint:RegistryPath` | Crash group registry file; put it on a volume so groups survive restarts |
 | `Security__ApiKey` | `Security:ApiKey` | Shared secret required on REST, MCP and SignalR (see [Security](#security)) |
 | `Security__AllowedDumpDirectories__0` | `Security:AllowedDumpDirectories[0]` | Directory dumps may be loaded from (add `__1`, `__2`, … for more) |
 | `AllowedHosts` | `AllowedHosts` | Accepted `Host` headers; the image sets `*`, `appsettings.json` defaults to localhost only |
@@ -178,7 +183,7 @@ Always pin to `:vX.Y.Z` in production / scripted use. `:latest` is convenient lo
 
 - **First pull is ~3 GB** (Windows Server Core base + Debugging Tools + service binaries). Subsequent pulls only fetch changed layers.
 - **First `load_dump` against a new symbol cache takes 10-30 minutes** while Microsoft Symbol Server downloads PDBs. Second run from the cached volume: 30-60 seconds.
-- **Dump file paths must be visible inside the container** — mount the host directory containing dumps (e.g. `-v C:\dumps:C:\dumps:ro`) and pass that *container* path in `DumpPath`, not the host path.
+- **Dump file paths must be visible inside the container** — mount the host directory containing dumps (e.g. `-v C:\dumps:C:\dumps:ro`) and pass that *container* path as `dump_file_path` (REST: `dumpFilePath`), not the host path.
 - Symbol cache is intentionally **not pre-baked** into the image — symbols rotate every Patch Tuesday, so a baked cache would just rot. Mount a named volume (`cdb-symbols`) to make the cache survive container restarts.
 
 ### Deploying to Azure
@@ -228,54 +233,67 @@ The server supports multiple configuration methods with the following priority o
 ### Configuration File
 
 #### DumpAnalysisService Configuration
-Create `DumpAnalysisService/appsettings.json`:
+`DumpAnalysisService/appsettings.json` (next to the executable after publishing):
 ```json
 {
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information"
-    }
-  },
+  "AllowedHosts": "localhost;127.0.0.1;[::1]",
   "Debugger": {
-    "CdbPath": null,
-    "SymbolCache": null,
-    "SymbolPathExtra": "",
-    "SymbolServers": null
+    "DefaultSymbolCache": null,
+    "DefaultSymbolPathExtra": null,
+    "DefaultSymbolServers": "srv*https://msdl.microsoft.com/download/symbols;srv*https://symbols.nuget.org/download/symbols;srv*https://download.microsoft.com/download/symbols"
+  },
+  "Security": {
+    "ApiKey": null,
+    "AllowUnsafeCommands": false,
+    "AllowClientSymbolOverrides": true,
+    "AllowedDumpDirectories": [],
+    "MaxConcurrentSessions": 10
+  },
+  "Fingerprint": {
+    "RegistryPath": null,
+    "RulesPath": null,
+    "FrameCount": null
   }
 }
 ```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Debugger:DefaultSymbolCache` | `%LOCALAPPDATA%\DumpAnalysisService\symbols` | Symbol cache directory |
+| `Debugger:DefaultSymbolPathExtra` | none | Semicolon-separated local symbol paths, searched first |
+| `Debugger:DefaultSymbolServers` | Microsoft, NuGet and Microsoft download symbol servers | The base server list, appended after any client servers. **Setting it replaces the built-in list**, so keep `srv*https://msdl.microsoft.com/download/symbols` in it. Entries are used verbatim, so write URLs as `srv*https://…` |
+
+The cdb.exe path is not configured: the service [detects it](#automatic-debugger-detection). For the `Security` section see [Security](#security); for `Fingerprint`, see [list_crash_groups](#list_crash_groups).
 
 #### Symbol Configuration Examples
 
-**Example 1: Company with internal symbol server**
+The symbol path is built in this order: the cache, local paths (`DefaultSymbolPathExtra`, or the client's `symbol_path_extra`), the client's symbol servers (tool parameter or `X-Symbol-Servers` header), then `DefaultSymbolServers`. In client values, a URL becomes `srv*<url>`; a UNC or local path is added as is.
+
+**Example 1: Company with an internal symbol server, for all clients**
 ```json
 {
   "Debugger": {
-    "SymbolCache": "D:\\SymbolCache",
-    "SymbolPathExtra": "C:\\MyProject\\Debug",
-    "SymbolServers": "https://symbols.company.com"
+    "DefaultSymbolCache": "D:\\SymbolCache",
+    "DefaultSymbolPathExtra": "C:\\MyProject\\Debug",
+    "DefaultSymbolServers": "srv*https://symbols.company.com;srv*https://msdl.microsoft.com/download/symbols"
   }
 }
 ```
-Results in symbol path:
+This gives the symbol path:
 ```
-C:\MyProject\Debug;srv*D:\SymbolCache*https://symbols.company.com;srv*D:\SymbolCache*https://msdl.microsoft.com/download/symbols
+cache*D:\SymbolCache;C:\MyProject\Debug;srv*https://symbols.company.com;srv*https://msdl.microsoft.com/download/symbols
 ```
 
-**Example 2: Mixed local and network symbols**
+**Example 2: Extra servers for one MCP client only** (Microsoft servers stay, from the defaults)
 ```json
-{
-  "Debugger": {
-    "SymbolServers": "\\\\buildserver\\symbols;https://private-symbols.com"
-  }
-}
+"headers": { "X-Symbol-Servers": "\\\\buildserver\\symbols;https://private-symbols.com" }
 ```
 
 **Example 3: Local development only**
 ```json
 {
   "Debugger": {
-    "SymbolPathExtra": "C:\\MyPDBs;D:\\ThirdParty\\Symbols"
+    "DefaultSymbolPathExtra": "C:\\MyPDBs;D:\\ThirdParty\\Symbols"
   }
 }
 ```
@@ -476,24 +494,12 @@ dotnet publish DumpAnalysisService\DumpAnalysisService.csproj -c Release -r win-
 
 #### 2. Configuration Options
 
-**Method A: Global Configuration**
+**Method A: Global Configuration (all your projects)**
 
-Add to `%APPDATA%\Claude\claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "dump-analyzer": {
-      "type": "http",
-      "url": "http://localhost:7997/mcp",
-      "headers": {
-        "X-Symbol-Cache": "D:\\Symbols",
-        "X-Symbol-Path-Extra": "",
-        "X-Symbol-Servers": ""
-      }
-    }
-  }
-}
+```powershell
+claude mcp add --transport http --scope user dump-analyzer http://localhost:7997/mcp `
+  --header "X-Symbol-Cache: D:\Symbols"
+# With Security:ApiKey set on the service, also add: --header "X-Api-Key: <key>"
 ```
 
 **Important:** You must start DumpAnalysisService.exe manually before using Claude Code:
@@ -572,28 +578,33 @@ Edit `publish\win-x64\appsettings.json` or `DumpAnalysisService/appsettings.json
   "Debugger": {
     "DefaultSymbolCache": "D:\\Symbols",
     "DefaultSymbolPathExtra": "C:\\MyProject\\Debug",
-    "DefaultSymbolServers": "https://symbols.company.com"
+    "DefaultSymbolServers": "srv*https://symbols.company.com;srv*https://msdl.microsoft.com/download/symbols"
   }
 }
 ```
 
 #### 3. Usage in Claude Code
 
-After starting DumpAnalysisService and configuring Claude Code, you can use:
+After you start DumpAnalysisService and configure Claude Code, these tools are available (see [MCP Tools](#mcp-tools)):
 
-- `detect_debuggers` - verify debugger configuration
-- `load_dump` - load dump file and create session
-- `basic_analysis` - complete crash analysis
-- `execute_command` - custom CDB commands
-- `predefined_analysis` - specialized analyses (heap, threads, modules, etc.)
+- `detect_debuggers`: check the debugger configuration
+- `triage_dump`: instant first look at a dump, with no debugger and no symbols
+- `load_dump`: load a dump file and create a session
+- `basic_analysis`: complete crash analysis
+- `execute_command`: custom CDB commands
+- `predefined_analysis`: specialised analyses (heap, threads, modules, etc.)
+- `fingerprint_crash` / `list_crash_groups`: has this crash been seen before, and how often
+- `list_jobs`, `list_analyses`, `close_session`
 
 **Example workflow:**
 1. Start DumpAnalysisService.exe
 2. Open Claude Code
 3. "Use detect_debuggers to verify configuration"
-4. "Load dump file D:\\crash.dmp with symbol_cache='D:\\Symbols'"
-5. "Perform basic_analysis on session"
-6. "Run predefined_analysis of type heap"
+4. "Triage D:\\crash.dmp"
+5. "Load dump file D:\\crash.dmp with symbol_cache='D:\\Symbols'"
+6. "Perform basic_analysis on session"
+7. "Fingerprint the crash: have we seen it before?"
+8. "Run predefined_analysis of type heap"
 
 #### 4. Advanced Configuration
 
@@ -632,7 +643,7 @@ After starting DumpAnalysisService and configuring Claude Code, you can use:
     "Debugger": {
       "DefaultSymbolCache": "D:\\SymbolCache",
       "DefaultSymbolPathExtra": "C:\\CommonSymbols",
-      "DefaultSymbolServers": "https://company-symbols.com"
+      "DefaultSymbolServers": "srv*https://company-symbols.com;srv*https://msdl.microsoft.com/download/symbols"
     }
   }
   ```
@@ -725,9 +736,16 @@ Quick PowerShell snippets for poking the REST API without an MCP client — usef
 dotnet run --project DumpAnalysisService.TestCrasher -- C:\dumps\crash.dmp
 ```
 
-Service must be running at `http://localhost:7997`. All operations are job-based: `POST` returns `202 Accepted` with a `jobId`; poll `GET /api/jobs/{jobId}` until `state` is `Completed`, `Failed`, or `Cancelled`.
+Service must be running at `http://localhost:7997`. All operations are job-based: `POST` returns `202 Accepted` with a `jobId`; poll `GET /api/jobs/{jobId}` until `state` is `Completed`, `Failed`, or `Cancelled`. With `Security:ApiKey` set, add `-Headers @{ 'X-Api-Key' = '<key>' }` to every call.
 
 ```powershell
+# 0. Optional: instant triage, no debugger needed; the job result is the triage JSON
+$triage = Invoke-RestMethod -Method Post `
+  -Uri http://localhost:7997/api/jobs/triage-dump `
+  -ContentType application/json `
+  -Body (@{ dumpFilePath = 'C:\dumps\crash.dmp' } | ConvertTo-Json)
+
+
 # 1. Load the dump → returns { jobId, statusEndpoint, message }
 $create = Invoke-RestMethod -Method Post `
   -Uri http://localhost:7997/api/jobs/load-dump `
@@ -742,7 +760,7 @@ do {
 $sessionId = $job.sessionId
 ```
 
-Once you have a `sessionId`, the other three operations follow the same pattern (POST → poll the returned `jobId` → read `result` from the final job status):
+Once you have a `sessionId`, the other operations follow the same pattern (POST → poll the returned `jobId` → read `result` from the final job status):
 
 ```powershell
 # Run !analyze -v + thread stacks + module list
@@ -759,6 +777,14 @@ Invoke-RestMethod -Method Post -Uri http://localhost:7997/api/jobs/execute-comma
 Invoke-RestMethod -Method Post -Uri http://localhost:7997/api/jobs/predefined-analysis `
   -ContentType application/json `
   -Body (@{ sessionId = $sessionId; analysisType = 'heap' } | ConvertTo-Json)
+
+# Fingerprint the crash and record it in the crash group registry
+Invoke-RestMethod -Method Post -Uri http://localhost:7997/api/jobs/fingerprint-crash `
+  -ContentType application/json `
+  -Body (@{ sessionId = $sessionId } | ConvertTo-Json)
+
+# Known crash groups, most recently seen first (answers directly, no job)
+Invoke-RestMethod http://localhost:7997/api/crash-groups
 ```
 
 `DumpAnalysisService.IntegrationTests` automates this exact flow against a `TestCrasher`-generated dump and is the recommended pattern for verifying any change end-to-end.
@@ -788,6 +814,8 @@ For standalone usage without MCP:
 - Ensure DumpAnalysisService.exe is running
 - Verify configuration in `.mcp.json` or Claude config
 - Check http://localhost:7997/api/diagnostics/health in browser
+- `401 Unauthorized`: the service has `Security:ApiKey` set, so add the `X-Api-Key` header to the client configuration
+- `400 Invalid hostname`: the client reaches the service by a name that `AllowedHosts` does not list (it defaults to localhost)
 
 ## License
 
