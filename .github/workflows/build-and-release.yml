@@ -356,6 +356,20 @@ jobs:
         name: publish-win-x64-${{ needs.build.outputs.version }}
         path: publish/win-x64
 
+    # The hosted Windows images can start with the Docker engine down
+    # (actions/runner-images#13729), which is what broke the v1.1.0 image build.
+    - name: Start Docker engine
+      shell: pwsh
+      run: |
+        Restart-Service docker -ErrorAction Stop
+        for ($i = 0; $i -lt 30; $i++) {
+          docker version *> $null
+          if ($LASTEXITCODE -eq 0) { break }
+          Start-Sleep -Seconds 2
+        }
+        docker version
+        if ($LASTEXITCODE -ne 0) { throw "The Docker engine did not start" }
+
     - name: Login to GHCR
       shell: pwsh
       run: |
