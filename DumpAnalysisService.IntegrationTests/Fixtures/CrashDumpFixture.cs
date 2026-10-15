@@ -17,12 +17,12 @@ public sealed class CrashDumpFixture : IAsyncLifetime
 {
     /// <summary>
     /// Debugger events that end a scenario: access violation, integer divide by zero,
-    /// stack overflow, break instruction (deadlock scenario), fail-fast, the scenario's
-    /// application-defined code, and the .NET exception code (NativeAOT raises a thrown
-    /// managed exception as SEH 0xe0434352).
+    /// stack overflow, break instruction (the hang scenarios), fail-fast, the scenario's
+    /// application-defined code, the .NET exception code (NativeAOT raises a thrown
+    /// managed exception as SEH 0xe0434352) and the MSVC C++ exception code.
     /// </summary>
     private static readonly string[] _dumpOnEvents =
-        ["av", "dz", "sov", "bpe", "0xc0000409", "0xe0001234", "0xe0434352"];
+        ["av", "dz", "sov", "bpe", "0xc0000409", "0xe0001234", "0xe0434352", "0xe06d7363"];
 
     private static readonly TimeSpan _scenarioTimeout = TimeSpan.FromMinutes(3);
 

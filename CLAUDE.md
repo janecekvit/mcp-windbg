@@ -114,7 +114,7 @@ package metadata) live in `Directory.Build.props`. Licence: Apache-2.0 (`LICENSE
    - `Shared.Tests`: Unit tests for the `Shared` project (configuration providers, client libraries, constants). Some SignalR-dependent tests are skipped under xUnit when no host is running.
    - `DumpAnalysisService.IntegrationTests`: Integration suite that boots `DumpAnalysisService` in-process via `WebApplicationFactory` and exercises the REST + SignalR flow against a real `TestCrasher` dump.
    - `DumpAnalysisService.TestCrasher`: Tiny console app that writes a snapshot dump of itself (heap, threads) for the integration tests (copied next to the test output via a `CopyTestCrasher` MSBuild target).
-   - `DumpAnalysisService.CrashScenarios`: NativeAOT program with one real crash per scenario (access violation via two call paths, divide by zero, stack overflow, custom `RaiseException` code, fail-fast, unhandled .NET exception, critical-section deadlock). NativeAOT gives native frames with our own PDB, so cdb shows our function names. It writes no dumps: `CrashDumpFixture` runs it under cdb with `sxe -c ".dump /ma ..."` for each scenario-ending event. Published next to the tests by the Windows-only `PublishCrashScenarios` target (NativeAOT cannot cross-compile); elsewhere the crash tests skip.
+   - `DumpAnalysisService.CrashScenarios`: NativeAOT program with one real crash per scenario (access violation via two call paths, divide by zero, stack overflow, custom `RaiseException` code, fail-fast, unhandled .NET exception, critical-section deadlock, call into an unloaded DLL, use-after-free fill pattern, C++ `std::out_of_range` from msvcp140, busy loop, handle leak). NativeAOT gives native frames with our own PDB, so cdb shows our function names. It writes no dumps: `CrashDumpFixture` runs it under cdb with `sxe -c ".dump /ma ..."` for each scenario-ending event. Published next to the tests by the Windows-only `PublishCrashScenarios` target (NativeAOT cannot cross-compile); elsewhere the crash tests skip.
 
 ### Docker Distribution
 
@@ -222,14 +222,25 @@ CancelSessionAsync() (SessionManagerService.cs)
 
 ### Dump Triage (Infrastructure/Minidump/, Services/DumpTriageService.cs)
 
-`MinidumpParser` reads the minidump header, stream directory and the system info,
-misc info, exception, thread list and module list streams by offset (memory ranges
-are never loaded); for kernel dumps only the `PAGEDU64`/`PAGEDUMP` header. Every
-offset and count is bounds-checked and malformed files raise `InvalidDataException`.
-`DumpTriageService.Build` is a pure mapping to `Shared.Models.DumpTriageResult`
-(plus hints) and is unit-tested with synthetic dumps from
-`DumpAnalysisService.Tests/Minidump/MinidumpBuilder.cs`. `DumpPathPolicy` enforces
-`Security:AllowedDumpDirectories` for both triage and `load_dump`.
+`MinidumpParser` reads the minidump header, stream directory and the metadata streams by
+offset: system info, misc info, exception (plus the faulting thread's x64/x86 registers from
+its CONTEXT), thread list, module list, unloaded modules, thread info, thread names, memory
+info (regions), handle data, process VM counters, system memory info and comments. Captured
+memory (memory list / memory64 list) is only touched by small reads in `MemoryMap`: the C++
+exception type and message (`CppExceptionDecoder`, ThrowInfo RVAs on x64, pointers on x86)
+and the delay-load DLL/function. Kernel dumps get only the `PAGEDU64`/`PAGEDUMP` header
+(bug check, DumpType, SystemTime, SystemUpTime). Every offset and count is bounds-checked
+and malformed files raise `InvalidDataException`; list streams are stepped by their own
+SizeOfEntry. Struct offsets were checked against the Windows headers (Wine/mingw-w64).
+`DumpTriageService.Build` is a pure mapping to `Shared.Models.DumpTriageResult`: a stable
+`fault.classification` (`ExceptionCodes.ClassOf` plus the access violation refinements),
+fill patterns (`FillPatterns`), fail-fast codes (`FastFailCodes`), bug check summaries
+(`BugCheckCodes.Describe`) and the hints. `WithSymbolStatus` then checks the symbol cache
+load_dump would use (`cache\name.pdb\KEY\name.pdb`, two-tier, `.pd_`, `file.ptr`).
+Unit tests build synthetic dumps with `DumpAnalysisService.Tests/Minidump/MinidumpBuilder.cs`;
+the integration tests triage real CrashScenarios dumps (including unloaded-module,
+use-after-free pattern, C++ exception, busy-loop and handle-leak scenarios).
+`DumpPathPolicy` enforces `Security:AllowedDumpDirectories` for both triage and `load_dump`.
 
 ### Error Handling Pattern
 
@@ -328,7 +339,7 @@ All 9 tools follow the same pattern:
 - `list_jobs` - List all jobs with status
 - `list_analyses` - List available predefined analyses
 - `detect_debuggers` - Detect CDB/WinDbg installations
-- `triage_dump` - Read a dump's minidump streams without cdb (structured content): fault, process, modules with PDB keys, runtime, hints
+- `triage_dump` - Read a dump's minidump streams without cdb (structured content): classified fault, registers, process traits, threads, modules (unloaded, PDB keys, cache status), memory and handles, kernel bug check summary, hints
 
 ### Flow:
 1. MCP client calls tool → DebuggerTools creates `jobId` immediately

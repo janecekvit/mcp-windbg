@@ -266,7 +266,7 @@ public class JobsController : ControllerBase
         {
             try
             {
-                var result = await _triage.TriageAsync(request.DumpFilePath);
+                var result = await _triage.TriageAsync(request.DumpFilePath, request.SymbolCache);
                 await _jobManager.CompleteJobAsync(jobId, JsonSerializer.Serialize(result, JsonSerializerOptions.Web));
             }
             catch (Exception ex)

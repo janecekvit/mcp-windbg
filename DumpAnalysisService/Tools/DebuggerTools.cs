@@ -42,7 +42,10 @@ public class DebuggerTools
     }
 
     [McpServerTool(UseStructuredContent = true, ReadOnly = true)]
-    [Description("Instant first look at a dump without the debugger or symbols: dump type, OS, process, exception and faulting module, threads, non-Windows modules with their PDB keys, .NET runtime, and suggested next steps. Run it before load_dump, which can take minutes.")]
+    [Description("Instant first look at a dump without the debugger or symbols: dump type and contents, OS, process (WoW64, debug build), " +
+        "the exception classified (null pointer, use-after-free pattern, call into an unloaded DLL, DEP, fail-fast code, C++ type and message, " +
+        "delay-load DLL), faulting registers, busiest threads and thread names, memory and handle pressure, non-Windows modules with PDB keys and " +
+        "whether their symbols are already cached, .NET runtime, kernel bug check decoding, and suggested next steps. Run it before load_dump, which can take minutes.")]
     public async Task<DumpTriageResult> TriageDump(
         [Description("Path to the memory dump file (.dmp)")] string dump_file_path,
         IProgress<ProgressNotificationValue>? progress = null,
@@ -53,13 +56,15 @@ public class DebuggerTools
         if (string.IsNullOrWhiteSpace(dump_file_path))
             throw new ArgumentException("Dump file path is required", nameof(dump_file_path));
 
+        // Same symbol cache as load_dump: X-Symbol-Cache header, else the server default.
+        var symbolCache = _symbolConfigProvider.GetConfiguration().SymbolCache;
         var jobId = _jobManager.CreateJob(JobOperationType.TriageDump);
 
         _ = Task.Run(async () =>
         {
             try
             {
-                var result = await _triage.TriageAsync(dump_file_path, cancellationToken);
+                var result = await _triage.TriageAsync(dump_file_path, symbolCache, cancellationToken);
                 await _jobManager.CompleteJobAsync(jobId, JsonSerializer.Serialize(result, JsonSerializerOptions.Web));
             }
             catch (Exception ex)
