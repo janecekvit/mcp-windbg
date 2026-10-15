@@ -1,3 +1,4 @@
+using DumpAnalysisService.Fingerprinting;
 using DumpAnalysisService.Providers;
 using DumpAnalysisService.Services;
 using DumpAnalysisService.Tools;
@@ -25,7 +26,8 @@ public class DebuggerToolsErrorHandlingTests
             (sessions ?? new Mock<ISessionManagerService>()).Object,
             (diagnostics ?? new Mock<IDiagnosticsService>()).Object,
             symbolProvider.Object,
-            new Mock<IDumpTriageService>().Object);
+            new Mock<IDumpTriageService>().Object,
+            new Mock<ICrashFingerprintService>().Object);
     }
 
     [Fact]

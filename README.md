@@ -377,6 +377,29 @@ Lists all available predefined analyses with descriptions.
 ### detect_debuggers
 Detects available CDB/WinDbg installations on the system.
 
+### fingerprint_crash
+Reduces the crash in a loaded session to a **stable fingerprint**, so dumps of the same defect group together across machines, ASLR layouts and rebuilds, and records it in the crash group registry.
+
+**Parameters:**
+- `session_id`: Debugging session ID (from `load_dump`)
+
+How it works: the exception code (and the dump's SHA-256) come from `triage_dump`, the faulting stack from `.ecxr; kn`. Frames every crash shares (exception dispatch in `ntdll`, `RaiseException`, `_CxxThrowException`, `abort`, WER, runtime throw and fail-fast helpers, thread start) are dropped; each frame is reduced to `module!function` (lowercase module, no offset, argument list, template arguments or funclet suffix; frames without symbols become `module+0xoffset`); recursion is collapsed (`f (×k)`, depth not hashed). The fingerprint is the first 12 hex characters of SHA-256 over the exception code and the first 5 meaningful frames.
+
+**Returns** structured content: `fingerprint`, `quality` (`exact`: all frames symbolised, `partial`: some by offset, `weak`: no symbols, fewer than two meaningful frames, or a hang/break dump; weak fingerprints are reported but never grouped), exception code/name/classification, `title` (`<code name> in <top frame>`), the `frames` used, and from the registry: `recorded`, `isNew`, `isNewDump` (the same dump, by SHA-256, is counted once), `occurrences`, `firstSeenUtc`.
+
+### list_crash_groups
+Lists the known crash groups, most recently seen first: fingerprint, title, exception, frames, quality, first/last seen, occurrences and the dumps counted.
+
+The registry is `%LOCALAPPDATA%\DumpAnalysisService\fingerprints.json`; the `Fingerprint` section of `appsettings.json` changes it:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Fingerprint:RegistryPath` | `%LOCALAPPDATA%\DumpAnalysisService\fingerprints.json` | Crash group registry file |
+| `Fingerprint:RulesPath` | built-in `fingerprint-rules.json` | Rules file (`frameCount`, `ignoreFrames` globs like `"ntdll!Ki*"`) that replaces the built-in one |
+| `Fingerprint:FrameCount` | 5 | Meaningful frames hashed |
+
+Hang and deadlock fingerprints (which need waiter-chain analysis rather than a faulting stack) are not supported yet.
+
 ### close_session
 Closes a debugging session and releases resources.
 
@@ -389,7 +412,7 @@ In addition to MCP, `DumpAnalysisService` exposes the same job-based operations 
 
 ### REST endpoints
 
-All job-creating endpoints return `202 Accepted` with `{ jobId, statusEndpoint }`; poll `GET /api/jobs/{jobId}` until `state` is `Completed`, `Failed`, or `Cancelled`. Authoritative routes live in `JobsController.cs` and `DiagnosticsController.cs`.
+All job-creating endpoints return `202 Accepted` with `{ jobId, statusEndpoint }`; poll `GET /api/jobs/{jobId}` until `state` is `Completed`, `Failed`, or `Cancelled`. Authoritative routes live in `JobsController.cs`, `CrashGroupsController.cs` and `DiagnosticsController.cs`.
 
 | Method | Route | Purpose |
 |---|---|---|
@@ -399,6 +422,8 @@ All job-creating endpoints return `202 Accepted` with `{ jobId, statusEndpoint }
 | `POST` | `/api/jobs/predefined-analysis` | Run a named specialised analysis (heap, threads, …) |
 | `POST` | `/api/jobs/close-session` | Close a session and release CDB |
 | `POST` | `/api/jobs/triage-dump` | Read a dump's minidump streams without the debugger; the job result is the triage result as JSON |
+| `POST` | `/api/jobs/fingerprint-crash` | Fingerprint the crash in a session (`{ sessionId }`) and record it; the job result is the fingerprint result as JSON |
+| `GET`  | `/api/crash-groups` | Known crash groups, most recently seen first |
 | `GET`  | `/api/jobs` | List jobs (optional `?state=Running`) |
 | `GET`  | `/api/jobs/{jobId}` | Job status + progress |
 | `POST` | `/api/jobs/{jobId}/cancel` | Cancel a running job |

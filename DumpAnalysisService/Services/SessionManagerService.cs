@@ -102,7 +102,14 @@ public sealed class SessionManagerService : ISessionManagerService
     public async Task<string> ExecuteCommandAsync(string jobId, string sessionId, string command, CancellationToken cancellationToken = default)
     {
         CdbCommandPolicy.Validate(command, _securityOptions.AllowUnsafeCommands);
+        return await ExecuteInternalCommandAsync(jobId, sessionId, command, cancellationToken);
+    }
 
+    public string? GetDumpFile(string sessionId) =>
+        _sessions.TryGetValue(sessionId, out var session) ? session.CurrentDumpFile : null;
+
+    public async Task<string> ExecuteInternalCommandAsync(string jobId, string sessionId, string command, CancellationToken cancellationToken = default)
+    {
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
             var error = $"Session {sessionId} not found";

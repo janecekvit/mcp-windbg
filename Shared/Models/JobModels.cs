@@ -43,7 +43,8 @@ public enum JobOperationType
     PredefinedAnalysis,
     BatchCommands,
     CloseSession,
-    TriageDump
+    TriageDump,
+    FingerprintCrash
 }
 
 /// <summary>
