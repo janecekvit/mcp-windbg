@@ -26,6 +26,8 @@ public class RequestContractValidationTests
         [new CloseSessionRequest(null!), false],
         [new TriageDumpRequest(@"C:\dumps\app.dmp"), true],
         [new TriageDumpRequest(null!), false],
+        [new FingerprintCrashRequest("abc12345"), true],
+        [new FingerprintCrashRequest(null!), false],
     ];
 
     [Theory]

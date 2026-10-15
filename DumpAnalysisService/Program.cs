@@ -1,9 +1,11 @@
 using DumpAnalysisService.Factories;
+using DumpAnalysisService.Fingerprinting;
 using DumpAnalysisService.Infrastructure.Detection;
 using DumpAnalysisService.Infrastructure.IO;
 using DumpAnalysisService.Providers;
 using DumpAnalysisService.Security;
 using DumpAnalysisService.Services;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Extensions.Tasks;
 using Shared;
@@ -35,6 +37,13 @@ public partial class Program
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
             builder.Services.AddSingleton<IJobManagerService, JobManagerService>();
             builder.Services.AddSingleton<IDumpTriageService, DumpTriageService>();
+
+            // Crash fingerprints and crash groups
+            builder.Services.Configure<FingerprintOptions>(builder.Configuration.GetSection(FingerprintOptions.SectionName));
+            builder.Services.AddSingleton(sp => FingerprintRules.Load(sp.GetRequiredService<IOptions<FingerprintOptions>>().Value));
+            builder.Services.AddSingleton<CrashFingerprinter>();
+            builder.Services.AddSingleton<ICrashGroupRegistry, CrashGroupRegistry>();
+            builder.Services.AddSingleton<ICrashFingerprintService, CrashFingerprintService>();
 
             // HTTP context accessor for reading request headers
             builder.Services.AddHttpContextAccessor();

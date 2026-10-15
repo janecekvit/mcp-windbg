@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.Json;
 using DumpAnalysisService.Providers;
+using DumpAnalysisService.Fingerprinting;
 using DumpAnalysisService.Services;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
@@ -24,6 +25,7 @@ public class DebuggerTools
     private readonly IDiagnosticsService _diagnosticsService;
     private readonly ISymbolConfigurationProvider _symbolConfigProvider;
     private readonly IDumpTriageService _triage;
+    private readonly ICrashFingerprintService _fingerprints;
 
     public DebuggerTools(
         ILogger<DebuggerTools> logger,
@@ -31,7 +33,8 @@ public class DebuggerTools
         ISessionManagerService sessionManager,
         IDiagnosticsService diagnosticsService,
         ISymbolConfigurationProvider symbolConfigProvider,
-        IDumpTriageService triage)
+        IDumpTriageService triage,
+        ICrashFingerprintService fingerprints)
     {
         _logger = logger;
         _jobManager = jobManager;
@@ -39,6 +42,7 @@ public class DebuggerTools
         _diagnosticsService = diagnosticsService;
         _symbolConfigProvider = symbolConfigProvider;
         _triage = triage;
+        _fingerprints = fingerprints;
     }
 
     [McpServerTool(UseStructuredContent = true, ReadOnly = true)]
@@ -77,6 +81,51 @@ public class DebuggerTools
         var json = await _WaitForJobCompletionAsync(jobId, progress, cancellationToken);
         return JsonSerializer.Deserialize<DumpTriageResult>(json, JsonSerializerOptions.Web)
             ?? throw new InvalidOperationException("Triage returned no result");
+    }
+
+    [McpServerTool(UseStructuredContent = true)]
+    [Description("Reduce the crash in a loaded session to a stable fingerprint (12 hex characters over the exception code and the top " +
+        "meaningful frames of the faulting stack, ignoring dispatcher, RaiseException, abort and WER frames, offsets, template arguments " +
+        "and recursion depth), so dumps of the same defect group together across machines, ASLR and rebuilds. Records it in the crash " +
+        "group registry and says whether it is new or how many dumps had it before. Quality: exact, partial, or weak (not grouped).")]
+    public async Task<CrashFingerprintResult> FingerprintCrash(
+        [Description("Debugging session ID (from load_dump)")] string session_id,
+        IProgress<ProgressNotificationValue>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Tool fingerprint_crash called with session_id: {SessionId}", session_id);
+
+        if (string.IsNullOrWhiteSpace(session_id))
+            throw new ArgumentException("Session ID is required", nameof(session_id));
+
+        var jobId = _jobManager.CreateJob(JobOperationType.FingerprintCrash);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await _fingerprints.FingerprintAsync(jobId, session_id, cancellationToken);
+                await _jobManager.CompleteJobAsync(jobId, JsonSerializer.Serialize(result, JsonSerializerOptions.Web));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Job {JobId} failed", jobId);
+                await _jobManager.FailJobAsync(jobId, ex.Message);
+            }
+        }, cancellationToken);
+
+        var json = await _WaitForJobCompletionAsync(jobId, progress, cancellationToken);
+        return JsonSerializer.Deserialize<CrashFingerprintResult>(json, JsonSerializerOptions.Web)
+            ?? throw new InvalidOperationException("Fingerprinting returned no result");
+    }
+
+    [McpServerTool(UseStructuredContent = true, ReadOnly = true)]
+    [Description("List the known crash groups (fingerprints recorded by fingerprint_crash), most recently seen first: title, " +
+        "exception, frames, quality, first and last seen, and how many distinct dumps had each.")]
+    public async Task<CrashGroupList> ListCrashGroups(CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Tool list_crash_groups called");
+        return await _fingerprints.ListGroupsAsync(cancellationToken);
     }
 
     [McpServerTool]

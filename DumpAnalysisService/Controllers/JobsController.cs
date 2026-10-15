@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DumpAnalysisService.Fingerprinting;
 using DumpAnalysisService.Services;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Models;
@@ -14,17 +15,20 @@ public class JobsController : ControllerBase
     private readonly IJobManagerService _jobManager;
     private readonly ISessionManagerService _sessionManager;
     private readonly IDumpTriageService _triage;
+    private readonly ICrashFingerprintService _fingerprints;
 
     public JobsController(
         ILogger<JobsController> logger,
         IJobManagerService jobManager,
         ISessionManagerService sessionManager,
-        IDumpTriageService triage)
+        IDumpTriageService triage,
+        ICrashFingerprintService fingerprints)
     {
         _logger = logger;
         _jobManager = jobManager;
         _sessionManager = sessionManager;
         _triage = triage;
+        _fingerprints = fingerprints;
     }
 
     /// <summary>
@@ -282,6 +286,35 @@ public class JobsController : ControllerBase
     /// <summary>
     /// Creates a standardized 202 Accepted response for job creation
     /// </summary>
+    /// <summary>
+    /// Creates a job that fingerprints the crash in a session and records it in the crash group registry.
+    /// The job result is the fingerprint result as JSON.
+    /// </summary>
+    [HttpPost("fingerprint-crash")]
+    [ProducesResponseType<JobCreatedResponse>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ErrorResponse>(StatusCodes.Status400BadRequest)]
+    public IActionResult FingerprintCrashAsync([FromBody] FingerprintCrashRequest request)
+    {
+        var jobId = _jobManager.CreateJob(JobOperationType.FingerprintCrash);
+        _logger.LogInformation("Created job {JobId} for fingerprinting the crash in session {SessionId}", jobId, request.SessionId);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await _fingerprints.FingerprintAsync(jobId, request.SessionId);
+                await _jobManager.CompleteJobAsync(jobId, JsonSerializer.Serialize(result, JsonSerializerOptions.Web));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Job {JobId} failed", jobId);
+                await _jobManager.FailJobAsync(jobId, ex.Message);
+            }
+        });
+
+        return _AcceptedJobResponse(jobId, "crash fingerprint");
+    }
+
     private AcceptedResult _AcceptedJobResponse(string jobId, string operationDescription)
     {
         var response = new JobCreatedResponse(

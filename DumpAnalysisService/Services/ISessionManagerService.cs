@@ -29,6 +29,14 @@ public interface ISessionManagerService : IDisposable
     Task<string> ExecuteCommandAsync(string jobId, string sessionId, string command, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Executes a command the service itself built (never user input), without the user command policy.
+    /// </summary>
+    Task<string> ExecuteInternalCommandAsync(string jobId, string sessionId, string command, CancellationToken cancellationToken = default);
+
+    /// <summary>The dump file loaded in a session; null when the session does not exist.</summary>
+    string? GetDumpFile(string sessionId);
+
+    /// <summary>
     /// Runs a comprehensive basic analysis in the specified session with job-based progress reporting
     /// </summary>
     /// <param name="jobId">Job ID for progress tracking</param>

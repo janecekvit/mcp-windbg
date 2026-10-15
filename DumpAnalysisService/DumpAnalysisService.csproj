@@ -18,4 +18,8 @@
 		<PackageReference Include="ModelContextProtocol.Extensions.Tasks" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<EmbeddedResource Include="Fingerprinting\fingerprint-rules.json" LogicalName="fingerprint-rules.json" />
+	</ItemGroup>
+
 </Project>

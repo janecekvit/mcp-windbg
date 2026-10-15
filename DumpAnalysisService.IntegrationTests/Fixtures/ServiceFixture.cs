@@ -8,6 +8,9 @@ public sealed class ServiceFixture : WebApplicationFactory<Program>, IAsyncLifet
 {
     public HttpClient Client { get; private set; } = default!;
 
+    /// <summary>Crash group registry of this test run.</summary>
+    public string RegistryPath { get; } = Path.Combine(Path.GetTempPath(), "mcp-windbg-tests", $"fingerprints-{Guid.NewGuid():N}.json");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         var symbolCache = Path.Combine(
@@ -21,6 +24,8 @@ public sealed class ServiceFixture : WebApplicationFactory<Program>, IAsyncLifet
             cfg.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Debugger:DefaultSymbolCache"] = symbolCache,
+                // Keep the test runs' crash groups out of the user's registry.
+                ["Fingerprint:RegistryPath"] = RegistryPath,
             });
         });
 

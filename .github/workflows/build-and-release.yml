@@ -132,13 +132,15 @@ jobs:
 
         foreach ($trxFile in $trxFiles) {
           try {
-            [xml]$trx = Get-Content $trxFile.FullName
+            # -LiteralPath: a second run in the same second is named "...[1].trx", which -Path reads as a wildcard
+            [xml]$trx = Get-Content -LiteralPath $trxFile.FullName -Raw
             $counters = $trx.TestRun.ResultSummary.Counters
             if ($counters) {
               $totalTests += [int]$counters.total
               $passedTests += [int]$counters.passed
               $failedTests += [int]$counters.failed
-              $skippedTests += [int]$counters.inconclusive + [int]$counters.notExecuted + [int]$counters.notRunnable
+              # Skipped tests are results with outcome NotExecuted; the TRX counters leave notExecuted at 0
+              $skippedTests += @($trx.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'NotExecuted' }).Count
             }
           }
           catch {
