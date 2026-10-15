@@ -94,7 +94,7 @@ package metadata) live in `Directory.Build.props`. Licence: Apache-2.0 (`LICENSE
    - Entry Point: `Program.cs` - ASP.NET Core Web API (port 7997)
    - **MCP Integration**: ModelContextProtocol.AspNetCore SDK
      - HTTP Transport: `/mcp/sse` (GET), `/mcp/messages` (POST)
-     - Tools: `DebuggerTools.cs` with 8 [McpServerTool] methods
+     - Tools: `DebuggerTools.cs` with 9 [McpServerTool] methods
    - **Services**: Session management, job tracking, CDB process orchestration
    - **Controllers**: REST API for PowerShell/Azure Functions integration
    - **SignalR Hub**: Real-time progress notifications at `/hubs/progress`
@@ -114,7 +114,7 @@ package metadata) live in `Directory.Build.props`. Licence: Apache-2.0 (`LICENSE
    - `Shared.Tests`: Unit tests for the `Shared` project (configuration providers, client libraries, constants). Some SignalR-dependent tests are skipped under xUnit when no host is running.
    - `DumpAnalysisService.IntegrationTests`: Integration suite that boots `DumpAnalysisService` in-process via `WebApplicationFactory` and exercises the REST + SignalR flow against a real `TestCrasher` dump.
    - `DumpAnalysisService.TestCrasher`: Tiny console app that writes a snapshot dump of itself (heap, threads) for the integration tests (copied next to the test output via a `CopyTestCrasher` MSBuild target).
-   - `DumpAnalysisService.CrashScenarios`: NativeAOT program with one real crash per scenario (access violation via two call paths, divide by zero, stack overflow, custom `RaiseException` code, fail-fast, unhandled .NET exception, critical-section deadlock). NativeAOT gives native frames with our own PDB, so cdb shows our function names. It writes no dumps: `CrashDumpFixture` runs it under cdb with `sxe -c ".dump /ma ..."` for each scenario-ending event. Published next to the tests by the Windows-only `PublishCrashScenarios` target (NativeAOT cannot cross-compile); elsewhere the crash tests skip.
+   - `DumpAnalysisService.CrashScenarios`: NativeAOT program with one real crash per scenario (access violation via two call paths, divide by zero, stack overflow, custom `RaiseException` code, fail-fast, unhandled .NET exception, critical-section deadlock, call into an unloaded DLL, use-after-free fill pattern, C++ `std::out_of_range` from msvcp140, busy loop, handle leak). NativeAOT gives native frames with our own PDB, so cdb shows our function names. It writes no dumps: `CrashDumpFixture` runs it under cdb with `sxe -c ".dump /ma ..."` for each scenario-ending event. Published next to the tests by the Windows-only `PublishCrashScenarios` target (NativeAOT cannot cross-compile); elsewhere the crash tests skip.
 
 ### Docker Distribution
 
@@ -220,6 +220,28 @@ CancelSessionAsync() (SessionManagerService.cs)
   → Remove from dictionary, Dispose()
 ```
 
+### Dump Triage (Infrastructure/Minidump/, Services/DumpTriageService.cs)
+
+`MinidumpParser` reads the minidump header, stream directory and the metadata streams by
+offset: system info, misc info, exception (plus the faulting thread's x64/x86 registers from
+its CONTEXT), thread list, module list, unloaded modules, thread info, thread names, memory
+info (regions), handle data, process VM counters, system memory info and comments. Captured
+memory (memory list / memory64 list) is only touched by small reads in `MemoryMap`: the C++
+exception type and message (`CppExceptionDecoder`, ThrowInfo RVAs on x64, pointers on x86)
+and the delay-load DLL/function. Kernel dumps get only the `PAGEDU64`/`PAGEDUMP` header
+(bug check, DumpType, SystemTime, SystemUpTime). Every offset and count is bounds-checked
+and malformed files raise `InvalidDataException`; list streams are stepped by their own
+SizeOfEntry. Struct offsets were checked against the Windows headers (Wine/mingw-w64).
+`DumpTriageService.Build` is a pure mapping to `Shared.Models.DumpTriageResult`: a stable
+`fault.classification` (`ExceptionCodes.ClassOf` plus the access violation refinements),
+fill patterns (`FillPatterns`), fail-fast codes (`FastFailCodes`), bug check summaries
+(`BugCheckCodes.Describe`) and the hints. `WithSymbolStatus` then checks the symbol cache
+load_dump would use (`cache\name.pdb\KEY\name.pdb`, two-tier, `.pd_`, `file.ptr`).
+Unit tests build synthetic dumps with `DumpAnalysisService.Tests/Minidump/MinidumpBuilder.cs`;
+the integration tests triage real CrashScenarios dumps (including unloaded-module,
+use-after-free pattern, C++ exception, busy-loop and handle-leak scenarios).
+`DumpPathPolicy` enforces `Security:AllowedDumpDirectories` for both triage and `load_dump`.
+
 ### Error Handling Pattern
 
 **Exception-based flow** (NOT boolean returns):
@@ -294,6 +316,7 @@ POST /api/jobs/execute-command     → 202 Accepted, returns { jobId, statusEndp
 POST /api/jobs/basic-analysis      → 202 Accepted, returns { jobId, statusEndpoint }
 POST /api/jobs/predefined-analysis → 202 Accepted, returns { jobId, statusEndpoint }
 POST /api/jobs/close-session       → 202 Accepted, returns { jobId, statusEndpoint }
+POST /api/jobs/triage-dump         → 202 Accepted; job result = DumpTriageResult as JSON
 GET  /api/jobs/{jobId}             → Job status with progress
 GET  /api/jobs?state=Running       → List all jobs (with optional state filter)
 POST /api/jobs/{jobId}/cancel      → Cancel running job
@@ -301,7 +324,7 @@ POST /api/jobs/{jobId}/cancel      → Cancel running job
 
 ### MCP Tools (DebuggerTools.cs)
 
-All 8 tools follow the same pattern:
+All 9 tools follow the same pattern:
 1. Create job via `JobManagerService.CreateJob()`
 2. Start background `Task.Run()` that calls `SessionManager` with `jobId`
 3. Poll job status via `_WaitForJobCompletionAsync()` which reports progress via `IProgress<ProgressNotificationValue>`
@@ -316,6 +339,7 @@ All 8 tools follow the same pattern:
 - `list_jobs` - List all jobs with status
 - `list_analyses` - List available predefined analyses
 - `detect_debuggers` - Detect CDB/WinDbg installations
+- `triage_dump` - Read a dump's minidump streams without cdb (structured content): classified fault, registers, process traits, threads, modules (unloaded, PDB keys, cache status), memory and handles, kernel bug check summary, hints
 
 ### Flow:
 1. MCP client calls tool → DebuggerTools creates `jobId` immediately

@@ -24,7 +24,8 @@ public class DebuggerToolsErrorHandlingTests
             (jobs ?? new Mock<IJobManagerService>()).Object,
             (sessions ?? new Mock<ISessionManagerService>()).Object,
             (diagnostics ?? new Mock<IDiagnosticsService>()).Object,
-            symbolProvider.Object);
+            symbolProvider.Object,
+            new Mock<IDumpTriageService>().Object);
     }
 
     [Fact]

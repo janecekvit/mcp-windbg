@@ -299,6 +299,43 @@ The debugger runs with the service's permissions and reads whatever dump path it
 
 ## MCP Tools
 
+### triage_dump
+Instant first look at a dump, read straight from its minidump streams: no debugger, no symbols, typically well under a second. Run it before `load_dump`, which can take minutes while symbols download.
+
+**Parameters:**
+- `dump_file_path`: Path to .dmp file
+
+The symbol cache it checks is the one `load_dump` uses: the `X-Symbol-Cache` header, else `DefaultSymbolCache` (REST: optional `symbolCache` in the body, honouring `Security:AllowClientSymbolOverrides`).
+
+**Returns** structured content (with an output schema):
+
+| Section | Content |
+|---|---|
+| `dump` | size, SHA-256 (files up to 1 GB), full-memory flag, creation time, what the dump contains (`full-memory`, `handle-data`, `thread-info`, `memory-info`, `unloaded-modules`, `thread-names`, ...) and the dumper's comment |
+| `system` | architecture, processor count, Windows version, product type |
+| `process` | image name and path, PID, bitness, start time, uptime, CPU time; WoW64 (32-bit process in a 64-bit dump) and debug C runtime detection |
+| `fault` | exception code, name and a stable `classification`; faulting thread and its name, address, module + offset, the faulting thread's registers. Details per exception: access type, target address and its memory region (free, reserved, guard, read-only, non-executable), unloaded module hit, fill patterns in the target or registers, fail-fast code, C++ type and `what()` message, delay-load DLL and function. `null` for a snapshot |
+| `threads` | count, faulting thread, exited threads, the busiest threads (CPU time and share of their lifetime, start module), thread names |
+| `modules` | count, how many belong to Windows, the faulting module plus every non-Windows module with version, timestamp, PDB name, GUID/age, symbol-server key and whether the PDB is cached; recently unloaded modules |
+| `runtime` | .NET / .NET Framework and its version, when loaded |
+| `memory` | private bytes, working set, virtual size, job commit limit, used and largest free address space (32-bit), system commit and physical memory |
+| `handles` | open handles, per object type |
+| `symbols` | symbol cache checked, how many PDBs are cached, which non-Windows ones are missing |
+| `kernel` | for kernel dumps: bug check code, name, parameters and a decoded summary, dump type, crash time and system uptime (header only) |
+| `hints` | plain-language next steps, e.g. "Null-pointer read (target 0x0) in app.exe+0x1a2b. Run basic_analysis for the faulting stack." |
+
+States it recognises without the debugger:
+
+| Area | States |
+|---|---|
+| Access violations | null pointer, null function pointer, call into or data access in an **unloaded DLL**, non-canonical (garbage) pointer, **fill patterns** (`0xDD`/`0xFEEEFEEE` freed, `0xCD`/`0xBAADF00D`/`0xCC` uninitialised, `0xFD`/`0xAB` guard bytes) in the target or a register, unallocated, reserved-only, guard and no-access pages, DEP (execute of non-executable memory), write to read-only memory |
+| Exceptions | fail-fast with its `FAST_FAIL_*` code (GS cookie, CFG, CET shadow stack, heap corruption, `abort`), C++ throw with type and message, delay-load failure with DLL and function, in-page I/O error with status, out of memory, illegal instruction, DLL not found / entry point / init failure, CRT invalid parameter, `abort()`, assertion, possible deadlock, user callback exception, WinRT stowed exception, corrupt exception chain, Ctrl+C, harmless SetThreadName |
+| Process | crash during startup, WoW64, debug build, busy loop (a thread near 100% CPU) or all threads waiting in a hang dump, handle leak, 32-bit address space exhaustion, job commit limit, system commit near the limit, private bytes near physical memory |
+| Dump | missing handle data or full memory, dumper comment, symbols already cached or to be downloaded |
+| Kernel | decoded parameters of the common bug checks (0xA, 0xD1, 0x50, 0x1E/0x7E/0x8E, 0x3B, 0x7F, 0x133, 0x139, 0xEF, 0xF4, 0x9F, 0x124, 0x101, 0xE2, ...), small dump |
+
+Subject to `Security:AllowedDumpDirectories` like `load_dump`.
+
 ### load_dump
 Loads a memory dump and creates a new debugging session.
 
@@ -361,6 +398,7 @@ All job-creating endpoints return `202 Accepted` with `{ jobId, statusEndpoint }
 | `POST` | `/api/jobs/basic-analysis` | Run the comprehensive basic analysis |
 | `POST` | `/api/jobs/predefined-analysis` | Run a named specialised analysis (heap, threads, …) |
 | `POST` | `/api/jobs/close-session` | Close a session and release CDB |
+| `POST` | `/api/jobs/triage-dump` | Read a dump's minidump streams without the debugger; the job result is the triage result as JSON |
 | `GET`  | `/api/jobs` | List jobs (optional `?state=Running`) |
 | `GET`  | `/api/jobs/{jobId}` | Job status + progress |
 | `POST` | `/api/jobs/{jobId}/cancel` | Cancel a running job |

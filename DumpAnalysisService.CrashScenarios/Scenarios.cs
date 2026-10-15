@@ -19,6 +19,11 @@ internal static unsafe class Scenarios
         ["fail-fast"] = FailFastEntry,
         ["managed-unhandled"] = ManagedUnhandledEntry,
         ["deadlock"] = DeadlockEntry,
+        ["unloaded-module"] = UnloadedModuleEntry,
+        ["use-after-free"] = UseAfterFreeEntry,
+        ["cpp-exception"] = CppExceptionEntry,
+        ["busy-loop"] = BusyLoopEntry,
+        ["handle-leak"] = HandleLeakEntry,
     };
 
     // Set at run time from a value the compiler cannot know, so it cannot prove the pointer
@@ -26,6 +31,7 @@ internal static unsafe class Scenarios
     private static int* s_nullPointer;
     private static int s_zero;
     private static volatile int s_sink;
+    private static volatile bool s_keepSpinning = true;
 
     /// <param name="runtimeZero">Always 0 at run time (derived from the argument count).</param>
     public static void Initialize(int runtimeZero)
@@ -145,5 +151,109 @@ internal static unsafe class Scenarios
         holdsFirst.Signal();
         holdsFirst.Wait();
         NativeMethods.EnterCriticalSection(second);
+    }
+
+    // ---- unloaded-module: call into a DLL after FreeLibrary unmapped it
+
+    /// <summary>System DLLs a bare NativeAOT process does not load on its own.</summary>
+    private static readonly string[] s_unloadableDlls = ["dbghelp.dll", "version.dll", "winmm.dll", "wtsapi32.dll", "msimg32.dll"];
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void UnloadedModuleEntry() => CallIntoUnloadedPlugin();
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void CallIntoUnloadedPlugin()
+    {
+        foreach (var name in s_unloadableDlls)
+        {
+            if (NativeMethods.GetModuleHandleW(name) != 0)
+                continue;
+            var module = NativeMethods.LoadLibraryW(name);
+            if (module == 0)
+                continue;
+
+            // A code address inside the image, kept after the image is gone (a dangling callback).
+            var callback = (delegate* unmanaged<void>)(module + 0x1000);
+            NativeMethods.FreeLibrary(module);
+            if (NativeMethods.GetModuleHandleW(name) != 0)
+                continue; // still referenced elsewhere, try the next one
+
+            callback();
+            return;
+        }
+        throw new InvalidOperationException("CrashScenarios: no DLL could be loaded and unloaded");
+    }
+
+    // ---- use-after-free: dereference a pointer read from a block carrying the debug CRT's freed fill (0xDD)
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void UseAfterFreeEntry() => s_sink = ReadReleasedRecord(ReleaseRecord());
+
+    /// <summary>
+    /// Fills the block the way the debug CRT's free() does. The block itself is kept allocated so the
+    /// pattern is still there when it is read; the pointer field now holds 0xDDDDDDDDDDDDDDDD.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static nint* ReleaseRecord()
+    {
+        var record = (nint*)NativeMemory.Alloc(64);
+        NativeMemory.Fill(record, 64, 0xDD);
+        return record;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int ReadReleasedRecord(nint* record) => *(int*)record[0];
+
+    // ---- cpp-exception: a real MSVC C++ throw (std::out_of_range) from msvcp140.dll
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void CppExceptionEntry() => ThrowFromNativeLibrary();
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowFromNativeLibrary()
+    {
+        fixed (byte* message = "CrashScenarios: out of range\0"u8)
+            NativeMethods.ThrowOutOfRange(message);
+    }
+
+    // ---- busy-loop: one thread spins, then the debugger takes a hang dump
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void BusyLoopEntry()
+    {
+        var spinner = new Thread(SpinUntilStopped) { IsBackground = true, Name = "Spinner" };
+        spinner.Start();
+        Thread.Sleep(3000);
+        NativeMethods.DebugBreak();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void SpinUntilStopped()
+    {
+        var iterations = 0;
+        while (s_keepSpinning)
+            iterations++;
+        s_sink = iterations;
+    }
+
+    // ---- handle-leak: thousands of event handles that are never closed, then a hang dump
+
+    public const int LeakedHandles = 12_000;
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void HandleLeakEntry()
+    {
+        LeakEventHandles();
+        NativeMethods.DebugBreak();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void LeakEventHandles()
+    {
+        for (var i = 0; i < LeakedHandles; i++)
+        {
+            if (NativeMethods.CreateEventW(0, 1, 0, 0) == 0)
+                throw new InvalidOperationException("CrashScenarios: CreateEvent failed");
+        }
     }
 }

@@ -108,6 +108,7 @@ public static class Constants
         public const string ListJobs = "list_jobs";
         public const string ListAnalyses = "list_analyses";
         public const string DetectDebuggers = "detect_debuggers";
+        public const string TriageDump = "triage_dump";
 
         /// <summary>
         /// Gets all available MCP tool names
@@ -122,7 +123,8 @@ public static class Constants
         PredefinedAnalysis,
         ListJobs,
         ListAnalyses,
-        DetectDebuggers
+        DetectDebuggers,
+        TriageDump
     };
     }
 }

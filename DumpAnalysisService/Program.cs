@@ -34,6 +34,7 @@ public partial class Program
             builder.Services.AddSingleton<ICdbSessionFactory, CdbSessionFactory>();
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
             builder.Services.AddSingleton<IJobManagerService, JobManagerService>();
+            builder.Services.AddSingleton<IDumpTriageService, DumpTriageService>();
 
             // HTTP context accessor for reading request headers
             builder.Services.AddHttpContextAccessor();
