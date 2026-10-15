@@ -225,6 +225,7 @@ public sealed class DumpTriageStateTests : IDisposable
     [InlineData(7ul, "FAST_FAIL_FATAL_APP_EXIT", "terminated itself on purpose")]
     [InlineData(10ul, "FAST_FAIL_GUARD_ICALL_CHECK_FAILURE", "Control Flow Guard")]
     [InlineData(57ul, "FAST_FAIL_CONTROL_INVALID_RETURN_ADDRESS", "shadow stack")]
+    [InlineData(72ul, "FAST_FAIL_EXCEPTION_DOTNET_AOT", "NativeAOT")]
     [InlineData(999ul, "0x3e7", "failed check")]
     public void FailFast_DecodesSubcode(ulong subcode, string expectedName, string expectedHint)
     {

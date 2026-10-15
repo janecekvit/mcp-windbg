@@ -62,8 +62,9 @@ public class DumpTriageTests
         Assert.Equal("user-minidump", result.Dump.Format);
         Assert.True(result.Dump.FullMemory);
         Assert.Equal(64, result.Dump.Sha256!.Length);
-        // .dump /ma = full memory, full memory info, handle data, unloaded modules, thread info
-        Assert.Superset(new HashSet<string> { "memory-info", "handle-data", "unloaded-modules", "thread-info" }, result.Dump.Contents.ToHashSet());
+        // .dump /ma = full memory, full memory info, handle data, thread info (and unloaded modules,
+        // a stream dbghelp writes only when the process has unloaded one).
+        Assert.Superset(new HashSet<string> { "memory-info", "handle-data", "thread-info" }, result.Dump.Contents.ToHashSet());
         Assert.Equal("x64", result.System!.Architecture);
         Assert.Equal("CrashScenarios.exe", result.Process!.ImageName);
         Assert.NotNull(result.Process.ProcessId);
@@ -116,9 +117,9 @@ public class DumpTriageTests
 
         var result = await _TriageViaRestAsync(await _crashDumps.GetDumpAsync("fail-fast"));
 
-        _output.WriteLine($"fail-fast code: {result.Fault!.FastFailCode}");
-        Assert.NotNull(result.Fault.FastFailCode);
-        Assert.Contains(result.Hints, h => h.Contains(result.Fault.FastFailCode!));
+        // Environment.FailFast under NativeAOT raises the runtime's own fail-fast code.
+        Assert.Equal("FAST_FAIL_EXCEPTION_DOTNET_AOT", result.Fault!.FastFailCode);
+        Assert.Contains(result.Hints, h => h.Contains("FAST_FAIL_EXCEPTION_DOTNET_AOT") && h.Contains("NativeAOT"));
     }
 
     [SkippableFact]

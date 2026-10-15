@@ -102,7 +102,7 @@ internal sealed class MinidumpBuilder
         streams.Add((4, _ModuleList)); // last: tests corrupt the module count through the last directory entry
 
         const int headerSize = 32;
-        var appender = new Appender(headerSize + streams.Count * 12);
+        using var appender = new Appender(headerSize + streams.Count * 12);
         var directory = new List<(uint Type, uint Size, uint Rva)>();
         foreach (var (type, factory) in streams)
         {
@@ -129,7 +129,7 @@ internal sealed class MinidumpBuilder
     }
 
     /// <summary>Appends blobs after the header and directory and hands out their RVAs.</summary>
-    private sealed class Appender
+    private sealed class Appender : IDisposable
     {
         private readonly MemoryStream _stream = new();
 
@@ -156,6 +156,8 @@ internal sealed class MinidumpBuilder
         }
 
         public byte[] ToArray() => _stream.ToArray();
+
+        public void Dispose() => _stream.Dispose();
     }
 
     private byte[] _SystemInfo()

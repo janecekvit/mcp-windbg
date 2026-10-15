@@ -206,6 +206,8 @@ public static class FastFailCodes
         [68] = "FAST_FAIL_PATCH_CALLBACK_FAILED",
         [69] = "FAST_FAIL_NTDLL_PATCH_FAILED",
         [70] = "FAST_FAIL_INVALID_FLS_DATA",
+        // Not in winnt.h: the code .NET NativeAOT's RuntimeExceptionHelpers.FailFast raises.
+        [72] = "FAST_FAIL_EXCEPTION_DOTNET_AOT",
     };
 
     public static string? NameOf(ulong code) => code <= uint.MaxValue ? _names.GetValueOrDefault((uint)code) : null;
@@ -224,6 +226,7 @@ public static class FastFailCodes
         21 => "the SEH exception handler chain is corrupt (SEHOP)",
         38 => "longjmp to an invalid target",
         44 or 57 => "the CET shadow stack disagrees with the return address: the stack was corrupted",
+        72 => "the .NET NativeAOT runtime failed fast: Environment.FailFast, an unhandled exception or a fatal runtime error (the message is on the faulting stack)",
         _ => null,
     };
 }
