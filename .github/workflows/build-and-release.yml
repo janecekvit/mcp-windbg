@@ -326,7 +326,7 @@ jobs:
         fail-on-error: true
 
     - name: Upload test results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: test-results-${{ steps.version.outputs.version }}
@@ -344,7 +344,7 @@ jobs:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: windbg-mcp-server-${{ steps.version.outputs.version }}
         path: |
