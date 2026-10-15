@@ -1,4 +1,6 @@
+using DumpAnalysisService.Security;
 using DumpAnalysisService.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared;
 using Shared.Models;
@@ -8,6 +10,7 @@ namespace DumpAnalysisService.Controllers;
 [ApiController]
 [Route("api/diagnostics")]
 [Produces("application/json")]
+[Authorize(Policy = DumpPolicies.Read)]
 public class DiagnosticsController : ControllerBase
 {
     private readonly ILogger<DiagnosticsController> _logger;
@@ -29,6 +32,7 @@ public class DiagnosticsController : ControllerBase
     /// </summary>
     /// <returns>Health status information</returns>
     [HttpGet("health")]
+    [AllowAnonymous]
     [ProducesResponseType<object>(StatusCodes.Status200OK)]
     public IActionResult Health()
     {

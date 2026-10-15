@@ -1,8 +1,10 @@
 using DumpAnalysisService.Fingerprinting;
 using DumpAnalysisService.Providers;
+using DumpAnalysisService.Security;
 using DumpAnalysisService.Services;
 using DumpAnalysisService.Tools;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Shared.Configuration;
 
@@ -27,7 +29,9 @@ public class DebuggerToolsErrorHandlingTests
             (diagnostics ?? new Mock<IDiagnosticsService>()).Object,
             symbolProvider.Object,
             new Mock<IDumpTriageService>().Object,
-            new Mock<ICrashFingerprintService>().Object);
+            new Mock<ICrashFingerprintService>().Object,
+            Options.Create(new SecurityOptions()),
+            new AuditLog(NullLogger<AuditLog>.Instance));
     }
 
     [Fact]

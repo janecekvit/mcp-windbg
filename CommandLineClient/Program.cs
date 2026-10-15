@@ -31,17 +31,20 @@ internal class Program
             // Setup logging
             using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
 
-            // API key for a service started with Security:ApiKey
+            // API key for a service started with Security:ApiKey, access token for one with Security:Jwt
             var apiKey = Environment.GetEnvironmentVariable(Constants.Network.ApiKeyEnvironmentVariable);
+            var accessToken = Environment.GetEnvironmentVariable(Constants.Network.AccessTokenEnvironmentVariable);
 
             // Setup HTTP client
             var httpClient = new HttpClient();
             if (!string.IsNullOrEmpty(apiKey))
                 httpClient.DefaultRequestHeaders.Add(Constants.Network.ApiKeyHeader, apiKey);
+            if (!string.IsNullOrEmpty(accessToken))
+                httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
             // Setup SignalR client
             var signalRLogger = loggerFactory.CreateLogger<SignalRClientService>();
-            var signalRClient = new SignalRClientService(signalRLogger, Constants.Network.DefaultProgressHubUrl, apiKey);
+            var signalRClient = new SignalRClientService(signalRLogger, Constants.Network.DefaultProgressHubUrl, apiKey, accessToken);
 
             // Connect to SignalR hub
             await signalRClient.ConnectAsync();
@@ -297,6 +300,7 @@ internal class Program
         Console.WriteLine();
         Console.WriteLine("Environment:");
         Console.WriteLine($"  {Constants.Network.ApiKeyEnvironmentVariable,-27} API key, when the service runs with Security:ApiKey");
+        Console.WriteLine($"  {Constants.Network.AccessTokenEnvironmentVariable,-27} OAuth access token, when the service runs with Security:Jwt");
         Console.WriteLine();
         Console.WriteLine("Commands:");
         Console.WriteLine("  load <dump-file-path>       Load a memory dump");

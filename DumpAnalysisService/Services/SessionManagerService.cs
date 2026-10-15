@@ -14,6 +14,7 @@ public sealed class SessionManagerService : ISessionManagerService
     private readonly IJobManagerService _jobManager;
     private readonly SecurityOptions _securityOptions;
     private readonly ConcurrentDictionary<string, ICdbSessionService> _sessions = new();
+    private readonly ConcurrentDictionary<string, string> _owners = new();
     private readonly object _sessionsLock = new();
 
     public SessionManagerService(
@@ -34,6 +35,7 @@ public sealed class SessionManagerService : ISessionManagerService
         string jobId,
         string dumpFilePath,
         Shared.Configuration.SymbolsConfiguration? symbols = null,
+        string? owner = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -67,6 +69,8 @@ public sealed class SessionManagerService : ISessionManagerService
                 }
 
                 _sessions[sessionId] = session;
+                if (owner is not null)
+                    _owners[sessionId] = owner;
             }
 
             _logger.LogInformation("Created new CDB session {SessionId}, loading dump: {DumpFile}", sessionId, dumpFilePath);
@@ -83,6 +87,7 @@ public sealed class SessionManagerService : ISessionManagerService
             {
                 // A failed load must not leave a cdb.exe process or a dead session behind
                 _sessions.TryRemove(sessionId, out _);
+                _owners.TryRemove(sessionId, out _);
                 session.Dispose();
                 throw;
             }
@@ -103,6 +108,12 @@ public sealed class SessionManagerService : ISessionManagerService
     {
         CdbCommandPolicy.Validate(command, _securityOptions.AllowUnsafeCommands);
         return await ExecuteInternalCommandAsync(jobId, sessionId, command, cancellationToken);
+    }
+
+    public bool TryGetSessionOwner(string sessionId, out string? owner)
+    {
+        owner = _owners.TryGetValue(sessionId, out var value) ? value : null;
+        return _sessions.ContainsKey(sessionId);
     }
 
     public string? GetDumpFile(string sessionId) =>
@@ -196,6 +207,7 @@ public sealed class SessionManagerService : ISessionManagerService
         {
             await session.CancelAsync();
             _sessions.TryRemove(sessionId, out _);
+            _owners.TryRemove(sessionId, out _);
             session.Dispose();
             _logger.LogInformation("Cancelled and closed CDB session {SessionId}", sessionId);
         }

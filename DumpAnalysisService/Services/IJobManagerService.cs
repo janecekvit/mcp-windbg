@@ -7,7 +7,10 @@ public interface IJobManagerService
     /// <summary>
     /// Creates a new job and returns its ID
     /// </summary>
-    string CreateJob(JobOperationType operation, string? sessionId = null);
+    string CreateJob(JobOperationType operation, string? sessionId = null, string? owner = null);
+
+    /// <summary>The caller id that created the job (null: unowned). False when the job does not exist.</summary>
+    bool TryGetJobOwner(string jobId, out string? owner);
 
     /// <summary>
     /// Gets the current status of a job
