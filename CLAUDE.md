@@ -123,7 +123,7 @@ Pre-built Windows container images are published to **`ghcr.io/janecekvit/mcp-wi
 - **Base image:** `mcr.microsoft.com/windows/servercore:ltsc2022` (Linux containers cannot run `cdb.exe`).
 - **Debugging tools:** installed during image build via the Windows SDK web setup (`fwlink/?linkid=2237387 /features OptionId.WindowsDesktopDebuggers`).
 - **Build input:** the existing `publish/win-x64/` self-contained publish output — Docker layer simply `COPY`s the same artefacts the Release ZIP ships. No second build path.
-- **Health probe:** `HEALTHCHECK` polls `GET /api/diagnostics/health`, the one route `ApiKeyMiddleware` leaves open, so the probe keeps working when `Security__ApiKey` is set.
+- **Health probe:** `HEALTHCHECK` polls `GET /api/diagnostics/health`, the one `[AllowAnonymous]` route, so the probe keeps working when `Security__ApiKey` or `Security__Jwt__*` is set.
 - **Exposure:** the image sets `AllowedHosts=*`; set `Security__ApiKey` whenever the port is reachable from other machines.
 - **CI gate:** the image is built and pushed by the separate `docker` job, on tag refs only (`startsWith(github.ref, 'refs/tags/v')`), on `windows-2022` (`windows-latest` has no running Docker engine; the ltsc2022 base matches that host). It downloads the build job's `publish/win-x64` artifact, and a Docker failure never blocks the release ZIP.
 
@@ -132,9 +132,28 @@ See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" f
 ## Security Model (DumpAnalysisService/Security/)
 
 `SecurityOptions` is bound from the `Security` configuration section:
-- **`ApiKeyMiddleware`**: when `Security:ApiKey` is set, every request except
-  `GET /api/diagnostics/health` needs `X-Api-Key` or `Authorization: Bearer`
-  (SignalR may use `?access_token=` on `/hubs`). Constant-time comparison.
+- **Authentication** (`DumpAuthentication.AddDumpAuthentication`): a policy scheme forwards a
+  JWT-shaped bearer token to JwtBearer (`Security:Jwt`, enabled by `Authority`) and anything else
+  to `ApiKeyAuthenticationHandler` (`Security:ApiKey`, `X-Api-Key` or `Authorization: Bearer`,
+  constant-time). SignalR may use `?access_token=` on `/hubs`. With JWT on, challenges go to the
+  MCP SDK's `McpAuthenticationHandler` (`AddMcp`), which adds `resource_metadata` to the 401 and
+  serves RFC 9728 metadata at `/.well-known/oauth-protected-resource/...`. When any credential is
+  configured, a fallback policy requires an authenticated user everywhere except
+  `GET /api/diagnostics/health`.
+- **Authorization**: `[Authorize(Policy = DumpPolicies.Read|Analyze|Admin)]` on controllers,
+  the hub and each MCP tool (`.AddAuthorizationFilters()` also filters `tools/list`).
+  `DumpPermissionHandler` grants everything when no credential is configured, and to the API key;
+  for tokens, `Caller.PermissionOf` reads `Jwt:RoleClaimTypes` (default `roles` only).
+- **Ownership** (`Security/Ownership.cs`): jobs (`CreateJob(..., owner)`) and sessions
+  (`CreateSessionWithDumpAsync(..., owner)`) record `Caller.Id` (`oid`, else `sub`; null for
+  unrestricted callers: no auth configured, the API key, admins). Entry points (JobsController,
+  DebuggerTools, ProgressHub.SubscribeToJob) call `EnsureSessionAccess` / `CanAccessJob` before
+  starting work, so another user's session or job reads as not found. MCP tools get the caller
+  from `RequestContext<CallToolRequestParams>.User`, never from IHttpContextAccessor (tasks run
+  after the request). `AuditLog.Record` logs who did what.
+- Tests: `DumpAnalysisService.Tests/Security/AuthTestHost.cs` boots the service with tokens signed
+  by a local RSA key (static OpenID configuration, nothing fetched); settings go through
+  `UseSetting`, because `Program` reads `Security:*` before `Build()`.
 - **`CdbCommandPolicy`**: applied to user commands in
   `SessionManagerService.ExecuteCommandAsync` only (never to internal init or
   predefined-analysis commands). Single line, no `q`/`qq`, and unless
@@ -147,7 +166,8 @@ See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" f
 - `AllowedHosts` defaults to localhost (DNS-rebinding protection); the Docker
   image sets `AllowedHosts=*` and expects `Security__ApiKey`.
 
-When adding a new way to send text to cdb.exe, route user input through
+When adding an endpoint or MCP tool, give it a `DumpPolicies` policy and, if it takes a session
+or job id, an ownership check. When adding a new way to send text to cdb.exe, route user input through
 `CdbCommandPolicy` and never build a command line by string concatenation:
 `CdbProcessManager.CreateStartInfo` uses `ProcessStartInfo.ArgumentList`.
 

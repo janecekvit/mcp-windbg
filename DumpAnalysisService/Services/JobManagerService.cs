@@ -17,6 +17,7 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
     {
         public string JobId { get; init; } = string.Empty;
         public string? SessionId { get; set; }
+        public string? Owner { get; init; }
         public JobOperationType Operation { get; init; }
         public JobState State { get; set; }
         public JobPhase Phase { get; set; } = JobPhase.Queued;
@@ -88,13 +89,14 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
             TimeSpan.FromMinutes(10));
     }
 
-    public string CreateJob(JobOperationType operation, string? sessionId = null)
+    public string CreateJob(JobOperationType operation, string? sessionId = null, string? owner = null)
     {
         var jobId = Guid.NewGuid().ToString("N")[..12]; // 12 character job ID
         var job = new JobStatusInternal
         {
             JobId = jobId,
             SessionId = sessionId,
+            Owner = owner,
             Operation = operation,
             State = JobState.Queued,
             Progress = 0.0,
@@ -105,6 +107,12 @@ public sealed class JobManagerService : IJobManagerService, IDisposable
         _logger.LogInformation("Created job {JobId} for operation {Operation}", jobId, operation);
 
         return jobId;
+    }
+
+    public bool TryGetJobOwner(string jobId, out string? owner)
+    {
+        owner = _jobs.TryGetValue(jobId, out var job) ? job.Owner : null;
+        return job is not null;
     }
 
     public JobStatus GetJobStatus(string jobId)

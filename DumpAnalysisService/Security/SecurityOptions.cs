@@ -38,4 +38,13 @@ public sealed class SecurityOptions
     /// Maximum number of concurrently open CDB sessions (each one is a cdb.exe process).
     /// </summary>
     public int MaxConcurrentSessions { get; set; } = 10;
+
+    /// <summary>
+    /// OAuth 2.1 / OpenID Connect bearer tokens (Microsoft Entra ID, Keycloak, Auth0, ...).
+    /// Enabled when <see cref="JwtOptions.Authority"/> is set; works alongside <see cref="ApiKey"/>.
+    /// </summary>
+    public JwtOptions Jwt { get; set; } = new();
+
+    /// <summary>True when any credential is required (API key or bearer tokens).</summary>
+    public bool AuthenticationRequired => !string.IsNullOrWhiteSpace(ApiKey) || Jwt.Enabled;
 }

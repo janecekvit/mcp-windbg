@@ -26,6 +26,12 @@ public static class Constants
         /// </summary>
         public const string ApiKeyEnvironmentVariable = "DUMP_ANALYSIS_API_KEY";
 
+        /// <summary>
+        /// Environment variable the command-line client reads an OAuth access token from
+        /// (for a service with Security:Jwt, e.g. from az account get-access-token).
+        /// </summary>
+        public const string AccessTokenEnvironmentVariable = "DUMP_ANALYSIS_ACCESS_TOKEN";
+
     }
 
     /// <summary>

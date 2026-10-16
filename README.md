@@ -15,7 +15,7 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 - **Session management**: several dump files open at once
 - **MCP Streamable HTTP**, with progress notifications and the MCP Tasks extension
 - **REST API** with the same job-based operations, plus SignalR progress notifications
-- **Secure by default**: optional API key, localhost-only host filter, restricted dump directories, a limit on concurrent sessions
+- **Secure by default**: API key and/or OAuth 2.1 bearer tokens (Microsoft Entra ID or any OIDC provider) with roles, per-user sessions and an audit log; localhost-only host filter; restricted dump directories; a limit on concurrent sessions
 - **Docker image**: Windows Server Core with the Debugging Tools preinstalled (`ghcr.io/janecekvit/mcp-windbg`)
 - **Command-line client**: a standalone client for scripting and Azure Functions
 
@@ -175,6 +175,7 @@ ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so t
 | `Debugger__DefaultSymbolServers` | `Debugger:DefaultSymbolServers` | Semicolon-separated base symbol servers (`srv*https://…`). An empty value keeps the built-in Microsoft/NuGet list; a value replaces it, so keep `srv*https://msdl.microsoft.com/download/symbols` in it |
 | `Fingerprint__RegistryPath` | `Fingerprint:RegistryPath` | Crash group registry file; put it on a volume so groups survive restarts |
 | `Security__ApiKey` | `Security:ApiKey` | Shared secret required on REST, MCP and SignalR (see [Security](#security)) |
+| `Security__Jwt__Authority`, `Security__Jwt__Audiences__0`, … | `Security:Jwt:*` | OAuth bearer tokens, e.g. Microsoft Entra ID (see [OAuth bearer tokens](#oauth-bearer-tokens-microsoft-entra-id-keycloak-auth0)) |
 | `Security__AllowedDumpDirectories__0` | `Security:AllowedDumpDirectories[0]` | Directory dumps may be loaded from (add `__1`, `__2`, … for more) |
 | `AllowedHosts` | `AllowedHosts` | Accepted `Host` headers; the image sets `*`, `appsettings.json` defaults to localhost only |
 
@@ -308,7 +309,8 @@ The debugger runs with the service's permissions and reads whatever dump path it
 
 | Setting | Default | Effect |
 |---|---|---|
-| `ApiKey` | none | When set, every REST, MCP and SignalR request needs `X-Api-Key: <key>` or `Authorization: Bearer <key>`; `GET /api/diagnostics/health` stays open for probes. **Required whenever the port is reachable from another machine.** |
+| `ApiKey` | none | When set, every REST, MCP and SignalR request needs `X-Api-Key: <key>` or `Authorization: Bearer <key>`; `GET /api/diagnostics/health` stays open for probes. **Set this or `Jwt` whenever the port is reachable from another machine.** The API key holder is an administrator. |
+| `Jwt:*` | off | OAuth 2.1 / OpenID Connect bearer tokens with roles and per-user sessions, see [OAuth bearer tokens](#oauth-bearer-tokens-microsoft-entra-id-keycloak-auth0). Works alongside `ApiKey`. |
 | `AllowUnsafeCommands` | `false` | `execute_command` refuses debugger meta-commands that act outside the dump: `.shell`, `.load`/`.loadby`, `.create`/`.attach`, `.writemem`/`.dump`/`.logopen`, `$<` script files, `.sympath`/`.srcpath` changes, `.server`, … Multi-line commands and `q`/`qq` are always refused (use `close_session`). cdb.exe additionally runs with `-noshell`. |
 | `AllowClientSymbolOverrides` | `true` | When `false`, `X-Symbol-*` headers and the REST `symbols` body are ignored and only the server-side `Debugger:*` defaults are used (prevents clients from pointing the debugger at arbitrary UNC shares). Client values are always validated (no quotes, control characters, or extra path elements in the cache). |
 | `AllowedDumpDirectories` | `[]` (any) | When non-empty, dumps can only be loaded from these directories. |
@@ -316,7 +318,88 @@ The debugger runs with the service's permissions and reads whatever dump path it
 
 `AllowedHosts` in `appsettings.json` accepts only `localhost`, `127.0.0.1` and `[::1]`, which blocks DNS-rebinding attacks from a browser against a locally running service. The Docker image overrides it with `*` and relies on the API key instead.
 
-`CommandLineClient` reads the key from the `DUMP_ANALYSIS_API_KEY` environment variable (it is deliberately not a command-line argument, which other users on the machine can list).
+`CommandLineClient` reads the key from the `DUMP_ANALYSIS_API_KEY` environment variable and an OAuth access token from `DUMP_ANALYSIS_ACCESS_TOKEN`. Neither is a command-line argument, because other users on the machine can list those.
+
+### OAuth bearer tokens (Microsoft Entra ID, Keycloak, Auth0)
+
+With `Security:Jwt:Authority` set, the service is an OAuth 2.1 **resource server**. It validates the access tokens an identity provider issues and never signs anyone in itself.
+
+- A request without a valid credential gets `401`, with `WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp"`.
+- That document is RFC 9728 protected resource metadata. It names the authorization server and the scopes, so an MCP client such as Claude Code can find where to sign in.
+- The health probe and the metadata document stay anonymous.
+- The API key keeps working next to tokens, for scripts and probes. Send it as `X-Api-Key`. A bearer value made of three dot-separated parts is treated as a JWT.
+
+| Setting (`Security:Jwt:…`) | Default | Meaning |
+|---|---|---|
+| `Authority` | none (off) | The issuer. Its OpenID configuration supplies the signing keys and the expected issuer. Entra ID: `https://login.microsoftonline.com/<tenant-id>/v2.0` |
+| `Audiences` | required | Accepted `aud` values. Entra ID: the API app's client id (v2 tokens) and/or `api://<client-id>` |
+| `ValidIssuers` | the authority's | Extra accepted `iss` values, for example `https://sts.windows.net/<tenant-id>/` for Entra v1 tokens |
+| `PublicBaseUrl` | from the request | The external URL advertised as the resource (`https://dumps.example.com`). Set it behind a proxy or gateway |
+| `ScopesSupported` | `[]` | Scopes advertised in the metadata, e.g. `api://<client-id>/access_as_user` |
+| `RoleClaimTypes` | `["roles"]` | Claims matched against the role names. Add `scp` / `scope` only for providers that put permissions there: an Entra scope is granted by user consent, not by assignment |
+| `ReaderRole` / `AnalystRole` / `AdminRole` | `Dumps.Read` / `Dumps.Analyze` / `Dumps.Admin` | Role names |
+
+**Roles.** Each role includes the ones below it. A valid token without any of these roles gets `403`. Any app in a tenant can obtain a token for your API through client credentials, so audience and issuer checks alone are not access control.
+
+| Role | Allows |
+|---|---|
+| `Dumps.Read` | `list_jobs`, `list_analyses`, `list_crash_groups`, `detect_debuggers`; job status; SignalR progress for own jobs |
+| `Dumps.Analyze` | Read, plus `triage_dump`, `load_dump`, `execute_command`, the analyses, `fingerprint_crash`, `close_session`, cancelling jobs |
+| `Dumps.Admin` | Analyze, plus every user's sessions and jobs |
+
+- **Tool list:** `tools/list` returns only the tools the caller's role allows.
+- **Per-user sessions:** a session or job belongs to the caller who created it, identified by `oid`, else `sub`. Another non-admin caller gets `404`, the same as for a session that does not exist. `list_jobs` and `GET /api/jobs` show only the caller's own jobs. Sessions and jobs started with the API key are unowned, so only administrators and API-key callers see them.
+- **Audit log:** the log category `DumpAnalysisService.Security.AuditLog` records `AUDIT <user> (<oid>) <action> session=<id> <dump path | command | analysis>` for each triage, load, command, analysis, fingerprint, close and cancel.
+
+#### Microsoft Entra ID setup
+
+1. **Register the API.** In *App registrations*, create a new registration (for example *WinDbg MCP Server*, single tenant).
+   - *Expose an API*: set the Application ID URI to `api://<api-client-id>` and add the scope `access_as_user`.
+   - *App roles*: create `Dumps.Read`, `Dumps.Analyze` and `Dumps.Admin`. Set *Allowed member types* to Users/Groups, plus Applications for service callers.
+   - *Manifest*: set `"requestedAccessTokenVersion": 2` (in `api`), so tokens come from the v2 issuer.
+2. **Restrict and assign.** In *Enterprise applications*, open the API: *Properties* → **Assignment required = Yes**. Under *Users and groups*, assign people or groups to the roles. Unassigned users then get no token at all.
+3. **Register the client for Claude Code** (Entra ID has no dynamic client registration, so the client is registered once):
+   - create a new registration, for example *WinDbg MCP – Claude Code*;
+   - *Authentication* → *Mobile and desktop applications* → redirect URI `http://localhost:8080/callback`;
+   - *API permissions* → *My APIs* → the API → `access_as_user` → grant admin consent.
+4. **Configure the service**, as environment variables in the container or App Service:
+   ```
+   Security__Jwt__Authority=https://login.microsoftonline.com/<tenant-id>/v2.0
+   Security__Jwt__Audiences__0=<api-client-id>
+   Security__Jwt__Audiences__1=api://<api-client-id>
+   Security__Jwt__PublicBaseUrl=https://dumps.example.com
+   Security__Jwt__ScopesSupported__0=api://<api-client-id>/access_as_user
+   ```
+5. **Connect Claude Code.** It discovers the authority from the metadata and opens the sign-in in a browser:
+   ```powershell
+   claude mcp add --transport http --client-id <claude-client-id> --callback-port 8080 dump-analyzer https://dumps.example.com/mcp
+   ```
+   Or in `.mcp.json`:
+   ```json
+   "dump-analyzer": {
+     "type": "http",
+     "url": "https://dumps.example.com/mcp",
+     "oauth": { "clientId": "<claude-client-id>", "callbackPort": 8080, "scopes": "api://<api-client-id>/access_as_user" }
+   }
+   ```
+   If Claude Code cannot discover the authorization server, add `"authServerMetadataUrl": "https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration"` to `oauth`. Entra ID serves only the OpenID discovery document, not RFC 8414 metadata.
+
+   **Without a client registration**, the Azure CLI can supply the token:
+   - In the API's *Expose an API* → *Authorized client applications*, add the Azure CLI client id `04b07795-8ddb-461a-bbee-02f9e1bf7b46`.
+   - Let Claude Code fetch the token at connect time with `headersHelper`. Its command prints `{"Authorization":"Bearer <token>"}`:
+     ```json
+     "dump-analyzer": {
+       "type": "http",
+       "url": "https://dumps.example.com/mcp",
+       "headersHelper": "pwsh -NoProfile -Command \"@{ Authorization = 'Bearer ' + (az account get-access-token --resource api://<api-client-id> --query accessToken -o tsv) } | ConvertTo-Json -Compress\""
+     }
+     ```
+6. **Services and scripts.** Azure Functions or pipelines:
+   - assign an app role to the managed identity or service principal;
+   - request a token for `api://<api-client-id>/.default`, for example with `DefaultAzureCredential`;
+   - send it as `Authorization: Bearer`, or put it in `DUMP_ANALYSIS_ACCESS_TOKEN` for `CommandLineClient`.
+
+**Other providers:** set `Authority` to the realm or tenant issuer URL and `Audiences` to the API's audience. If roles come in another claim, set `RoleClaimTypes` (Auth0: `permissions`; Keycloak with a client roles mapper: `roles`).
 
 ## MCP Tools
 
@@ -817,7 +900,8 @@ For standalone usage without MCP:
 - Ensure DumpAnalysisService.exe is running
 - Verify configuration in `.mcp.json` or Claude config
 - Check http://localhost:7997/api/diagnostics/health in browser
-- `401 Unauthorized`: the service has `Security:ApiKey` set, so add the `X-Api-Key` header to the client configuration
+- `401 Unauthorized`: the service has `Security:ApiKey` or `Security:Jwt` set. Add the `X-Api-Key` header or sign in with a token. The `WWW-Authenticate` header says which: `resource_metadata` means OAuth. A `401` with a token usually means the audience or issuer does not match `Security:Jwt` (the service logs the reason).
+- `403 Forbidden` with a token: the token has no `Dumps.*` role, or not a high enough one. Assign the user or app to an app role, then sign in again.
 - `400 Invalid hostname`: the client reaches the service by a name that `AllowedHosts` does not list (it defaults to localhost)
 
 ## License

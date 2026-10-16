@@ -26,6 +26,10 @@ public partial class Program
             builder.Services.AddSingleton(debuggerConfig);
             builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.SectionName));
 
+            // API key and/or OAuth bearer tokens (Security:ApiKey, Security:Jwt), roles, audit log
+            builder.AddDumpAuthentication();
+            builder.Services.AddSingleton<AuditLog>();
+
             // Infrastructure services
             builder.Services.AddSingleton<IPathExpansionService, PathExpansionService>();
             builder.Services.AddSingleton<IPathDetectionService, PathDetectionService>();
@@ -64,6 +68,8 @@ public partial class Program
                     options.SessionMode = HttpServerSessionMode.StatefulForInitializeClients;
                 })
                 .WithToolsFromAssembly()
+                // [Authorize(Policy = ...)] on the tools: tools/list shows only what the caller may call.
+                .AddAuthorizationFilters()
                 // MCP Tasks extension (SEP-2663): a task-aware client can run any tool call
                 // as a task and poll tasks/get instead of holding the request open.
                 // Tool calls still create REST-visible jobs in JobManagerService.
@@ -102,8 +108,10 @@ public partial class Program
             // Enable CORS
             app.UseCors();
 
-            // Shared-secret authentication for REST, MCP and SignalR (no-op without Security:ApiKey)
-            app.UseMiddleware<ApiKeyMiddleware>();
+            // API key / bearer token authentication for REST, MCP and SignalR; serves the OAuth
+            // protected resource metadata when Security:Jwt is configured. No-op without credentials.
+            app.UseAuthentication();
+            app.UseAuthorization();
 
             // Configure controllers
             app.MapControllers();
@@ -152,7 +160,7 @@ public partial class Program
     private static void _WarnIfExposedWithoutApiKey(WebApplication app, ILogger logger)
     {
         var security = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SecurityOptions>>().Value;
-        if (!string.IsNullOrWhiteSpace(security.ApiKey))
+        if (security.AuthenticationRequired)
             return;
 
         foreach (var url in app.Urls)
@@ -161,8 +169,8 @@ public partial class Program
                 || !uri.IsLoopback)
             {
                 logger.LogWarning(
-                    "Listening on {Url} without Security:ApiKey - every client that can reach this port can use the debugger. " +
-                    "Set Security__ApiKey (and send it as X-Api-Key) when the service is reachable from other machines.", url);
+                    "Listening on {Url} without Security:ApiKey or Security:Jwt - every client that can reach this port can use the debugger. " +
+                    "Set Security__ApiKey (sent as X-Api-Key) or Security__Jwt__Authority when the service is reachable from other machines.", url);
             }
         }
     }

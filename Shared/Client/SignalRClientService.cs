@@ -10,6 +10,7 @@ public class SignalRClientService : ISignalRClientService
     private readonly ILogger<SignalRClientService> _logger;
     private readonly string _hubUrl;
     private readonly string? _apiKey;
+    private readonly string? _accessToken;
     private HubConnection? _connection;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JobCompletedNotification>> _jobCompletions = new();
     private readonly ConcurrentDictionary<string, Action<ProgressNotification>> _progressCallbacks = new();
@@ -19,11 +20,13 @@ public class SignalRClientService : ISignalRClientService
     public SignalRClientService(
         ILogger<SignalRClientService> logger,
         string hubUrl = Constants.Network.DefaultProgressHubUrl,
-        string? apiKey = null)
+        string? apiKey = null,
+        string? accessToken = null)
     {
         _logger = logger;
         _hubUrl = hubUrl;
         _apiKey = apiKey;
+        _accessToken = accessToken;
     }
 
     public void SubscribeToJobProgress(string jobId, Action<ProgressNotification> progressCallback)
@@ -53,6 +56,9 @@ public class SignalRClientService : ISignalRClientService
             {
                 if (!string.IsNullOrEmpty(_apiKey))
                     options.Headers[Constants.Network.ApiKeyHeader] = _apiKey;
+                // Sent as a header, or as ?access_token= on WebSocket transports that cannot send headers
+                if (!string.IsNullOrEmpty(_accessToken))
+                    options.AccessTokenProvider = () => Task.FromResult<string?>(_accessToken);
             })
             .WithAutomaticReconnect()
             .Build();

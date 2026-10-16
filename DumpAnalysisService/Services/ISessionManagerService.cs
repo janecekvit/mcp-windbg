@@ -10,13 +10,18 @@ public interface ISessionManagerService : IDisposable
     /// <param name="jobId">Job ID for progress tracking</param>
     /// <param name="dumpFilePath">Path to the memory dump file to load</param>
     /// <param name="symbols">Optional: Symbol configuration from MCP server</param>
+    /// <param name="owner">Caller id that owns the session (null: unowned, visible to unrestricted callers only)</param>
     /// <param name="cancellationToken">Token to cancel the operation</param>
     /// <returns>Unique session ID for the created session</returns>
     Task<string> CreateSessionWithDumpAsync(
         string jobId,
         string dumpFilePath,
         Shared.Configuration.SymbolsConfiguration? symbols = null,
+        string? owner = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>The caller id that owns the session (null: unowned). False when the session does not exist.</summary>
+    bool TryGetSessionOwner(string sessionId, out string? owner);
 
     /// <summary>
     /// Executes a WinDbg/CDB command in the specified session with job-based progress reporting

@@ -1,4 +1,6 @@
 using DumpAnalysisService.Fingerprinting;
+using DumpAnalysisService.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Models;
 
@@ -10,6 +12,7 @@ namespace DumpAnalysisService.Controllers;
 [ApiController]
 [Route("api/crash-groups")]
 [Produces("application/json")]
+[Authorize(Policy = DumpPolicies.Read)]
 public class CrashGroupsController : ControllerBase
 {
     private readonly ICrashFingerprintService _fingerprints;
