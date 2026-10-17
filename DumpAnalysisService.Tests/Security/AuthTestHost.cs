@@ -101,3 +101,16 @@ public sealed class AuthTestHost : WebApplicationFactory<Program>
         return client;
     }
 }
+
+/// <summary>
+/// Every test class that starts the service in-process. The MCP SDK can lose the special binding
+/// of a tool parameter (IProgress, RequestContext) when several servers build their tools at the
+/// same time in one process, so these classes run one after another. A real deployment runs one
+/// server per process.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class InProcessServiceCollection
+{
+    public const string Name = "In-process service";
+}
+

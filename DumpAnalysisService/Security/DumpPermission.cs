@@ -38,6 +38,9 @@ public sealed record Caller(string? Id, string Name, DumpPermission Permission)
 
     public static readonly Caller Anonymous = new(null, "anonymous", DumpPermission.Admin);
 
+    /// <summary>No identity although authentication is required: owns nothing and may do nothing.</summary>
+    public static readonly Caller Unidentified = new("unidentified", "unidentified", DumpPermission.None);
+
     public bool IsRestricted => Id is not null;
 
     /// <summary>Whether this caller may use a session or job owned by <paramref name="owner"/> (null: unowned).</summary>
@@ -45,12 +48,15 @@ public sealed record Caller(string? Id, string Name, DumpPermission Permission)
 
     /// <summary>
     /// Resolves the caller from the authenticated principal. Without any authentication configured,
-    /// everyone is unrestricted, as before bearer tokens existed.
+    /// everyone is unrestricted, as before bearer tokens existed; with it, a missing or anonymous
+    /// principal is <see cref="Unidentified"/> (fail closed).
     /// </summary>
     public static Caller From(ClaimsPrincipal? user, SecurityOptions security)
     {
-        if (!security.AuthenticationRequired || user?.Identity?.IsAuthenticated != true)
+        if (!security.AuthenticationRequired)
             return Anonymous;
+        if (user?.Identity?.IsAuthenticated != true)
+            return Unidentified;
 
         if (user.HasClaim(AuthMethodClaim, ApiKeyMethod))
             return new Caller(null, ApiKeyMethod, DumpPermission.Admin);

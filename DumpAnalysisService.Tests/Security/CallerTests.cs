@@ -25,6 +25,18 @@ public class CallerTests
     }
 
     [Fact]
+    public void WithAuthentication_AMissingPrincipalIsUnidentified_NotUnrestricted()
+    {
+        var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
+
+        Assert.Same(Caller.Unidentified, Caller.From(null, Jwt));
+        Assert.Same(Caller.Unidentified, Caller.From(anonymous, new SecurityOptions { ApiKey = "k" }));
+        Assert.True(Caller.Unidentified.IsRestricted);
+        Assert.Equal(DumpPermission.None, Caller.Unidentified.Permission);
+        Assert.False(Caller.Unidentified.Owns(null));
+    }
+
+    [Fact]
     public void ApiKey_IsAnUnrestrictedAdministrator()
     {
         var caller = Caller.From(_Token((Caller.AuthMethodClaim, Caller.ApiKeyMethod)), new SecurityOptions { ApiKey = "k" });
