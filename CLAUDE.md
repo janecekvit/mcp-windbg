@@ -149,11 +149,17 @@ See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" f
   unrestricted callers: no auth configured, the API key, admins). Entry points (JobsController,
   DebuggerTools, ProgressHub.SubscribeToJob) call `EnsureSessionAccess` / `CanAccessJob` before
   starting work, so another user's session or job reads as not found. MCP tools get the caller
-  from `RequestContext<CallToolRequestParams>.User`, never from IHttpContextAccessor (tasks run
-  after the request). `AuditLog.Record` logs who did what.
+  from `McpCallerContext`, which a call-tool request filter (Program.cs) sets from
+  `request.User`. The filter also runs for task-backed calls, after the HTTP request has ended.
+  Never take the user from IHttpContextAccessor or from a `RequestContext` tool parameter: when
+  several servers build their tools at once in one process, the SDK can lose a special
+  parameter binding, and the parameter then arrives empty from the tool arguments. With
+  authentication on, a missing principal is `Caller.Unidentified` (no permission), never
+  unrestricted. `AuditLog.Record` logs who did what.
 - Tests: `DumpAnalysisService.Tests/Security/AuthTestHost.cs` boots the service with tokens signed
-  by a local RSA key (static OpenID configuration, nothing fetched); settings go through
-  `UseSetting`, because `Program` reads `Security:*` before `Build()`.
+  by a local RSA key (static OpenID configuration, nothing fetched). Settings go through
+  `UseSetting`, because `Program` reads `Security:*` before `Build()`. Classes that start it
+  share the non-parallel `InProcessServiceCollection`, for the same SDK binding race.
 - **`CdbCommandPolicy`**: applied to user commands in
   `SessionManagerService.ExecuteCommandAsync` only (never to internal init or
   predefined-analysis commands). Single line, no `q`/`qq`, and unless
