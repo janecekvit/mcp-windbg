@@ -5,6 +5,7 @@ using Shared.Models;
 
 namespace DumpAnalysisService.Tests.Security;
 
+[Collection(InProcessServiceCollection.Name)]
 public sealed class AuthenticationEndpointTests : IClassFixture<AuthenticationEndpointTests.JwtHost>
 {
     public sealed class JwtHost : IDisposable
@@ -147,6 +148,7 @@ public sealed class AuthenticationEndpointTests : IClassFixture<AuthenticationEn
     }
 }
 
+[Collection(InProcessServiceCollection.Name)]
 public sealed class ApiKeyOnlyEndpointTests : IDisposable
 {
     private readonly AuthTestHost _host = new(jwt: false);
@@ -190,6 +192,7 @@ public sealed class ApiKeyOnlyEndpointTests : IDisposable
     }
 }
 
+[Collection(InProcessServiceCollection.Name)]
 public sealed class NoAuthenticationEndpointTests : IDisposable
 {
     private readonly AuthTestHost _host = new(jwt: false, apiKey: null);

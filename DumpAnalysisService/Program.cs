@@ -70,6 +70,13 @@ public partial class Program
                 .WithToolsFromAssembly()
                 // [Authorize(Policy = ...)] on the tools: tools/list shows only what the caller may call.
                 .AddAuthorizationFilters()
+                // The caller of each tool call, for ownership and the audit log. Runs right before the
+                // tool, also for task-backed calls (whose HTTP request has already ended).
+                .WithRequestFilters(filters => filters.AddCallToolFilter(next => async (request, cancellationToken) =>
+                {
+                    using var _ = McpCallerContext.Use(request.User);
+                    return await next(request, cancellationToken);
+                }))
                 // MCP Tasks extension (SEP-2663): a task-aware client can run any tool call
                 // as a task and poll tasks/get instead of holding the request open.
                 // Tool calls still create REST-visible jobs in JobManagerService.

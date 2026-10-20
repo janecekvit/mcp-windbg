@@ -9,7 +9,6 @@ using DumpAnalysisService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Shared;
 using Shared.Models;
@@ -55,8 +54,18 @@ public class DebuggerTools
         _audit = audit;
     }
 
-    /// <summary>The caller of a tool call; the SDK carries the authenticated user on the request context.</summary>
-    private Caller _CallerOf(RequestContext<CallToolRequestParams>? context) => Caller.From(context?.User, _security);
+    /// <summary>
+    /// The caller of the tool call, set by the call-tool filter (<see cref="McpCallerContext"/>).
+    /// With authentication configured, a call without an identity is refused, never treated as unrestricted.
+    /// </summary>
+    /// <exception cref="UnauthorizedAccessException">Authentication is required and the call carries no identity.</exception>
+    private Caller _Caller()
+    {
+        var caller = Caller.From(McpCallerContext.User, _security);
+        if (caller.Permission == DumpPermission.None)
+            throw new UnauthorizedAccessException("The tool call carries no authenticated caller");
+        return caller;
+    }
 
     [McpServerTool(UseStructuredContent = true, ReadOnly = true)]
     [Authorize(Policy = DumpPolicies.Analyze)]
@@ -66,7 +75,6 @@ public class DebuggerTools
         "whether their symbols are already cached, .NET runtime, kernel bug check decoding, and suggested next steps. Run it before load_dump, which can take minutes.")]
     public async Task<DumpTriageResult> TriageDump(
         [Description("Path to the memory dump file (.dmp)")] string dump_file_path,
-        RequestContext<CallToolRequestParams>? context = null,
         IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -77,7 +85,7 @@ public class DebuggerTools
 
         // Same symbol cache as load_dump: X-Symbol-Cache header, else the server default.
         var symbolCache = _symbolConfigProvider.GetConfiguration().SymbolCache;
-        var caller = _CallerOf(context);
+        var caller = _Caller();
         var jobId = _jobManager.CreateJob(JobOperationType.TriageDump, owner: caller.Id);
         _audit.Record(caller, "triage-dump", detail: dump_file_path);
 
@@ -108,7 +116,6 @@ public class DebuggerTools
         "group registry and says whether it is new or how many dumps had it before. Quality: exact, partial, or weak (not grouped).")]
     public async Task<CrashFingerprintResult> FingerprintCrash(
         [Description("Debugging session ID (from load_dump)")] string session_id,
-        RequestContext<CallToolRequestParams>? context = null,
         IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -117,7 +124,7 @@ public class DebuggerTools
         if (string.IsNullOrWhiteSpace(session_id))
             throw new ArgumentException("Session ID is required", nameof(session_id));
 
-        var caller = _CallerOf(context);
+        var caller = _Caller();
         _sessionManager.EnsureSessionAccess(caller, session_id);
         var jobId = _jobManager.CreateJob(JobOperationType.FingerprintCrash, session_id, caller.Id);
         _audit.Record(caller, "fingerprint-crash", session_id);
@@ -156,7 +163,6 @@ public class DebuggerTools
     [Description("Load a memory dump file and create a new CDB debugging session")]
     public async Task<string> LoadDump(
         [Description("Path to the memory dump file (.dmp)")] string dump_file_path,
-        RequestContext<CallToolRequestParams>? context = null,
         IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -174,7 +180,7 @@ public class DebuggerTools
             var symbols = _symbolConfigProvider.GetConfiguration();
 
             // Create job
-            var caller = _CallerOf(context);
+            var caller = _Caller();
             var jobId = _jobManager.CreateJob(JobOperationType.LoadDump, owner: caller.Id);
             _audit.Record(caller, "load-dump", detail: dump_file_path);
             _logger.LogInformation("Created job {JobId} for loading dump", jobId);
@@ -217,7 +223,6 @@ public class DebuggerTools
     public async Task<string> ExecuteCommand(
         [Description("ID of the debugging session")] string session_id,
         [Description("WinDbg/CDB command to execute (e.g., 'kb', '!analyze -v', 'dt')")] string command,
-        RequestContext<CallToolRequestParams>? context = null,
         IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -230,7 +235,7 @@ public class DebuggerTools
         if (string.IsNullOrWhiteSpace(command))
             throw new ArgumentException("Command is required", nameof(command));
 
-        var caller = _CallerOf(context);
+        var caller = _Caller();
         _sessionManager.EnsureSessionAccess(caller, session_id);
         var jobId = _jobManager.CreateJob(JobOperationType.ExecuteCommand, session_id, caller.Id);
         _audit.Record(caller, "execute-command", session_id, command);
@@ -258,7 +263,6 @@ public class DebuggerTools
     [Description("Run a comprehensive basic analysis of the loaded dump (equivalent to the PowerShell script)")]
     public async Task<string> BasicAnalysis(
         [Description("ID of the debugging session")] string session_id,
-        RequestContext<CallToolRequestParams>? context = null,
         IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -267,7 +271,7 @@ public class DebuggerTools
         if (string.IsNullOrWhiteSpace(session_id))
             throw new ArgumentException("Session ID is required", nameof(session_id));
 
-        var caller = _CallerOf(context);
+        var caller = _Caller();
         _sessionManager.EnsureSessionAccess(caller, session_id);
         var jobId = _jobManager.CreateJob(JobOperationType.BasicAnalysis, session_id, caller.Id);
         _audit.Record(caller, "basic-analysis", session_id);
@@ -298,7 +302,6 @@ public class DebuggerTools
         [Description("Type of analysis to run")]
         [AllowedValues("basic", "exception", "threads", "heap", "modules", "handles", "locks", "memory", "drivers", "processes")]
         string analysis_type,
-        RequestContext<CallToolRequestParams>? context = null,
         IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -313,7 +316,7 @@ public class DebuggerTools
 
         var parsedAnalysisType = analysis_type.ToAnalysisType();
 
-        var caller = _CallerOf(context);
+        var caller = _Caller();
         _sessionManager.EnsureSessionAccess(caller, session_id);
         var jobId = _jobManager.CreateJob(JobOperationType.PredefinedAnalysis, session_id, caller.Id);
         _audit.Record(caller, "predefined-analysis", session_id, analysis_type);
@@ -341,7 +344,6 @@ public class DebuggerTools
     [Description("Close a debugging session and free resources")]
     public async Task<string> CloseSession(
         [Description("ID of the debugging session to close")] string session_id,
-        RequestContext<CallToolRequestParams>? context = null,
         IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -350,7 +352,7 @@ public class DebuggerTools
         if (string.IsNullOrWhiteSpace(session_id))
             throw new ArgumentException("Session ID is required", nameof(session_id));
 
-        var caller = _CallerOf(context);
+        var caller = _Caller();
         _sessionManager.EnsureSessionAccess(caller, session_id);
         var jobId = _jobManager.CreateJob(JobOperationType.CloseSession, session_id, caller.Id);
         _audit.Record(caller, "close-session", session_id);
@@ -378,7 +380,6 @@ public class DebuggerTools
     [Description("List all jobs with their current status, optionally filtered by state (Queued, Running, Completed, Failed, Cancelled)")]
     public Task<string> ListJobs(
         [Description("Optional filter by job state (Queued, Running, Completed, Failed, Cancelled)")] string? state = null,
-        RequestContext<CallToolRequestParams>? context = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Tool list_jobs called with state filter: {State}", state ?? "none");
@@ -391,7 +392,7 @@ public class DebuggerTools
             jobState = parsedState;
         }
 
-        var caller = _CallerOf(context);
+        var caller = _Caller();
         var jobs = _jobManager.GetAllJobs(jobState).Where(job => _jobManager.CanAccessJob(caller, job.JobId)).ToList();
 
         // Format as readable text
