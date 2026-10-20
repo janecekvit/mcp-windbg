@@ -31,6 +31,7 @@ public class CallerTests
 
         Assert.Same(Caller.Unidentified, Caller.From(null, Jwt));
         Assert.Same(Caller.Unidentified, Caller.From(anonymous, new SecurityOptions { ApiKey = "k" }));
+        Assert.Same(Caller.Unidentified, Caller.From(new ClaimsPrincipal(), Jwt));
         Assert.True(Caller.Unidentified.IsRestricted);
         Assert.Equal(DumpPermission.None, Caller.Unidentified.Permission);
         Assert.False(Caller.Unidentified.Owns(null));
