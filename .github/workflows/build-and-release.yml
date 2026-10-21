@@ -433,10 +433,14 @@ jobs:
         ### What's included
         - ``DumpAnalysisService.exe`` - MCP HTTP server + REST API (port 7997)
         - ``CommandLineClient.exe`` - Command-line tool for scripting
+        - ``appsettings.json`` - Server configuration (debugger, symbols, security)
         - ``Scripts/`` - PowerShell scripts for standalone usage
         - ``README.md`` - Complete documentation and integration guide
         - ``.mcp.json`` - Configuration example for Claude Code (HTTP transport)
-        - ``Examples/`` - Usage examples and test files
+        - ``LICENSE``, ``NOTICE`` - Apache-2.0
+
+        ### Docker
+        ``docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}`` (Windows container, ltsc2022)
 
         ### Quick Start
         1. Download and extract the ZIP file
@@ -462,6 +466,8 @@ jobs:
         name: WinDbg MCP Server ${{ needs.build.outputs.version }}
         tag_name: ${{ github.ref_name }}
         body: ${{ steps.release_body.outputs.body }}
+        # Appends "What's Changed" (the PRs merged since the previous release) and a compare link.
+        generate_release_notes: true
         draft: false
         prerelease: ${{ contains(github.ref_name, '-') }}
         files: "*.zip"
