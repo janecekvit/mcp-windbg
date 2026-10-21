@@ -1,0 +1,106 @@
+# mcp-windbg architecture: who talks to whom, and the trust and process boundaries.
+# Source of truth for architecture.svg next to it: edit this file, then run
+# Scripts/render-diagrams.sh and commit both.
+vars: {
+  d2-config: {
+    layout-engine: elk
+  }
+}
+
+direction: down
+
+# Outside the service's trust boundary. Every request carries a JWT bearer token,
+# an API key, or nothing when no credential is configured.
+clients: Clients {
+  style.stroke-dash: 3
+
+  # Claude Code or any MCP client (Streamable HTTP).
+  mcp_client: MCP client
+  scripts: PowerShell / Azure Function
+  cli: CommandLineClient
+}
+
+# Optional: Microsoft Entra ID or any OpenID Connect provider (Security:Jwt).
+# Clients get access tokens from it; the service only fetches its signing keys.
+idp: Identity provider {
+  shape: cloud
+}
+
+host: Windows host or Docker container (servercore ltsc2022) {
+  # One ASP.NET Core process: MCP and REST share the same services and jobs.
+  service: DumpAnalysisService process (port 7997) {
+    # Authentication (policy scheme: JWT bearer or API key), then
+    # [Authorize(Policy = DumpPolicies.*)], then the ownership check
+    # (EnsureSessionAccess / CanAccessJob). Only GET /api/diagnostics/health is anonymous.
+    entry: Authenticated entry points {
+      # DebuggerTools. The caller comes from McpCallerContext (call-tool filter).
+      mcp: MCP /mcp
+      # JobsController, CrashGroupsController, DiagnosticsController.
+      rest: REST /api
+      # ProgressHub: clients subscribe to the jobs they own.
+      hub: SignalR /hubs/progress
+    }
+
+    # Every operation is a job: created at once, run in a background task, polled.
+    jobs: JobManagerService
+    # One CdbSessionService per session. User commands pass CdbCommandPolicy.
+    sessions: SessionManagerService
+    # MinidumpParser reads the dump's streams directly, without the debugger.
+    triage: DumpTriageService
+    # Exception code from triage plus the faulting stack from cdb.
+    fingerprints: CrashFingerprintService
+  }
+
+  # Started with -noshell; commands framed by .echo start and end markers.
+  cdb: cdb.exe (one per dump) {
+    style.multiple: true
+  }
+
+  files: Files {
+    # Restricted by Security:AllowedDumpDirectories.
+    dumps: Dump files {
+      shape: page
+    }
+    symcache: Symbol cache {
+      shape: cylinder
+    }
+    # Crash groups (Fingerprint:RegistryPath).
+    registry: crash-groups.json {
+      shape: page
+    }
+  }
+}
+
+# Microsoft and NuGet symbol servers, plus any configured srv* entries.
+symsrv: Symbol servers {
+  shape: cloud
+}
+
+clients.mcp_client -> host.service.entry.mcp
+clients.scripts -> host.service.entry.rest
+clients.cli -> host.service.entry.rest
+clients.cli -> host.service.entry.hub
+idp -> clients: token {
+  style.stroke-dash: 3
+}
+idp -> host.service.entry: signing keys {
+  style.stroke-dash: 3
+}
+
+host.service.entry -> host.service.jobs: create, poll
+host.service.entry -> host.service.sessions: load, command
+host.service.entry -> host.service.triage: triage
+host.service.entry -> host.service.fingerprints: fingerprint
+host.service.jobs -> host.service.entry.hub: push
+
+host.service.sessions -> host.service.jobs: progress
+host.service.sessions -> host.cdb: stdin / stdout
+host.service.fingerprints -> host.service.sessions: stack
+host.service.fingerprints -> host.service.triage: code
+host.service.fingerprints -> host.files.registry: record
+
+host.service.triage -> host.files.dumps: streams
+host.service.triage -> host.files.symcache: cached?
+host.cdb -> host.files.dumps: open
+host.cdb -> host.files.symcache
+host.cdb -> symsrv: download

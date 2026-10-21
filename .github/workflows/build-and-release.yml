@@ -335,6 +335,31 @@ jobs:
         path: publish/win-x64/
         retention-days: 1
 
+  # docs/**/*.d2 are the architecture sources: each must be formatted, valid, and rendered to the
+  # committed .svg next to it.
+  diagrams:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+        cache: false
+
+    - name: Install D2
+      # The SVG embeds the D2 build's version string, so install it the same way locally.
+      run: |
+        go install oss.terrastruct.com/d2@v0.7.2
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+    - name: Check diagrams
+      run: Scripts/render-diagrams.sh --check
+
   # The image is built on windows-2022: windows-latest has no running Docker engine, and the
   # servercore:ltsc2022 base image matches this host build. A failure here never blocks the
   # release ZIP, which the release job publishes from the build job alone.
