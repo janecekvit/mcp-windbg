@@ -348,7 +348,6 @@ jobs:
           package/
 
     - name: Upload publish output for the Docker image
-      if: startsWith(github.ref, 'refs/tags/v')
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: publish-win-x64-${{ steps.version.outputs.version }}
@@ -383,11 +382,56 @@ jobs:
     - name: Check diagrams
       run: Scripts/render-diagrams.sh --check
 
-  # The image is built on windows-2022: windows-latest has no running Docker engine, and the
-  # servercore:ltsc2022 base image matches this host build. A failure here never blocks the
-  # release ZIP, which the release job publishes from the build job alone.
+  # Images are built on windows-2022: windows-latest has no running Docker engine, and the
+  # servercore:ltsc2022 base image matches this host build.
+  #
+  # docker: every pull request and push to main builds the image without logging in or pushing,
+  # so a Dockerfile or base image change (Dependabot updates the digest) is tested before a
+  # release. Tags skip it: docker-publish builds the same image there and pushes it.
   docker:
     name: docker
+    needs: build
+    runs-on: windows-2022
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Download publish output
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        name: publish-win-x64-${{ needs.build.outputs.version }}
+        path: publish/win-x64
+
+    # The hosted Windows images can start with the Docker engine down
+    # (actions/runner-images#13729), which is what broke the v1.1.0 image build.
+    - name: Start Docker engine
+      shell: pwsh
+      run: |
+        Restart-Service docker -ErrorAction Stop
+        for ($i = 0; $i -lt 30; $i++) {
+          docker version *> $null
+          if ($LASTEXITCODE -eq 0) { break }
+          Start-Sleep -Seconds 2
+        }
+        docker version
+        if ($LASTEXITCODE -ne 0) { throw "The Docker engine did not start" }
+
+    - name: Build Docker image
+      shell: pwsh
+      run: |
+        docker build -t mcp-windbg:ci .
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  # Release tags only: build and push to ghcr.io. A failure here never blocks the release ZIP,
+  # which the release job publishes from the build job alone.
+  docker-publish:
+    name: docker-publish
     needs: build
     runs-on: windows-2022
     if: startsWith(github.ref, 'refs/tags/v')
