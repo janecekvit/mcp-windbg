@@ -54,6 +54,19 @@ dotnet build
 dotnet run --project DumpAnalysisService
 ```
 
+### Verifying a release download
+
+Every release ZIP has a signed [SLSA build provenance](https://slsa.dev/provenance/) attestation
+(Sigstore, keyless, made by the release workflow). Verify that a ZIP was built by this repository's
+`build-and-release.yml` from a release tag before running it:
+
+```powershell
+gh attestation verify windbg-mcp-server-vX.Y.Z-win-x64.zip --repo janecekvit/mcp-windbg
+```
+
+The same bundle is attached to the release as `…-win-x64.sigstore.json` (pass it with `--bundle`
+to verify offline), and its signed in-toto statement as `…-win-x64.intoto.jsonl`.
+
 ## Running via Docker
 
 Pre-built Windows container images are published to GitHub Container Registry on every release tag. Lets you run `DumpAnalysisService` as a sidecar without manually downloading the Release ZIP.

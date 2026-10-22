@@ -165,7 +165,11 @@ Workflows: `build-and-release.yml` (build, tests, coverage, Docker image build; 
 - Top-level `permissions: contents: read` (`{}` in `scorecard.yml`); a job that needs more asks for
   it at job level, with a comment saying why (`id-token: write` for Codecov OIDC, `checks: write`
   for the test reporter, `security-events: write` for SARIF, `packages: write` for ghcr.io,
-  `contents: write` only in the release job).
+  `contents: write` only in the release job, which also has `id-token: write` and
+  `attestations: write` for the build provenance).
+- **Signed releases**: the release job attests the ZIP with `actions/attest-build-provenance`
+  (Sigstore) and attaches the bundle as `.sigstore.json` and its DSSE envelope as `.intoto.jsonl`,
+  the suffixes OpenSSF Scorecard's Signed-Releases check looks for.
 - **Never expand `${{ }}` inside a `run:` script**: pass the value through `env:` and read
   `$env:NAME` / `$NAME` (zizmor flags it as template injection).
 - A `concurrency` group in every workflow; pull request runs cancel their older run.

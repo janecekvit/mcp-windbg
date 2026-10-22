@@ -8,8 +8,14 @@ LABEL org.opencontainers.image.source="https://github.com/janecekvit/mcp-windbg"
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';"]
 
 # Install Windows Debugging Tools (cdb.exe + symsrv) via Windows SDK web setup.
-RUN Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2237387" `
-        -OutFile winsdksetup.exe ; `
+RUN $response = Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2237387" `
+        -OutFile winsdksetup.exe -UseBasicParsing -PassThru ; `
+    Write-Host "winsdksetup.exe from $($response.BaseResponse.ResponseUri)" ; `
+    Write-Host "winsdksetup.exe SHA-256 $((Get-FileHash winsdksetup.exe -Algorithm SHA256).Hash)" ; `
+    $signature = Get-AuthenticodeSignature winsdksetup.exe ; `
+    if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { `
+        throw "winsdksetup.exe is not validly signed by Microsoft: $($signature.Status) $($signature.SignerCertificate.Subject)" `
+    } ; `
     Start-Process -Wait winsdksetup.exe `
         -ArgumentList '/quiet','/features','OptionId.WindowsDesktopDebuggers' ; `
     Remove-Item winsdksetup.exe
