@@ -468,10 +468,12 @@ jobs:
       with:
         name: windbg-mcp-server-${{ needs.build.outputs.version }}
 
-    - name: Create Release Body
-      id: release_body
+    # gh is on the runner; no third-party release action. --generate-notes appends "What's
+    # Changed" (the PRs merged since the previous release) and a compare link to the notes file.
+    - name: Create GitHub Release
       shell: pwsh
       env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         VERSION: ${{ needs.build.outputs.version }}
       run: |
         $body = @"
@@ -515,19 +517,21 @@ jobs:
 
         For detailed documentation, see [README.md](https://github.com/$env:GITHUB_REPOSITORY/blob/$env:GITHUB_REF_NAME/README.md).
         "@
-        echo "body<<EOF" >> $env:GITHUB_OUTPUT
-        echo $body >> $env:GITHUB_OUTPUT
-        echo "EOF" >> $env:GITHUB_OUTPUT
+        Set-Content -LiteralPath release-notes.md -Value $body -Encoding utf8
 
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-      with:
-        name: WinDbg MCP Server ${{ needs.build.outputs.version }}
-        tag_name: ${{ github.ref_name }}
-        body: ${{ steps.release_body.outputs.body }}
-        # Appends "What's Changed" (the PRs merged since the previous release) and a compare link.
-        generate_release_notes: true
-        draft: false
-        prerelease: ${{ contains(github.ref_name, '-') }}
-        files: "*.zip"
-        token: ${{ secrets.GITHUB_TOKEN }}
+        $tag = $env:GITHUB_REF_NAME
+        $zips = @(Get-ChildItem -Filter *.zip | ForEach-Object FullName)
+        if ($zips.Count -eq 0) { throw "No release ZIP was downloaded" }
+
+        # A re-run finds the release already there: replace its assets instead of failing.
+        gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+        if ($LASTEXITCODE -eq 0) {
+          gh release upload $tag @zips --repo $env:GITHUB_REPOSITORY --clobber
+        } else {
+          $options = @('--repo', $env:GITHUB_REPOSITORY, '--verify-tag',
+                       '--title', "WinDbg MCP Server $env:VERSION",
+                       '--notes-file', 'release-notes.md', '--generate-notes')
+          if ($tag.Contains('-')) { $options += '--prerelease' }
+          gh release create $tag @zips @options
+        }
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
