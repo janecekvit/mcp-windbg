@@ -7,11 +7,16 @@ LABEL org.opencontainers.image.source="https://github.com/janecekvit/mcp-windbg"
 
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';"]
 
-# Install Windows Debugging Tools (cdb.exe + symsrv) via Windows SDK web setup.
-RUN $response = Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2237387" `
-        -OutFile winsdksetup.exe -UseBasicParsing -PassThru ; `
-    Write-Host "winsdksetup.exe from $($response.BaseResponse.ResponseUri)" ; `
-    Write-Host "winsdksetup.exe SHA-256 $((Get-FileHash winsdksetup.exe -Algorithm SHA256).Hash)" ; `
+# Install Windows Debugging Tools (cdb.exe + symsrv) via the Windows SDK web setup, pinned to
+# one SDK release: the versioned URL that https://go.microsoft.com/fwlink/?linkid=2237387
+# resolved to, and that file's SHA-256. The build also requires a valid Microsoft Authenticode
+# signature. To move to a newer SDK, resolve the fwlink, download the file and update both values
+# (Get-FileHash winsdksetup.exe -Algorithm SHA256).
+RUN $url = 'https://download.microsoft.com/download/b/8/5/b85bd06f-491c-4c1c-923e-75ce2fe2378e/windowssdk/winsdksetup.exe' ; `
+    $sha256 = '1BF94F7D2CF44CDF50124C3B5745A27B517367435F1BD5D0F127A33B2BD8344C' ; `
+    Invoke-WebRequest -Uri $url -OutFile winsdksetup.exe -UseBasicParsing ; `
+    $actual = (Get-FileHash winsdksetup.exe -Algorithm SHA256).Hash ; `
+    if ($actual -ne $sha256) { throw "winsdksetup.exe SHA-256 is $actual, expected $sha256" } ; `
     $signature = Get-AuthenticodeSignature winsdksetup.exe ; `
     if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { `
         throw "winsdksetup.exe is not validly signed by Microsoft: $($signature.Status) $($signature.SignerCertificate.Subject)" `
