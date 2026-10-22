@@ -1,0 +1,43 @@
+# lychee configuration: the link check of .github/workflows/docs.yml.
+# Every relative link and every #anchor must resolve; an external link must answer.
+# Run locally with lychee v0.24.2 (the version lychee-action v2.9.0 installs):
+#   lychee --config lychee.toml --no-progress './**/*.md'
+
+# Check the anchor of a link as well as its target, in a local file and on a remote page.
+include_fragments = "full"
+
+# A link inside a code block or a code span is an example (an MCP config, a curl call), not a link.
+include_verbatim = false
+
+# 206 is a partial answer and 429 is a rate limit; neither says the page is gone.
+accept = ["200", "206", "429"]
+
+# Remember results in .lycheecache, which the workflow carries between runs, so a pull request
+# does not hit every external site again.
+cache = true
+max_cache_age = "1d"
+
+max_retries = 3
+retry_wait_time = 5
+timeout = 20
+
+# Never reachable from a runner, or not a real address.
+exclude_all_private = true
+exclude = [
+    # The service itself, listening locally on its default port or behind a local proxy.
+    '^https?://localhost',
+    '^https?://127\.0\.0\.1',
+    '^https?://\+:',
+    # Microsoft Entra ID and other OIDC issuers in configuration examples: they carry a tenant id.
+    '^https://login\.microsoftonline\.com/',
+    '^https://sts\.windows\.net/',
+    # Example organisations and domains in illustrations.
+    'contoso',
+    '^https?://([a-z0-9-]+\.)*example\.(com|net|org)',
+    '^https?://([a-z0-9-]+\.)*company\.com',
+    '^https?://([a-z0-9-]+\.)*(private-symbols|company-symbols)\.com',
+    # A URL with a placeholder in it: {org}, <tenant-id>, and their percent-encoded forms.
+    '[{}<>]',
+    '%7[BbDd]',
+    '%3[CcEe]',
+]

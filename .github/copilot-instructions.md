@@ -5,6 +5,7 @@ The service runs untrusted dump files and takes debugger commands from MCP clien
 for security first. Flag these as blocking:
 
 ## Security (always blocking)
+
 - **cdb command injection**: user text must reach cdb.exe only through
   `SessionManagerService.ExecuteCommandAsync`, which applies `CdbCommandPolicy` (single line, no
   `q`/`qq`, no `.shell`/`.load`/`.create`/`.writemem`/`$<`). Block new paths that send user or
@@ -25,12 +26,14 @@ for security first. Flag these as blocking:
   change, its commit messages or the pull request description.
 
 ## Workflows (`.github/workflows/`)
+
 - Every `uses:` pinned to a full commit SHA with the release in a comment (`@<sha> # vX.Y.Z`).
 - `persist-credentials: false` on checkout; top-level `permissions: contents: read`, with extra
   job permissions only where needed and commented.
 - No `${{ }}` expansion inside `run:` scripts; pass values through `env:`.
 
 ## Correctness
+
 - Services throw specific exceptions (`FileNotFoundException`, `ArgumentException`,
   `InvalidOperationException`); controllers map them to 400/404/500. No boolean error returns.
 - cdb commands go through the per-session semaphore; never two commands on one session at once.
@@ -40,6 +43,7 @@ for security first. Flag these as blocking:
   and the rendered `.svg` (`Scripts/render-diagrams.sh`).
 
 ## Tests
+
 - Behaviour changes need tests in `DumpAnalysisService.Tests` (or `Shared.Tests`); security
   checks need a test that the refused case is refused.
 - Never skip, disable or quarantine a test to make CI pass.

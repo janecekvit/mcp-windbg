@@ -1,6 +1,7 @@
 # WinDbg MCP Server
 
 [![Build and Release](https://github.com/janecekvit/mcp-windbg/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/janecekvit/mcp-windbg/actions/workflows/build-and-release.yml)
+[![Docs](https://github.com/janecekvit/mcp-windbg/actions/workflows/docs.yml/badge.svg)](https://github.com/janecekvit/mcp-windbg/actions/workflows/docs.yml)
 [![codecov](https://codecov.io/gh/janecekvit/mcp-windbg/graph/badge.svg)](https://codecov.io/gh/janecekvit/mcp-windbg)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/janecekvit/mcp-windbg/badge)](https://scorecard.dev/viewer/?uri=github.com/janecekvit/mcp-windbg)
 
@@ -37,6 +38,7 @@ sequence diagrams for loading a dump and for securing a request are in [`docs/ar
 ## Installation
 
 ### Quick Installation (Single-file executable)
+
 ```powershell
 # Build single-file executables
 .\Scripts\Publish.ps1
@@ -49,6 +51,7 @@ sequence diagrams for loading a dump and for securing a request are in [`docs/ar
 ```
 
 ### Development build
+
 ```bash
 dotnet build
 dotnet run --project DumpAnalysisService
@@ -208,6 +211,7 @@ Use the `detect_debuggers` tool to discover available installations.
 ## Configuration
 
 The server supports multiple configuration methods with the following priority order (highest to lowest):
+
 1. **Tool Parameters** — per-call overrides passed as MCP tool arguments (e.g. `load_dump` `symbol_cache`)
 2. **HTTP Headers** — per-MCP-client defaults via `.mcp.json` (`X-Symbol-Cache`, `X-Symbol-Path-Extra`, `X-Symbol-Servers`)
 3. **appsettings.json** — server-wide defaults (`Debugger:DefaultSymbolCache`, …)
@@ -216,7 +220,9 @@ The server supports multiple configuration methods with the following priority o
 ### Configuration File
 
 #### DumpAnalysisService Configuration
+
 `DumpAnalysisService/appsettings.json` (next to the executable after publishing):
+
 ```json
 {
   "AllowedHosts": "localhost;127.0.0.1;[::1]",
@@ -253,6 +259,7 @@ The cdb.exe path is not configured: the service [detects it](#automatic-debugger
 The symbol path is built in this order: the cache, local paths (`DefaultSymbolPathExtra`, or the client's `symbol_path_extra`), the client's symbol servers (tool parameter or `X-Symbol-Servers` header), then `DefaultSymbolServers`. In client values, a URL becomes `srv*<url>`; a UNC or local path is added as is.
 
 **Example 1: Company with an internal symbol server, for all clients**
+
 ```json
 {
   "Debugger": {
@@ -262,17 +269,21 @@ The symbol path is built in this order: the cache, local paths (`DefaultSymbolPa
   }
 }
 ```
+
 This gives the symbol path:
-```
+
+```text
 cache*D:\SymbolCache;C:\MyProject\Debug;srv*https://symbols.company.com;srv*https://msdl.microsoft.com/download/symbols
 ```
 
 **Example 2: Extra servers for one MCP client only** (Microsoft servers stay, from the defaults)
+
 ```json
 "headers": { "X-Symbol-Servers": "\\\\buildserver\\symbols;https://private-symbols.com" }
 ```
 
 **Example 3: Local development only**
+
 ```json
 {
   "Debugger": {
@@ -280,7 +291,6 @@ cache*D:\SymbolCache;C:\MyProject\Debug;srv*https://symbols.company.com;srv*http
   }
 }
 ```
-
 
 ## Security
 
@@ -344,18 +354,23 @@ With `Security:Jwt:Authority` set, the service is an OAuth 2.1 **resource server
    - *Authentication* → *Mobile and desktop applications* → redirect URI `http://localhost:8080/callback`;
    - *API permissions* → *My APIs* → the API → `access_as_user` → grant admin consent.
 4. **Configure the service**, as environment variables in the container or App Service:
-   ```
+
+   ```text
    Security__Jwt__Authority=https://login.microsoftonline.com/<tenant-id>/v2.0
    Security__Jwt__Audiences__0=<api-client-id>
    Security__Jwt__Audiences__1=api://<api-client-id>
    Security__Jwt__PublicBaseUrl=https://dumps.example.com
    Security__Jwt__ScopesSupported__0=api://<api-client-id>/access_as_user
    ```
+
 5. **Connect Claude Code.** It discovers the authority from the metadata and opens the sign-in in a browser:
+
    ```powershell
    claude mcp add --transport http --client-id <claude-client-id> --callback-port 8080 dump-analyzer https://dumps.example.com/mcp
    ```
+
    Or in `.mcp.json`:
+
    ```json
    "dump-analyzer": {
      "type": "http",
@@ -363,11 +378,13 @@ With `Security:Jwt:Authority` set, the service is an OAuth 2.1 **resource server
      "oauth": { "clientId": "<claude-client-id>", "callbackPort": 8080, "scopes": "api://<api-client-id>/access_as_user" }
    }
    ```
+
    If Claude Code cannot discover the authorization server, add `"authServerMetadataUrl": "https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration"` to `oauth`. Entra ID serves only the OpenID discovery document, not RFC 8414 metadata.
 
    **Without a client registration**, the Azure CLI can supply the token:
    - In the API's *Expose an API* → *Authorized client applications*, add the Azure CLI client id `04b07795-8ddb-461a-bbee-02f9e1bf7b46`.
    - Let Claude Code fetch the token at connect time with `headersHelper`. Its command prints `{"Authorization":"Bearer <token>"}`:
+
      ```json
      "dump-analyzer": {
        "type": "http",
@@ -375,6 +392,7 @@ With `Security:Jwt:Authority` set, the service is an OAuth 2.1 **resource server
        "headersHelper": "pwsh -NoProfile -Command \"@{ Authorization = 'Bearer ' + (az account get-access-token --resource api://<api-client-id> --query accessToken -o tsv) } | ConvertTo-Json -Compress\""
      }
      ```
+
 6. **Services and scripts.** Azure Functions or pipelines:
    - assign an app role to the managed identity or service principal;
    - request a token for `api://<api-client-id>/.default`, for example with `DefaultAzureCredential`;
@@ -385,9 +403,11 @@ With `Security:Jwt:Authority` set, the service is an OAuth 2.1 **resource server
 ## MCP Tools
 
 ### triage_dump
+
 Instant first look at a dump, read straight from its minidump streams: no debugger, no symbols, typically well under a second. Run it before `load_dump`, which can take minutes while symbols download.
 
 **Parameters:**
+
 - `dump_file_path`: Path to .dmp file
 
 The symbol cache it checks is the one `load_dump` uses: the `X-Symbol-Cache` header, else `DefaultSymbolCache` (REST: optional `symbolCache` in the body, honouring `Security:AllowClientSymbolOverrides`).
@@ -422,50 +442,64 @@ States it recognises without the debugger:
 Subject to `Security:AllowedDumpDirectories` like `load_dump`.
 
 ### load_dump
+
 Loads a memory dump and creates a new debugging session.
 
 **Parameters:**
+
 - `dump_file_path`: Path to .dmp file
 - `symbol_cache` *(optional)*: Symbol cache directory (overrides HTTP header and `appsettings.json` defaults)
 - `symbol_path_extra` *(optional)*: Semicolon-separated additional local symbol paths
 - `symbol_servers` *(optional)*: Semicolon-separated extra symbol servers (Microsoft public symbol server is always included)
 
 ### execute_command
+
 Executes a WinDbg/CDB command in an existing session.
 
 **Parameters:**
+
 - `session_id`: Debugging session ID
 - `command`: Command to execute (e.g., "kb", "!analyze -v"); one line, subject to the [command policy](#security)
 
 ### predefined_analysis
+
 Runs a predefined analysis.
 
 **Parameters:**
+
 - `session_id`: Debugging session ID
 - `analysis_type`: Analysis type (basic, exception, threads, heap, modules, handles, locks, memory, drivers, processes)
 
 ### basic_analysis
+
 Runs basic analysis (equivalent to PowerShell script).
 
 **Parameters:**
+
 - `session_id`: Debugging session ID
 
 ### list_jobs
+
 Lists all jobs with their current status.
 
 **Parameters (optional):**
+
 - `state`: Filter by job state (Queued, Running, Completed, Failed, Cancelled)
 
 ### list_analyses
+
 Lists all available predefined analyses with descriptions.
 
 ### detect_debuggers
+
 Detects available CDB/WinDbg installations on the system.
 
 ### fingerprint_crash
+
 Reduces the crash in a loaded session to a **stable fingerprint**, so dumps of the same defect group together across machines, ASLR layouts and rebuilds, and records it in the crash group registry.
 
 **Parameters:**
+
 - `session_id`: Debugging session ID (from `load_dump`)
 
 How it works: the exception code (and the dump's SHA-256) come from `triage_dump`, the faulting stack from `.ecxr; kn`. Frames every crash shares (exception dispatch in `ntdll`, `RaiseException`, `_CxxThrowException`, `abort`, WER, runtime throw and fail-fast helpers, thread start) are dropped; each frame is reduced to `module!function` (lowercase module, no offset, argument list, template arguments or funclet suffix; frames without symbols become `module+0xoffset`); recursion is collapsed (`f (×k)`, depth not hashed). The fingerprint is the first 12 hex characters of SHA-256 over the exception code and the first 5 meaningful frames.
@@ -473,6 +507,7 @@ How it works: the exception code (and the dump's SHA-256) come from `triage_dump
 **Returns** structured content: `fingerprint`, `quality` (`exact`: all frames symbolised, `partial`: some by offset, `weak`: no symbols, fewer than two meaningful frames, or a hang/break dump; weak fingerprints are reported but never grouped), exception code/name/classification, `title` (`<code name> in <top frame>`), the `frames` used, and from the registry: `recorded`, `isNew`, `isNewDump` (the same dump, by SHA-256, is counted once), `occurrences`, `firstSeenUtc`.
 
 ### list_crash_groups
+
 Lists the known crash groups, most recently seen first: fingerprint, title, exception, frames, quality, first/last seen, occurrences and the dumps counted.
 
 The registry is `%LOCALAPPDATA%\DumpAnalysisService\fingerprints.json`; the `Fingerprint` section of `appsettings.json` changes it:
@@ -486,9 +521,11 @@ The registry is `%LOCALAPPDATA%\DumpAnalysisService\fingerprints.json`; the `Fin
 Hang and deadlock fingerprints (which need waiter-chain analysis rather than a faulting stack) are not supported yet.
 
 ### close_session
+
 Closes a debugging session and releases resources.
 
 **Parameters:**
+
 - `session_id`: ID of debugging session to close
 
 ## API Reference
@@ -552,6 +589,7 @@ var sessionId = await api.LoadDumpAsync(@"C:\dumps\crash.dmp"); // polls REST; S
 ### Claude Code Integration
 
 #### 1. Build and Installation
+
 ```powershell
 # Build single-file executable
 .\Scripts\Publish.ps1
@@ -570,6 +608,7 @@ claude mcp add --transport http --scope user dump-analyzer http://localhost:7997
 ```
 
 **Important:** You must start DumpAnalysisService.exe manually before using Claude Code:
+
 ```powershell
 # Start the service (keep this running)
 .\publish\win-x64\DumpAnalysisService.exe
@@ -596,6 +635,7 @@ Create `.mcp.json` in your project root:
 ```
 
 Start DumpAnalysisService separately:
+
 ```powershell
 # In a separate terminal/PowerShell window
 cd D:\Git\mcp-windbg\publish\win-x64
@@ -609,11 +649,13 @@ The `load_dump` tool supports three configuration methods with priority order:
 **1. Tool Parameters (Highest Priority - Per-Call)**
 
 Pass symbol configuration directly in your prompt:
-```
+
+```text
 Load dump file D:\crash.dmp with symbol_cache="D:\Symbols" and symbol_servers="https://symbols.company.com"
 ```
 
 Optional parameters:
+
 - `symbol_cache` - Symbol cache directory
 - `symbol_path_extra` - Additional local symbol directories (semicolon-separated)
 - `symbol_servers` - Custom symbol servers (semicolon-separated)
@@ -621,6 +663,7 @@ Optional parameters:
 **2. HTTP Headers (Per-MCP-Client Configuration)**
 
 Configure in your `.mcp.json` to set defaults for your MCP client:
+
 ```json
 {
   "mcpServers": {
@@ -640,6 +683,7 @@ Configure in your `.mcp.json` to set defaults for your MCP client:
 **3. appsettings.json (Server-Wide Defaults)**
 
 Edit `publish\win-x64\appsettings.json` or `DumpAnalysisService/appsettings.json` to set defaults for all MCP clients:
+
 ```json
 {
   "Debugger": {
@@ -664,6 +708,7 @@ After you start DumpAnalysisService and configure Claude Code, these tools are a
 - `list_jobs`, `list_analyses`, `close_session`
 
 **Example workflow:**
+
 1. Start DumpAnalysisService.exe
 2. Open Claude Code
 3. "Use detect_debuggers to verify configuration"
@@ -676,6 +721,7 @@ After you start DumpAnalysisService and configure Claude Code, these tools are a
 #### 4. Advanced Configuration
 
 **Configuration Priority (from highest to lowest):**
+
 1. **Tool Parameters** - Per-call override via prompt
 2. **HTTP Headers** - Per-MCP-client configuration via `.mcp.json`
 3. **appsettings.json** - Server-wide defaults for all clients
@@ -683,11 +729,13 @@ After you start DumpAnalysisService and configure Claude Code, these tools are a
 **Use Cases:**
 
 - **Tool Parameters**: Override symbol configuration for a specific dump file
-  ```
+
+  ```text
   Load dump D:\crash.dmp with symbol_servers="https://internal.company.com/symbols;\\fileserver\symbols"
   ```
 
 - **HTTP Headers**: Configure defaults for your MCP client instance (e.g., your Claude Code)
+
   ```json
   {
     "mcpServers": {
@@ -705,6 +753,7 @@ After you start DumpAnalysisService and configure Claude Code, these tools are a
   ```
 
 - **appsettings.json**: Set server-wide defaults for all MCP clients
+
   ```json
   {
     "Debugger": {
@@ -716,6 +765,7 @@ After you start DumpAnalysisService and configure Claude Code, these tools are a
   ```
 
 **Example Scenario:**
+
 - Server (`appsettings.json`): Default cache `D:\ServerSymbols`
 - Your MCP client (`.mcp.json` headers): Override to `D:\MySymbols`
 - Specific call (tool parameter): Override to `D:\ProjectSymbols` for one dump
@@ -727,6 +777,7 @@ Create `appsettings.Development.json` for development-specific settings.
 Standalone command-line client for scripting, Azure Functions, and automation.
 
 ### Installation
+
 ```powershell
 # Build with Publish.ps1
 .\Scripts\Publish.ps1
@@ -737,12 +788,14 @@ Standalone command-line client for scripting, Azure Functions, and automation.
 ### Usage
 
 **Start DumpAnalysisService first:**
+
 ```powershell
 # Terminal 1: Start the service
 .\publish\win-x64\DumpAnalysisService.exe
 ```
 
 **Then use the client:**
+
 ```powershell
 # Terminal 2: Use the client
 cd .\publish\win-x64
@@ -764,6 +817,7 @@ cd .\publish\win-x64
 ```
 
 ### Symbol Configuration
+
 ```powershell
 # Via command line parameters
 .\CommandLineClient.exe --symbol-cache "D:\Symbols" load "C:\dumps\crash.dmp"
@@ -868,19 +922,22 @@ For standalone usage without MCP:
 ## Troubleshooting
 
 ### DumpAnalysisService won't start
+
 - Check port 7997 is not in use: `netstat -ano | findstr :7997`
 - Verify CDB is installed: run `detect_debuggers` tool
 - Check logs in console output
 
 ### Symbol loading is slow
+
 - First load downloads symbols (10-30 min)
 - Subsequent loads use cache (30-60 sec)
 - Configure symbol cache in appsettings.json for persistent cache
 
 ### Claude Code can't connect
+
 - Ensure DumpAnalysisService.exe is running
 - Verify configuration in `.mcp.json` or Claude config
-- Check http://localhost:7997/api/diagnostics/health in browser
+- Check <http://localhost:7997/api/diagnostics/health> in browser
 - `401 Unauthorized`: the service has `Security:ApiKey` or `Security:Jwt` set. Add the `X-Api-Key` header or sign in with a token. The `WWW-Authenticate` header says which: `resource_metadata` means OAuth. A `401` with a token usually means the audience or issuer does not match `Security:Jwt` (the service logs the reason).
 - `403 Forbidden` with a token: the token has no `Dumps.*` role, or not a high enough one. Assign the user or app to an app role, then sign in again.
 - `400 Invalid hostname`: the client reaches the service by a name that `AllowedHosts` does not list (it defaults to localhost)

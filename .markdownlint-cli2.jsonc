@@ -1,0 +1,37 @@
+// markdownlint-cli2 configuration for every tracked Markdown file.
+// Run locally with: npx --yes markdownlint-cli2@0.23.2 (the version markdownlint-cli2-action v24.2.0 bundles).
+// CI runs the same check in .github/workflows/docs.yml.
+{
+  "config": {
+    "default": true,
+
+    // Paragraphs and table rows are not hard-wrapped: a paragraph is one line and the renderer wraps it.
+    "MD013": false,
+
+    // A heading may repeat under different parents: the README has an "Installation" section for the
+    // server and another one under "Command-Line Client".
+    "MD024": { "siblings_only": true },
+
+    // A bold lead-in line labels an example or a priority level inside a section ("**Example 1: ...**",
+    // "**1. Tool Parameters (Highest Priority)**"); it is not a missing heading and should stay out of
+    // the table of contents.
+    "MD036": false,
+
+    // A table's cells are padded, "| a | b |", over a delimiter row written "|---|---|", and the
+    // columns are not aligned: a cell is one line however long it is. No MD060 style accepts that mix.
+    "MD060": false,
+
+    // Emphasis is written with asterisks.
+    "MD049": { "style": "asterisk" },
+    "MD050": { "style": "asterisk" }
+  },
+
+  // Everything tracked; never build output or restored packages.
+  "globs": ["**/*.md"],
+  "gitignore": true,
+  "ignores": [
+    "**/node_modules/**",
+    "**/bin/**",
+    "**/obj/**"
+  ]
+}
