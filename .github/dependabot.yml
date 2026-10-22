@@ -23,6 +23,11 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 14
+    groups:
+      # init, analyze and upload-sarif must stay on one release: CodeQL fails a job whose
+      # init and analyze versions differ.
+      codeql-action:
+        patterns: ["github/codeql-action*"]
 
   # The Dockerfile base image is pinned by digest.
   - package-ecosystem: "docker"
