@@ -106,6 +106,7 @@ See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" f
 ## Security Model (DumpAnalysisService/Security/)
 
 `SecurityOptions` is bound from the `Security` configuration section:
+
 - **Authentication** (`DumpAuthentication.AddDumpAuthentication`): a policy scheme forwards a
   JWT-shaped bearer token to JwtBearer (`Security:Jwt`, enabled by `Authority`) and anything else
   to `ApiKeyAuthenticationHandler` (`Security:ApiKey`, `X-Api-Key` or `Authorization: Bearer`,
@@ -155,7 +156,8 @@ or job id, an ownership check. When adding a new way to send text to cdb.exe, ro
 
 Workflows: `build-and-release.yml` (build, tests, coverage, Docker image build; release ZIP and image push on tags),
 `security.yml` (CodeQL `actions` + `csharp` with `security-extended`, zizmor; push, PR, weekly),
-`scorecard.yml` (OpenSSF Scorecard, published, README badge). Rules for every workflow:
+`scorecard.yml` (OpenSSF Scorecard, published, README badge),
+`docs.yml` (jobs "Markdown lint" and "Links" over every tracked `.md`; push to main, PR). Rules for every workflow:
 
 - **Pin actions** to a full commit SHA with the release in a comment:
   `uses: actions/checkout@<sha> # v7.0.1`. A pinned release must be at least 14 days old; resolve
@@ -175,6 +177,11 @@ Workflows: `build-and-release.yml` (build, tests, coverage, Docker image build; 
 - A `concurrency` group in every workflow; pull request runs cancel their older run.
 - The symbol cache is skipped on tag builds, so a release never restores a cache another run wrote
   (the one `zizmor: ignore[cache-poisoning]`).
+- **Markdown**: `.markdownlint-cli2.jsonc` holds the lint rules, each exception with a comment saying why;
+  `lychee.toml` the link check (relative links and `#anchors` must resolve, links in code are examples,
+  localhost, placeholder and example-domain URLs are excluded). Before pushing a `.md` change, run
+  `npx --yes markdownlint-cli2@0.23.2` (the version the action bundles); fix the Markdown, or add an
+  exception with its reason.
 - Before pushing a workflow change, run `actionlint` and `zizmor --offline .github/workflows`
   (default persona clean, `--persona auditor` without warnings).
 
@@ -200,11 +207,13 @@ Repository conventions:
 ### Symbol Configuration Architecture (3-Tier Priority)
 
 **Priority Order** (DumpAnalysisService/Tools/DebuggerTools.cs):
+
 1. **Tool Parameters** (highest) - Per-call override via MCP tool arguments
 2. **HTTP Headers** - Per-MCP-client via `.mcp.json` headers (X-Symbol-Cache, X-Symbol-Path-Extra, X-Symbol-Servers)
 3. **appsettings.json** - Server-wide defaults (DefaultSymbolCache, DefaultSymbolPathExtra, DefaultSymbolServers)
 
 **Implementation**:
+
 ```csharp
 // DebuggerTools.cs - LoadDump tool
 var providerConfig = _symbolConfigProvider.GetConfiguration(); // Reads HTTP headers
@@ -215,6 +224,7 @@ var symbols = new SymbolsConfiguration(
 ```
 
 **HttpHeaderSymbolConfigurationProvider** (DumpAnalysisService/Providers/):
+
 - Scoped service (per HTTP request)
 - Reads `X-Symbol-Cache`, `X-Symbol-Path-Extra`, `X-Symbol-Servers` headers
 - Accessed via `IHttpContextAccessor`
@@ -236,13 +246,14 @@ CDB commands execute asynchronously with **marker-based output parsing**:
 **Why markers?** CDB output is continuous and unpredictable. Markers provide reliable command completion detection; the START marker discards output left over from an earlier timed-out command, and separate lines keep a `*` comment or unbalanced quote in the command from swallowing the END marker.
 
 **Thread Safety**:
+
 - `SemaphoreSlim` (CdbSessionService.cs:20) ensures only 1 command per session at a time
 - `ConcurrentDictionary` (SessionManagerService.cs:13) allows multiple sessions concurrently
 - Each dump file gets isolated CDB process - no cross-session interference
 
 ### Session Lifecycle
 
-```
+```text
 CreateSessionWithDumpAsync() (SessionManagerService.cs)
   → Generate 8-char session ID
   → CdbSessionService.LoadDumpAsync()
@@ -305,6 +316,7 @@ scenario → a different one).
 ### Error Handling Pattern
 
 **Exception-based flow** (NOT boolean returns):
+
 ```csharp
 // Services throw specific exceptions
 throw new FileNotFoundException("Dump file not found");
@@ -325,12 +337,14 @@ catch (Exception) → 500 Internal Server Error
 **Symbol Path Construction** (`Infrastructure/Debugger/SymbolPathBuilder.cs`):
 
 `cache*{cache};{extra paths};{client servers};{DefaultSymbolServers}`:
+
 1. **Cache directive** `cache*{cache}` - applies to every `srv*` entry
 2. **Local paths** from `SymbolPathExtra` (client) or `Debugger:DefaultSymbolPathExtra`
 3. **Client servers** from `SymbolServers` (tool parameter / `X-Symbol-Servers`): URLs become `srv*{url}`, UNC and local paths are added as is
 4. **`Debugger:DefaultSymbolServers`** - added verbatim (so written as `srv*https://...`); when unset, the built-in Microsoft/NuGet list. Setting it replaces that list.
 
 **Symbol Caching & Performance**:
+
 - **Cache-Aware Loading**: Uses `.reload` (NOT `.reload /f`) to leverage cached symbols
 - **First dump load**: 10-30 minutes (downloads symbols from Microsoft Symbol Server)
 - **Subsequent loads**: 30-60 seconds (uses cached symbols from configured cache directory)
@@ -343,15 +357,18 @@ catch (Exception) → 500 Internal Server Error
 ## Dependency Injection Architecture (Program.cs)
 
 **Singleton Services** (shared across all requests):
+
 - `DebuggerConfiguration` - Server-wide debugger settings from appsettings.json
 - `IPathExpansionService`, `IPathDetectionService` - Infrastructure
 - `IAnalysisService`, `IDiagnosticsService` - Analysis and diagnostics
 - `ICdbSessionFactory`, `ISessionManagerService`, `IJobManagerService` - Core services
 
 **Scoped Services** (per HTTP request):
+
 - `ISymbolConfigurationProvider` → `HttpHeaderSymbolConfigurationProvider` - Reads HTTP headers per request
 
 **MCP Server Configuration**:
+
 ```csharp
 builder.Services.AddMcpServer()
     .WithHttpTransport(options => {
@@ -366,7 +383,8 @@ builder.Services.AddMcpServer()
 **All operations are asynchronous and job-based**. There is NO blocking/synchronous API.
 
 ### Job-Based Endpoints (JobsController)
-```
+
+```text
 POST /api/jobs/load-dump           → 202 Accepted, returns { jobId, statusEndpoint }
 POST /api/jobs/execute-command     → 202 Accepted, returns { jobId, statusEndpoint }
 POST /api/jobs/basic-analysis      → 202 Accepted, returns { jobId, statusEndpoint }
@@ -383,12 +401,14 @@ POST /api/jobs/{jobId}/cancel      → Cancel running job
 ### MCP Tools (DebuggerTools.cs)
 
 All tools follow the same pattern (list_crash_groups, list_jobs and list_analyses answer directly):
+
 1. Create job via `JobManagerService.CreateJob()`
 2. Start background `Task.Run()` that calls `SessionManager` with `jobId`
 3. Poll job status via `_WaitForJobCompletionAsync()` which reports progress via `IProgress<ProgressNotificationValue>`
 4. Return result or throw exception
 
 **Tools**:
+
 - `load_dump` - Load dump file and create session
 - `execute_command` - Execute WinDbg/CDB command
 - `basic_analysis` - Run comprehensive basic analysis
@@ -401,7 +421,8 @@ All tools follow the same pattern (list_crash_groups, list_jobs and list_analyse
 - `fingerprint_crash` - Stable fingerprint of the crash in a session (structured content), recorded in the crash group registry
 - `list_crash_groups` - Known crash groups, most recently seen first
 
-### Flow:
+### Flow
+
 1. MCP client calls tool → DebuggerTools creates `jobId` immediately
 2. Background task starts operation, sends progress via job status updates
 3. DebuggerTools polls `JobManagerService.GetJobStatus()` every 1 second
@@ -409,6 +430,7 @@ All tools follow the same pattern (list_crash_groups, list_jobs and list_analyse
 5. When complete, return result or throw exception
 
 **CommandLineClient Flow** (for PowerShell/Azure Functions):
+
 1. Client calls REST API → receives `jobId` (202 Accepted)
 2. `SignalRClientService` subscribes to `ProgressHub` for that `jobId`
 3. DumpAnalysisService sends progress via SignalR `ProgressHub.SendJobProgress()`
@@ -426,6 +448,7 @@ the SDK owns the task state, while each tool call still creates a job in
 served statelessly.
 
 ### Timeout Configuration
+
 - Default: 10 minutes (`Constants.Jobs.DefaultMaxWaitTimeMs`)
 - Poll interval: 1 second (`Constants.Jobs.DefaultPollIntervalMs`)
 - Configurable in `Shared/Constants.cs`
@@ -433,6 +456,7 @@ served statelessly.
 ## Predefined Analysis Types
 
 `AnalysisService` provides 10 analysis types with WinDbg command sequences:
+
 - **basic**: !analyze -v, exception context, thread stacks
 - **exception**: Detailed exception record analysis
 - **threads**: Thread enumeration with full stacks
@@ -447,6 +471,7 @@ served statelessly.
 ## Common Patterns When Modifying Code
 
 **Adding a new MCP tool**:
+
 1. Add `[McpServerTool]` method to `DebuggerTools.cs`
 2. Create job with `_jobManager.CreateJob(JobOperationType.NewOperation)`
 3. Start background `Task.Run()` that calls `SessionManager` with `jobId`
@@ -454,16 +479,19 @@ served statelessly.
 5. Add `JobOperationType` enum value if needed
 
 **Adding a new analysis type**:
+
 1. Add entry to `AnalysisType` enum (Shared/Models/AnalysisType.cs)
 2. Add commands to `AnalysisService._analysisCommands` dictionary
 3. Add description to `AnalysisService._analysisDescriptions` dictionary
 
 **Modifying CDB command execution**:
+
 - All CDB commands go through `CdbSessionService._ExecuteCommandInternalAsync()` → `CdbProcessManager.ExecuteCommandAsync()`
 - Never bypass the semaphore lock - prevents stdin/stdout corruption
 - Use `IProgress<string>` parameter for long-running commands
 
 **Adding symbol configuration source**:
+
 1. Implement `ISymbolConfigurationProvider` interface
 2. Register in DI container (Singleton or Scoped)
 3. Inject into `DebuggerTools` constructor

@@ -42,7 +42,10 @@ forms; blank issues are off.
   files, debugger output, client symbol settings, commands for cdb.exe) also gets FsCheck property
   tests next to the existing `*PropertyTests` classes.
 - **CI is green.** Every pull request runs the build with unit and integration tests, the diagram
-  check, the Docker image build, CodeQL and zizmor. A pull request with a red check does not merge.
+  check, the Docker image build, CodeQL, zizmor, and the docs checks: *Markdown lint* over every
+  tracked `.md` file and *Links*, which resolves every relative link and anchor and asks each external
+  link. A pull request with a red check does not merge. Before pushing a Markdown change, run
+  `npx --yes markdownlint-cli2@0.23.2`; the rules are in `.markdownlint-cli2.jsonc` and `lychee.toml`.
 - **The security model holds.** A new endpoint or MCP tool gets a `DumpPolicies` policy and, if it
   takes a session or job id, an ownership check. User text for cdb.exe goes through `CdbCommandPolicy`.
   [`CLAUDE.md`](CLAUDE.md) describes the model.

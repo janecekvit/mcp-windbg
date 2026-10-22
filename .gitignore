@@ -5,3 +5,6 @@ publish/
 /.claude
 /nul
 /docs/superpowers
+
+# lychee link check cache (docs.yml)
+.lycheecache
