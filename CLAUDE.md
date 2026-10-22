@@ -95,7 +95,7 @@ package metadata) live in `Directory.Build.props`. Licence: Apache-2.0 (`LICENSE
 Pre-built Windows container images are published to **`ghcr.io/janecekvit/mcp-windbg`** on every `v*.*.*` release tag (workflow: `.github/workflows/build-and-release.yml`).
 
 - **Base image:** `mcr.microsoft.com/windows/servercore:ltsc2022` (Linux containers cannot run `cdb.exe`).
-- **Debugging tools:** installed during image build via the Windows SDK web setup (`fwlink/?linkid=2237387 /features OptionId.WindowsDesktopDebuggers`).
+- **Debugging tools:** installed during image build via the Windows SDK web setup (`/features OptionId.WindowsDesktopDebuggers`), pinned to a versioned download URL and its SHA-256 and required to carry a valid Microsoft Authenticode signature. Dependabot does not update it: to move to a newer SDK, resolve `fwlink/?linkid=2237387` and update the URL and hash in the `Dockerfile`.
 - **Build input:** the existing `publish/win-x64/` self-contained publish output — Docker layer simply `COPY`s the same artefacts the Release ZIP ships. No second build path.
 - **Health probe:** `HEALTHCHECK` polls `GET /api/diagnostics/health`, the one `[AllowAnonymous]` route, so the probe keeps working when `Security__ApiKey` or `Security__Jwt__*` is set.
 - **Exposure:** the image sets `AllowedHosts=*`; set `Security__ApiKey` whenever the port is reachable from other machines.
@@ -165,7 +165,11 @@ Workflows: `build-and-release.yml` (build, tests, coverage, Docker image build; 
 - Top-level `permissions: contents: read` (`{}` in `scorecard.yml`); a job that needs more asks for
   it at job level, with a comment saying why (`id-token: write` for Codecov OIDC, `checks: write`
   for the test reporter, `security-events: write` for SARIF, `packages: write` for ghcr.io,
-  `contents: write` only in the release job).
+  `contents: write` only in the release job, which also has `id-token: write` and
+  `attestations: write` for the build provenance).
+- **Signed releases**: the release job attests the ZIP with `actions/attest-build-provenance`
+  (Sigstore) and attaches the bundle as `.sigstore.json` and its DSSE envelope as `.intoto.jsonl`,
+  the suffixes OpenSSF Scorecard's Signed-Releases check looks for.
 - **Never expand `${{ }}` inside a `run:` script**: pass the value through `env:` and read
   `$env:NAME` / `$NAME` (zizmor flags it as template injection).
 - A `concurrency` group in every workflow; pull request runs cancel their older run.

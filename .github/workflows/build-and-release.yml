@@ -504,13 +504,24 @@ jobs:
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
-      contents: write   # create the GitHub release and upload the ZIP
+      contents: write       # create the GitHub release and upload the ZIP
+      id-token: write       # Sigstore signing certificate for the provenance attestation (OIDC)
+      attestations: write   # store the attestation in the repository (gh attestation verify)
 
     steps:
     - name: Download build artifacts
       uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       with:
         name: windbg-mcp-server-${{ needs.build.outputs.version }}
+
+    # SLSA build provenance for the ZIP, signed with Sigstore (public-good instance, keyless).
+    # The bundle is also attached to the release, so the ZIP can be verified offline and
+    # OpenSSF Scorecard counts the release as signed (.sigstore.json) with provenance (.intoto.jsonl).
+    - name: Attest build provenance
+      id: attest
+      uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+      with:
+        subject-path: '*.zip'
 
     # gh is on the runner; no third-party release action. --generate-notes appends "What's
     # Changed" (the PRs merged since the previous release) and a compare link to the notes file.
@@ -519,6 +530,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         VERSION: ${{ needs.build.outputs.version }}
+        BUNDLE: ${{ steps.attest.outputs.bundle-path }}
       run: |
         $body = @"
         ## WinDbg MCP Server $env:VERSION
@@ -547,6 +559,12 @@ jobs:
         ### Docker
         ``docker pull ghcr.io/$($env:GITHUB_REPOSITORY.ToLowerInvariant()):$env:GITHUB_REF_NAME`` (Windows container, ltsc2022)
 
+        ### Verify the download
+        The ZIP carries a signed SLSA build provenance attestation (Sigstore). Check that it was built by
+        this repository's release workflow from the ``$env:GITHUB_REF_NAME`` tag:
+        ``gh attestation verify windbg-mcp-server-v$env:VERSION-win-x64.zip --repo $env:GITHUB_REPOSITORY``
+        (offline: add ``--bundle windbg-mcp-server-v$env:VERSION-win-x64.sigstore.json``).
+
         ### Quick Start
         1. Download and extract the ZIP file
         2. Run ``DumpAnalysisService.exe`` to start the MCP HTTP server (port 7997)
@@ -567,15 +585,24 @@ jobs:
         $zips = @(Get-ChildItem -Filter *.zip | ForEach-Object FullName)
         if ($zips.Count -eq 0) { throw "No release ZIP was downloaded" }
 
+        # The attestation bundle as a release asset: the Sigstore bundle itself, and its DSSE
+        # envelope (the signed in-toto statement) as one JSON line.
+        $prefix = "windbg-mcp-server-v$env:VERSION-win-x64"
+        Copy-Item -LiteralPath $env:BUNDLE -Destination "$prefix.sigstore.json"
+        $envelope = (Get-Content -Raw -LiteralPath $env:BUNDLE | ConvertFrom-Json).dsseEnvelope
+        if (-not $envelope) { throw "The attestation bundle has no DSSE envelope" }
+        $envelope | ConvertTo-Json -Depth 20 -Compress | Set-Content -LiteralPath "$prefix.intoto.jsonl" -Encoding utf8NoBOM
+        $assets = $zips + @("$prefix.sigstore.json", "$prefix.intoto.jsonl")
+
         # A re-run finds the release already there: replace its assets instead of failing.
         gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
         if ($LASTEXITCODE -eq 0) {
-          gh release upload $tag @zips --repo $env:GITHUB_REPOSITORY --clobber
+          gh release upload $tag @assets --repo $env:GITHUB_REPOSITORY --clobber
         } else {
           $options = @('--repo', $env:GITHUB_REPOSITORY, '--verify-tag',
                        '--title', "WinDbg MCP Server $env:VERSION",
                        '--notes-file', 'release-notes.md', '--generate-notes')
           if ($tag.Contains('-')) { $options += '--prerelease' }
-          gh release create $tag @zips @options
+          gh release create $tag @assets @options
         }
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
