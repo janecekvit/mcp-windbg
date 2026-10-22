@@ -1,0 +1,54 @@
+name: Bug
+description: Something the server, the client or the image does wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Never attach a dump that holds someone else's data, credentials or customer content: describe it, or attach one built from a test program. A vulnerability does not belong here: report it privately, as SECURITY.md describes."
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release tag (vX.Y.Z), the image tag or digest, or the commit you built.
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Single-file executable (release ZIP)
+        - Docker image (ghcr.io/janecekvit/mcp-windbg)
+        - Built from source
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Windows version, cdb.exe or WinDbg version, the MCP client or the REST caller, and any Security or Debugger settings you changed. No secrets.
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The tool calls or REST requests, in order, and the kind of dump (user or kernel, x64 or x86, minidump or full).
+      value: |
+        1.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: What happened instead, with the error text or the relevant log lines.
+      render: text
+    validations:
+      required: true
