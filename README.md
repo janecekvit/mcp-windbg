@@ -2,6 +2,7 @@
 
 [![Build and Release](https://github.com/janecekvit/mcp-windbg/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/janecekvit/mcp-windbg/actions/workflows/build-and-release.yml)
 [![codecov](https://codecov.io/gh/janecekvit/mcp-windbg/graph/badge.svg)](https://codecov.io/gh/janecekvit/mcp-windbg)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/janecekvit/mcp-windbg/badge)](https://scorecard.dev/viewer/?uri=github.com/janecekvit/mcp-windbg)
 
 MCP (Model Context Protocol) server for interactive debugging of Windows memory dump files using Microsoft Command Line Debugger (cdb.exe) or WinDbg.
 
@@ -269,6 +270,8 @@ cache*D:\SymbolCache;C:\MyProject\Debug;srv*https://symbols.company.com;srv*http
 
 
 ## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md) (private reporting through GitHub Security Advisories).
 
 The debugger runs with the service's permissions and reads whatever dump path it is given, so the service is locked down by default. All settings live in the `Security` section of `appsettings.json` (or `Security__*` environment variables):
 

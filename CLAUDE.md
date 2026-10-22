@@ -99,7 +99,7 @@ Pre-built Windows container images are published to **`ghcr.io/janecekvit/mcp-wi
 - **Build input:** the existing `publish/win-x64/` self-contained publish output — Docker layer simply `COPY`s the same artefacts the Release ZIP ships. No second build path.
 - **Health probe:** `HEALTHCHECK` polls `GET /api/diagnostics/health`, the one `[AllowAnonymous]` route, so the probe keeps working when `Security__ApiKey` or `Security__Jwt__*` is set.
 - **Exposure:** the image sets `AllowedHosts=*`; set `Security__ApiKey` whenever the port is reachable from other machines.
-- **CI gate:** the image is built and pushed by the separate `docker` job, on tag refs only (`startsWith(github.ref, 'refs/tags/v')`), on `windows-2022` (`windows-latest` has no running Docker engine; the ltsc2022 base matches that host). It downloads the build job's `publish/win-x64` artifact, and a Docker failure never blocks the release ZIP.
+- **CI gate:** two jobs on `windows-2022` (`windows-latest` has no running Docker engine; the ltsc2022 base matches that host), both from the build job's `publish/win-x64` artifact. `docker` builds the image on every pull request and push to main, without logging in or pushing, so Dockerfile and base image digest changes are tested before a release. `docker-publish` builds and pushes on tag refs only (`startsWith(github.ref, 'refs/tags/v')`) and is the only job with `packages: write`. A Docker failure never blocks the release ZIP.
 
 See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" for the user-facing flow.
 
@@ -150,6 +150,40 @@ When adding an endpoint or MCP tool, give it a `DumpPolicies` policy and, if it 
 or job id, an ownership check. When adding a new way to send text to cdb.exe, route user input through
 `CdbCommandPolicy` and never build a command line by string concatenation:
 `CdbProcessManager.CreateStartInfo` uses `ProcessStartInfo.ArgumentList`.
+
+## CI and supply chain
+
+Workflows: `build-and-release.yml` (build, tests, coverage, Docker image build; release ZIP and image push on tags),
+`security.yml` (CodeQL `actions` + `csharp` with `security-extended`, zizmor; push, PR, weekly),
+`scorecard.yml` (OpenSSF Scorecard, published, README badge). Rules for every workflow:
+
+- **Pin actions** to a full commit SHA with the release in a comment:
+  `uses: actions/checkout@<sha> # v7.0.1`. A pinned release must be at least 14 days old; resolve
+  the SHA with `git ls-remote` and check the tag's date. Dependabot (`cooldown: 14` days) keeps the
+  pins, the NuGet packages and the Dockerfile base image digest current.
+- `persist-credentials: false` on every checkout.
+- Top-level `permissions: contents: read` (`{}` in `scorecard.yml`); a job that needs more asks for
+  it at job level, with a comment saying why (`id-token: write` for Codecov OIDC, `checks: write`
+  for the test reporter, `security-events: write` for SARIF, `packages: write` for ghcr.io,
+  `contents: write` only in the release job).
+- **Never expand `${{ }}` inside a `run:` script**: pass the value through `env:` and read
+  `$env:NAME` / `$NAME` (zizmor flags it as template injection).
+- A `concurrency` group in every workflow; pull request runs cancel their older run.
+- The symbol cache is skipped on tag builds, so a release never restores a cache another run wrote
+  (the one `zizmor: ignore[cache-poisoning]`).
+- Before pushing a workflow change, run `actionlint` and `zizmor --offline .github/workflows`
+  (default persona clean, `--persona auditor` without warnings).
+
+Repository conventions:
+
+- **The repository is public: never put links to Claude sessions (`claude.ai/code/session_…`) or
+  other private URLs in commits, pull request descriptions, comments or files.** No
+  `Claude-Session:` commit trailers; `Co-Authored-By: Claude …` stays.
+- **Pull requests are squash-merged with the title and description as the commit message, so
+  write the description as that message (what and why, plus how it was tested); reviewer or
+  settings instructions go in a PR comment.**
+- Vulnerabilities are reported privately (`SECURITY.md`); `.github/copilot-instructions.md` lists
+  what blocks a change in Copilot code review (keep it under 4,000 characters).
 
 ## Critical Implementation Details
 
