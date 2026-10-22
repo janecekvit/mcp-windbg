@@ -10,16 +10,26 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels its older run; pushes to main and tags always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   DOTNET_VERSION: '10.0.x'
   BUILD_CONFIGURATION: 'Release'
 
 jobs:
   build:
+    name: build
     runs-on: windows-latest
     permissions:
       contents: read
-      checks: write
+      checks: write     # dorny/test-reporter publishes the test results as a check run
       id-token: write   # Codecov upload via GitHub OIDC, no stored token
 
     outputs:
@@ -27,12 +37,13 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
+        persist-credentials: false
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v6
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -60,8 +71,11 @@ jobs:
           Write-Warning "Debuggers directory not found after install"
         }
 
+    # Not on tag builds: a release is built from a clean symbol cache, never from one a
+    # pull request run could have written (cache poisoning).
     - name: Cache Microsoft Symbol Server downloads
-      uses: actions/cache@v4
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 # zizmor: ignore[cache-poisoning] skipped on tags, see the if above
       with:
         path: C:\Users\runneradmin\AppData\Local\CdbMcpServer\symbols
         key: symcache-${{ runner.os }}-${{ hashFiles('DumpAnalysisService.TestCrasher/**/*.cs') }}
@@ -87,7 +101,7 @@ jobs:
       run: dotnet restore DumpAnalyzer.slnx
 
     - name: Build solution  
-      run: dotnet build DumpAnalyzer.slnx --no-restore --configuration ${{ env.BUILD_CONFIGURATION }}
+      run: dotnet build DumpAnalyzer.slnx --no-restore --configuration $env:BUILD_CONFIGURATION
 
     - name: Run unit tests
       shell: pwsh
@@ -95,7 +109,7 @@ jobs:
         Write-Host "Running unit tests..." -ForegroundColor Cyan
         dotnet test DumpAnalyzer.slnx `
           --no-build `
-          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --configuration $env:BUILD_CONFIGURATION `
           --filter "Category!=Integration" `
           --verbosity normal `
           --logger trx `
@@ -111,7 +125,7 @@ jobs:
         Write-Host "Running integration tests..." -ForegroundColor Cyan
         dotnet test DumpAnalysisService.IntegrationTests/DumpAnalysisService.IntegrationTests.csproj `
           --no-build `
-          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --configuration $env:BUILD_CONFIGURATION `
           --filter "Category=Integration" `
           --verbosity normal `
           --logger trx `
@@ -179,33 +193,39 @@ jobs:
         }
 
     - name: Publish DumpAnalysisService
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
       run: |
         dotnet publish DumpAnalysisService/DumpAnalysisService.csproj `
-          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --configuration $env:BUILD_CONFIGURATION `
           --runtime win-x64 `
           --output publish/win-x64 `
           --self-contained true `
           -p:PublishSingleFile=true `
           -p:PublishTrimmed=false `
           -p:PublishReadyToRun=false `
-          -p:Version=${{ steps.version.outputs.version }}
+          -p:Version=$env:VERSION
 
     - name: Publish CommandLineClient
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
       run: |
         dotnet publish CommandLineClient/CommandLineClient.csproj `
-          --configuration ${{ env.BUILD_CONFIGURATION }} `
+          --configuration $env:BUILD_CONFIGURATION `
           --runtime win-x64 `
           --output publish/win-x64 `
           --self-contained true `
           -p:PublishSingleFile=true `
           -p:PublishTrimmed=false `
           -p:PublishReadyToRun=false `
-          -p:Version=${{ steps.version.outputs.version }}
+          -p:Version=$env:VERSION
 
     - name: Create portable package
       shell: pwsh
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
       run: |
-        $version = "${{ steps.version.outputs.version }}"
+        $version = $env:VERSION
         
         Write-Host "📦 Creating WinDbg MCP Server package v$version"
         
@@ -295,7 +315,7 @@ jobs:
         }
 
     - name: Publish test results
-      uses: dorny/test-reporter@v3
+      uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
       if: always()
       with:
         name: .NET Tests
@@ -304,7 +324,7 @@ jobs:
         fail-on-error: true
 
     - name: Upload test results
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: always()
       with:
         name: test-results-${{ steps.version.outputs.version }}
@@ -312,7 +332,7 @@ jobs:
         retention-days: 30
 
     - name: Upload code coverage
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       if: always()
       with:
         directory: TestResults
@@ -320,7 +340,7 @@ jobs:
         fail_ci_if_error: false
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: windbg-mcp-server-${{ steps.version.outputs.version }}
         path: |
@@ -329,7 +349,7 @@ jobs:
 
     - name: Upload publish output for the Docker image
       if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: publish-win-x64-${{ steps.version.outputs.version }}
         path: publish/win-x64/
@@ -339,19 +359,22 @@ jobs:
   # servercore:ltsc2022 base image matches this host build. A failure here never blocks the
   # release ZIP, which the release job publishes from the build job alone.
   docker:
+    name: docker
     needs: build
     runs-on: windows-2022
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
-      packages: write
+      packages: write   # push the image to ghcr.io
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: Download publish output
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
       with:
         name: publish-win-x64-${{ needs.build.outputs.version }}
         path: publish/win-x64
@@ -372,15 +395,19 @@ jobs:
 
     - name: Login to GHCR
       shell: pwsh
+      env:
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo "${{ secrets.GITHUB_TOKEN }}" | `
-          docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        $env:GHCR_TOKEN | docker login ghcr.io -u $env:GITHUB_ACTOR --password-stdin
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Build Docker image
       shell: pwsh
+      env:
+        VERSION: ${{ needs.build.outputs.version }}
       run: |
-        $version = "${{ needs.build.outputs.version }}"
-        $image = "ghcr.io/${{ github.repository_owner }}/mcp-windbg"
+        $version = $env:VERSION
+        $image = "ghcr.io/$($env:GITHUB_REPOSITORY_OWNER.ToLowerInvariant())/mcp-windbg"
         docker build `
           -t "${image}:v$version" `
           -t "${image}:latest" `
@@ -389,34 +416,38 @@ jobs:
 
     - name: Push Docker image
       shell: pwsh
+      env:
+        VERSION: ${{ needs.build.outputs.version }}
       run: |
-        $version = "${{ needs.build.outputs.version }}"
-        $image = "ghcr.io/${{ github.repository_owner }}/mcp-windbg"
+        $version = $env:VERSION
+        $image = "ghcr.io/$($env:GITHUB_REPOSITORY_OWNER.ToLowerInvariant())/mcp-windbg"
         docker push "${image}:v$version"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         docker push "${image}:latest"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   release:
+    name: release
     needs: build
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
-      contents: write
-      actions: read
-    
+      contents: write   # create the GitHub release and upload the ZIP
+
     steps:
     - name: Download build artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
       with:
         name: windbg-mcp-server-${{ needs.build.outputs.version }}
 
     - name: Create Release Body
       id: release_body
       shell: pwsh
+      env:
+        VERSION: ${{ needs.build.outputs.version }}
       run: |
         $body = @"
-        ## WinDbg MCP Server ${{ needs.build.outputs.version }}
+        ## WinDbg MCP Server $env:VERSION
 
         Windows memory dump analysis tool with MCP (Model Context Protocol) HTTP integration.
 
@@ -440,7 +471,7 @@ jobs:
         - ``LICENSE``, ``NOTICE`` - Apache-2.0
 
         ### Docker
-        ``docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}`` (Windows container, ltsc2022)
+        ``docker pull ghcr.io/$($env:GITHUB_REPOSITORY.ToLowerInvariant()):$env:GITHUB_REF_NAME`` (Windows container, ltsc2022)
 
         ### Quick Start
         1. Download and extract the ZIP file
@@ -454,14 +485,14 @@ jobs:
         - .NET 10.0 runtime (included in single-file executable)
         - Windows SDK Debuggers (cdb.exe) or WinDbg from Microsoft Store
 
-        For detailed documentation, see [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md).
+        For detailed documentation, see [README.md](https://github.com/$env:GITHUB_REPOSITORY/blob/$env:GITHUB_REF_NAME/README.md).
         "@
         echo "body<<EOF" >> $env:GITHUB_OUTPUT
         echo $body >> $env:GITHUB_OUTPUT
         echo "EOF" >> $env:GITHUB_OUTPUT
 
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
       with:
         name: WinDbg MCP Server ${{ needs.build.outputs.version }}
         tag_name: ${{ github.ref_name }}

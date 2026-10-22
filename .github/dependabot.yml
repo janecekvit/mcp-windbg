@@ -1,9 +1,13 @@
 version: 2
 updates:
+  # Every update waits 14 days after its release (cooldown), so a compromised release has time
+  # to be caught before it reaches this repository.
   - package-ecosystem: "nuget"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 14
     groups:
       microsoft-dotnet:
         patterns: ["Microsoft.*", "System.*"]
@@ -12,7 +16,18 @@ updates:
       test-stack:
         patterns: ["xunit*", "Xunit.*", "coverlet.*", "Moq", "RichardSzalay.MockHttp", "Microsoft.NET.Test.Sdk"]
 
+  # Actions are pinned to commit SHAs; Dependabot updates the SHA and the version comment.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 14
+
+  # The Dockerfile base image is pinned by digest.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14

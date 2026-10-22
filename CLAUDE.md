@@ -177,6 +177,40 @@ or job id, an ownership check. When adding a new way to send text to cdb.exe, ro
 `CdbCommandPolicy` and never build a command line by string concatenation:
 `CdbProcessManager.CreateStartInfo` uses `ProcessStartInfo.ArgumentList`.
 
+## CI and supply chain
+
+Workflows: `build-and-release.yml` (build, tests, coverage, release ZIP, Docker image on tags),
+`security.yml` (CodeQL `actions` + `csharp` with `security-extended`, zizmor; push, PR, weekly),
+`scorecard.yml` (OpenSSF Scorecard, published, README badge). Rules for every workflow:
+
+- **Pin actions** to a full commit SHA with the release in a comment:
+  `uses: actions/checkout@<sha> # v7.0.1`. A pinned release must be at least 14 days old; resolve
+  the SHA with `git ls-remote` and check the tag's date. Dependabot (`cooldown: 14` days) keeps the
+  pins, the NuGet packages and the Dockerfile base image digest current.
+- `persist-credentials: false` on every checkout.
+- Top-level `permissions: contents: read` (`{}` in `scorecard.yml`); a job that needs more asks for
+  it at job level, with a comment saying why (`id-token: write` for Codecov OIDC, `checks: write`
+  for the test reporter, `security-events: write` for SARIF, `packages: write` for ghcr.io,
+  `contents: write` only in the release job).
+- **Never expand `${{ }}` inside a `run:` script**: pass the value through `env:` and read
+  `$env:NAME` / `$NAME` (zizmor flags it as template injection).
+- A `concurrency` group in every workflow; pull request runs cancel their older run.
+- The symbol cache is skipped on tag builds, so a release never restores a cache another run wrote
+  (the one `zizmor: ignore[cache-poisoning]`).
+- Before pushing a workflow change, run `actionlint` and `zizmor --offline .github/workflows`
+  (default persona clean, `--persona auditor` without warnings).
+
+Repository conventions:
+
+- **The repository is public: never put links to Claude sessions (`claude.ai/code/session_…`) or
+  other private URLs in commits, pull request descriptions, comments or files.** No
+  `Claude-Session:` commit trailers; `Co-Authored-By: Claude …` stays.
+- **Pull requests are squash-merged with the title and description as the commit message, so
+  write the description as that message (what and why, plus how it was tested); reviewer or
+  settings instructions go in a PR comment.**
+- Vulnerabilities are reported privately (`SECURITY.md`); `.github/copilot-instructions.md` lists
+  what blocks a change in Copilot code review (keep it under 4,000 characters).
+
 ## Critical Implementation Details
 
 ### Symbol Configuration Architecture (3-Tier Priority)
