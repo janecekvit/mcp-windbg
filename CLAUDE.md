@@ -84,7 +84,7 @@ package metadata) live in `Directory.Build.props`. Licence: Apache-2.0 (`LICENSE
    - Uses Shared.Client libraries to communicate with DumpAnalysisService
 
 4. **Test Projects**
-   - `DumpAnalysisService.Tests`: Service-layer unit tests for `DumpAnalysisService` (session manager, job manager, analysis service, controllers).
+   - `DumpAnalysisService.Tests`: Service-layer unit tests for `DumpAnalysisService` (session manager, job manager, analysis service, controllers). `*PropertyTests` classes are FsCheck property tests that fuzz untrusted input: `MinidumpParser` with mutated, truncated and random dumps (parse, or `InvalidDataException`; triage builds from whatever parses), `CdbCommandPolicy` and `SymbolInputValidator` (accept or `ArgumentException`, and what they accept keeps their invariants), and `CrashFingerprinter` (any text parses; addresses, offsets, templates, arguments and module case do not change a fingerprint). OpenSSF Scorecard counts FsCheck as fuzzing for C#.
    - `Shared.Tests`: Unit tests for the `Shared` project (configuration providers, client libraries, constants). Some SignalR-dependent tests are skipped under xUnit when no host is running.
    - `DumpAnalysisService.IntegrationTests`: Integration suite that boots `DumpAnalysisService` in-process via `WebApplicationFactory` and exercises the REST + SignalR flow against a real `TestCrasher` dump.
    - `DumpAnalysisService.TestCrasher`: Tiny console app that writes a snapshot dump of itself (heap, threads) for the integration tests (copied next to the test output via a `CopyTestCrasher` MSBuild target).
