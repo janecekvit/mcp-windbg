@@ -186,6 +186,8 @@ Repository conventions:
 - **Pull requests are squash-merged with the title and description as the commit message, so
   write the description as that message (what and why, plus how it was tested); reviewer or
   settings instructions go in a PR comment.**
+- `CONTRIBUTING.md` is the contributor's version of these rules (issue, one PR, tests, CI, signed
+  commits); keep it in step when a rule here changes.
 - Vulnerabilities are reported privately (`SECURITY.md`); `.github/copilot-instructions.md` lists
   what blocks a change in Copilot code review (keep it under 4,000 characters).
 
