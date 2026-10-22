@@ -190,6 +190,8 @@ Repository conventions:
   the areas it touches and acceptance criteria, ticked only with evidence in a comment; *Bug* asks for
   version, deployment and steps, never a dump holding someone else's data. `.github/pull_request_template.md`
   (Why / What changes / How to verify / `Closes #N`) is shaped to read as the squash commit message.
+- `CONTRIBUTING.md` is the contributor's version of these rules (issue, one PR, tests, CI, signed
+  commits); keep it in step when a rule here changes.
 - Vulnerabilities are reported privately (`SECURITY.md`); `.github/copilot-instructions.md` lists
   what blocks a change in Copilot code review (keep it under 4,000 characters).
 
