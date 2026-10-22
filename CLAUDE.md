@@ -36,53 +36,27 @@ curl http://localhost:7997/api/diagnostics/analyses
 
 **Solution**: Single ASP.NET Core service with dual interfaces (MCP Streamable HTTP + REST API) and job-based async operations:
 
-```
-┌─────────────┐
-│ Claude Code │  MCP Streamable HTTP
-│ (MCP Client)│
-└──────┬──────┘
-       │ http://localhost:7997/mcp
-       ↓
-┌──────────────────────────────────────────────────┐
-│        DumpAnalysisService (port 7997)           │
-│                                                  │
-│  ┌──────────────┐      ┌───────────────────┐   │
-│  │ MCP HTTP     │      │ REST API          │   │
-│  │ /mcp/*       │      │ /api/jobs/*       │   │
-│  │ (DebuggerTools)     │ (JobsController)  │   │
-│  └──────┬───────┘      └────────┬──────────┘   │
-│         │                       │               │
-│         └───────────┬───────────┘               │
-│                     ↓                           │
-│         ┌──────────────────────┐                │
-│         │ SessionManager       │                │
-│         │ + JobManager         │                │
-│         │ + ProgressHub        │                │
-│         │ (SignalR)            │                │
-│         └──────────┬───────────┘                │
-│                    │                            │
-└────────────────────┼────────────────────────────┘
-                     ↓
-              ┌─────────────┐
-              │ CDB Process │
-              │ (per dump)  │
-              └─────────────┘
+![Architecture](docs/architecture/architecture.svg)
 
-┌────────────────┐
-│ PowerShell /   │  REST API (Invoke-RestMethod)
-│ Azure Function │
-└────────┬───────┘
-         │ http://localhost:7997/api
-         ↓
-    (DumpAnalysisService)
+The diagram is rendered from [`docs/architecture/architecture.d2`](docs/architecture/architecture.d2), the
+source of truth for components, connections and trust/process boundaries (see **Diagrams** below).
+Sequence diagrams for the `load_dump` job and the request security path are in
+[`docs/architecture/README.md`](docs/architecture/README.md).
 
-┌──────────────────┐
-│ CommandLineClient│  REST API + SignalR
-└────────┬─────────┘
-         │ http://localhost:7997
-         ↓
-    (DumpAnalysisService)
-```
+### Diagrams
+
+- **D2 is the architecture source of truth.** `docs/architecture/architecture.d2` (ELK layout) holds the
+  components, their connections and the boundaries: clients, the DumpAnalysisService process, one cdb.exe
+  per dump, the Windows host or container. Its `#` comments carry the details the picture leaves out.
+  Read it before changing how components talk to each other.
+- When a component, boundary or connection changes, edit the `.d2`, run `Scripts/render-diagrams.sh`
+  (formats, validates, renders every `docs/**/*.d2`) and commit the regenerated `.svg` in the same PR.
+  The CI `diagrams` job runs it with `--check` and fails on an unformatted or invalid source or a stale SVG.
+- Install D2 the way CI does, `go install oss.terrastruct.com/d2@v0.7.2`: a release binary embeds a
+  different version string, so every SVG would read as stale.
+- **Mermaid is for flows over time** (sequence diagrams), inline in Markdown, as in
+  `docs/architecture/README.md`. Update them when the flow they show changes.
+- No ASCII art or draw.io for architecture. In D2 text, a `;` ends a statement, so keep it out of labels.
 
 ### Projects Structure
 

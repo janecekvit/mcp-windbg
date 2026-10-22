@@ -22,46 +22,11 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 
 ## Architecture
 
-```
-┌─────────────┐
-│ Claude Code │  MCP HTTP
-└──────┬──────┘
-       │ http://localhost:7997/mcp
-       ↓
-┌──────────────────────────────────────────────────┐
-│        DumpAnalysisService (port 7997)           │
-│                                                  │
-│  ┌──────────────┐      ┌───────────────────┐   │
-│  │ MCP HTTP     │      │ REST API          │   │
-│  │ /mcp/*       │      │ /api/jobs/*       │   │
-│  └──────────────┘      └───────────────────┘   │
-│                                                  │
-│         ┌──────────────────────┐                │
-│         │ SessionManager       │                │
-│         │ + JobManager         │                │
-│         │ + ProgressHub        │                │
-│         └──────────┬───────────┘                │
-└────────────────────┼────────────────────────────┘
-                     ↓
-              ┌─────────────┐
-              │ CDB Process │
-              └─────────────┘
+![Architecture](docs/architecture/architecture.svg)
 
-┌────────────────┐
-│ PowerShell /   │  REST API
-│ Azure Function │
-└────────┬───────┘
-         │ http://localhost:7997/api
-         ↓
-    (DumpAnalysisService)
-
-┌──────────────────┐
-│ CommandLineClient│  REST API + SignalR
-└────────┬─────────┘
-         │ http://localhost:7997
-         ↓
-    (DumpAnalysisService)
-```
+One ASP.NET Core process serves MCP (`/mcp`), REST (`/api`) and SignalR progress (`/hubs/progress`), and runs one
+`cdb.exe` per loaded dump. The diagram is rendered from [`docs/architecture/architecture.d2`](docs/architecture/architecture.d2);
+sequence diagrams for loading a dump and for securing a request are in [`docs/architecture/README.md`](docs/architecture/README.md).
 
 ## Requirements
 
