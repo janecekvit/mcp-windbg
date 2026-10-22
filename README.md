@@ -1,9 +1,12 @@
 # WinDbg MCP Server
 
 [![Build and Release](https://github.com/janecekvit/mcp-windbg/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/janecekvit/mcp-windbg/actions/workflows/build-and-release.yml)
+[![Security](https://github.com/janecekvit/mcp-windbg/actions/workflows/security.yml/badge.svg)](https://github.com/janecekvit/mcp-windbg/actions/workflows/security.yml)
 [![Docs](https://github.com/janecekvit/mcp-windbg/actions/workflows/docs.yml/badge.svg)](https://github.com/janecekvit/mcp-windbg/actions/workflows/docs.yml)
 [![codecov](https://codecov.io/gh/janecekvit/mcp-windbg/graph/badge.svg)](https://codecov.io/gh/janecekvit/mcp-windbg)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/janecekvit/mcp-windbg/badge)](https://scorecard.dev/viewer/?uri=github.com/janecekvit/mcp-windbg)
+[![Latest release](https://img.shields.io/github/v/release/janecekvit/mcp-windbg?sort=semver)](https://github.com/janecekvit/mcp-windbg/releases)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 MCP (Model Context Protocol) server for interactive debugging of Windows memory dump files using Microsoft Command Line Debugger (cdb.exe) or WinDbg.
 
@@ -941,6 +944,12 @@ For standalone usage without MCP:
 - `401 Unauthorized`: the service has `Security:ApiKey` or `Security:Jwt` set. Add the `X-Api-Key` header or sign in with a token. The `WWW-Authenticate` header says which: `resource_metadata` means OAuth. A `401` with a token usually means the audience or issuer does not match `Security:Jwt` (the service logs the reason).
 - `403 Forbidden` with a token: the token has no `Dumps.*` role, or not a high enough one. Assign the user or app to an app role, then sign in again.
 - `400 Invalid hostname`: the client reaches the service by a name that `AllowedHosts` does not list (it defaults to localhost)
+
+## Contributing
+
+Bugs and ideas go to [GitHub issues](https://github.com/janecekvit/mcp-windbg/issues), vulnerabilities
+privately as [`SECURITY.md`](SECURITY.md) describes. [`CONTRIBUTING.md`](CONTRIBUTING.md) says what a
+pull request needs.
 
 ## License
 
