@@ -1,0 +1,43 @@
+name: Change
+description: A need the server does not meet yet, or a change to how it works. Every change starts here.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: "State the need, not the solution. A defect goes in the Bug form. A vulnerability does not belong here: report it privately, as SECURITY.md describes."
+  - type: textarea
+    id: need
+    attributes:
+      label: The need
+      description: What is missing or wrong, for whom (an MCP client, a script over the REST API, an operator of the Docker image), and what happens today.
+    validations:
+      required: true
+  - type: checkboxes
+    id: areas
+    attributes:
+      label: Areas it touches
+      description: Tick every area the change is expected to touch.
+      options:
+        - label: MCP tools and REST API
+        - label: Dump triage parser
+        - label: Crash fingerprints
+        - label: cdb session handling
+        - label: CommandLineClient
+        - label: Docker image
+        - label: CI and docs
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance criteria
+      description: A checklist. Each item is something that can be shown true, and is ticked only when a comment on this issue shows what ran and what it printed.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What this change deliberately does not do, if that is worth saying.
+    validations:
+      required: false

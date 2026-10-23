@@ -10,10 +10,15 @@ flowchart LR
 
 ## Report a bug or ask for a feature
 
-Open a [GitHub issue](https://github.com/janecekvit/mcp-windbg/issues). For a bug, give the version
-or commit, how the service runs (single-file executable, Docker image, settings), what you did and
-what happened. A dump that shows a parser problem helps most when it is small; never attach a dump
-that holds someone else's data.
+Open a [GitHub issue](https://github.com/janecekvit/mcp-windbg/issues/new/choose) with one of the two
+forms; blank issues are off.
+
+- **Change**, for a need the server does not meet yet: state the need, not the solution, tick the
+  areas it touches and write the acceptance criteria as a checklist. A criterion is ticked only when a
+  comment on the issue shows what ran and what it printed.
+- **Bug**, for something that works wrong: the version or commit, how the service runs (single-file
+  executable, Docker image, source), the steps, what you expected and what happened. A dump that shows
+  a parser problem helps most when it is small; never attach a dump that holds someone else's data.
 
 **A vulnerability is never an issue.** Report it privately, as [`SECURITY.md`](SECURITY.md) describes.
 
@@ -22,8 +27,9 @@ that holds someone else's data.
 1. Start from an issue for anything larger than a typo, so the approach can be agreed before the work.
 2. Work on a branch (or a fork) and open **one pull request per change**.
 3. Write the pull request description as the commit message: pull requests are squash-merged with
-   their title and description. Say what changes and why, and how you tested it. Put notes for the
-   reviewer in a comment, not in the description.
+   their title and description. The [template](.github/pull_request_template.md) has the shape: *Why*,
+   *What changes*, *How to verify*, and `Closes #N` for the issue. Put notes for the reviewer in a
+   comment, not in the description.
 4. **Commits must be signed** (`main` accepts only verified signatures), and every discussion on the
    pull request must be resolved before it merges.
 
