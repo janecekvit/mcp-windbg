@@ -30,8 +30,20 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 ---
 config:
   layout: elk
+  theme: base
+  themeVariables:
+    background: "#FFFFFF"
+    primaryTextColor: "#0F172A"
+    textColor: "#0F172A"
+    titleColor: "#0F172A"
+    lineColor: "#475569"
+    edgeLabelBackground: "#FFFFFF"
+    clusterBkg: "#F8FAFC"
+    clusterBorder: "#475569"
+    fontFamily: "ui-sans-serif, system-ui, sans-serif"
 ---
 flowchart TB
+    %% Fixed base theme, so the diagram looks the same in GitHub's light and dark mode.
     %% One colour per layer: clients (indigo), authenticated entry points (green), services (blue),
     %% the debugger process (amber), files (violet), external services (grey), boundaries (slate).
     classDef client fill:#E0E7FF,stroke:#4F46E5,color:#312E81
@@ -117,11 +129,11 @@ flowchart TB
     cdb -- download --> symsrv
 
     %% Boundaries; the clients boundary is dashed (outside the trust boundary).
-    style clients fill:#EEF2FF,stroke:#6366F1,stroke-dasharray:3 3
-    style host fill:#F8FAFC,stroke:#475569
-    style service fill:#EFF6FF,stroke:#3B82F6
-    style entry fill:#ECFDF5,stroke:#10B981
-    style files fill:#FAF5FF,stroke:#A855F7
+    style clients fill:#EEF2FF,stroke:#6366F1,stroke-dasharray:3 3,color:#0F172A
+    style host fill:#F8FAFC,stroke:#475569,color:#0F172A
+    style service fill:#EFF6FF,stroke:#3B82F6,color:#0F172A
+    style entry fill:#ECFDF5,stroke:#10B981,color:#0F172A
+    style files fill:#FAF5FF,stroke:#A855F7,color:#0F172A
     %% Edges in neutral slate, so the colours mark the layers.
     linkStyle default stroke:#475569
 ```
