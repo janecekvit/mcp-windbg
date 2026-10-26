@@ -36,7 +36,7 @@ config:
     primaryTextColor: "#0F172A"
     textColor: "#0F172A"
     titleColor: "#0F172A"
-    lineColor: "#475569"
+    lineColor: "#64748B"
     edgeLabelBackground: "#FFFFFF"
     clusterBkg: "#F8FAFC"
     clusterBorder: "#475569"
@@ -135,7 +135,7 @@ flowchart TB
     style entry fill:#ECFDF5,stroke:#10B981,color:#0F172A
     style files fill:#FAF5FF,stroke:#A855F7,color:#0F172A
     %% Edges in neutral slate, so the colours mark the layers.
-    linkStyle default stroke:#475569
+    linkStyle default stroke:#64748B
 ```
 
 One ASP.NET Core process serves MCP (`/mcp`), REST (`/api`) and SignalR progress (`/hubs/progress`), and runs one
