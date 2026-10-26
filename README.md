@@ -40,7 +40,8 @@ config:
     edgeLabelBackground: "#FFFFFF"
     clusterBkg: "#F8FAFC"
     clusterBorder: "#475569"
-    fontFamily: "ui-sans-serif, system-ui, sans-serif"
+  flowchart:
+    padding: 16
 ---
 flowchart TB
     %% Fixed base theme, so the diagram looks the same in GitHub's light and dark mode.
