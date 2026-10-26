@@ -40,7 +40,7 @@ for security first. Flag these as blocking:
 - Every long operation is a job (`JobManagerService.CreateJob`), never a blocking call in an
   endpoint or tool.
 - A change to a component, boundary or connection updates the Mermaid flowchart in
-  `docs/architecture/README.md` (no D2, ASCII art or generated images).
+  the Architecture section of `README.md` (no D2, ASCII art or generated images).
 
 ## Tests
 

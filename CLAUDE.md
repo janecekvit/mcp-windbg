@@ -36,20 +36,21 @@ curl http://localhost:7997/api/diagnostics/analyses
 
 **Solution**: Single ASP.NET Core service with dual interfaces (MCP Streamable HTTP + REST API) and job-based async operations:
 
-The architecture diagram lives in [`docs/architecture/README.md`](docs/architecture/README.md): a Mermaid
-flowchart, the source of truth for components, connections and trust/process boundaries (see **Diagrams**
-below), followed by sequence diagrams for the `load_dump` job and the request security path.
+The architecture diagram lives in the [Architecture section of `README.md`](README.md#architecture): a
+Mermaid flowchart, the source of truth for components, connections and trust/process boundaries (see
+**Diagrams** below). Sequence diagrams for the `load_dump` job and the request security path are in
+[`docs/architecture/README.md`](docs/architecture/README.md).
 
 ### Diagrams
 
 - **Mermaid is the source of truth**, inline in Markdown; GitHub renders it, so there is no generated file
   to commit or keep in step.
-- **Architecture**: the flowchart (front matter `config: layout: elk`) at the top of
-  `docs/architecture/README.md` holds the components, their connections and the boundaries: clients, the
+- **Architecture**: the flowchart (front matter `config: layout: elk`) in the Architecture section of
+  `README.md`, its only copy, holds the components, their connections and the boundaries: clients, the
   DumpAnalysisService process, one cdb.exe per dump, the Windows host or container. Its `%%` comments carry
   the details the picture leaves out. Read it before changing how components talk to each other, and
   update it in the same PR when a component, boundary or connection changes.
-- **Flows over time** are sequence diagrams in the same file. Update them when the flow they show changes.
+- **Flows over time** are sequence diagrams in `docs/architecture/README.md`. Update them when the flow they show changes.
 - No D2, ASCII art or draw.io. Before pushing a diagram change, check that it parses, e.g.
   `npx -y @mermaid-js/mermaid-cli@11.4.2 -i diagram.mmd -o out.svg`, and do not commit the output.
 
