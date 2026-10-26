@@ -26,11 +26,10 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 
 ## Architecture
 
-![Architecture](docs/architecture/architecture.svg)
-
 One ASP.NET Core process serves MCP (`/mcp`), REST (`/api`) and SignalR progress (`/hubs/progress`), and runs one
-`cdb.exe` per loaded dump. The diagram is rendered from [`docs/architecture/architecture.d2`](docs/architecture/architecture.d2);
-sequence diagrams for loading a dump and for securing a request are in [`docs/architecture/README.md`](docs/architecture/README.md).
+`cdb.exe` per loaded dump. [`docs/architecture/README.md`](docs/architecture/README.md) draws the components, their
+connections and the trust and process boundaries as a Mermaid flowchart, followed by sequence diagrams for loading a
+dump and for securing a request.
 
 ## Requirements
 
