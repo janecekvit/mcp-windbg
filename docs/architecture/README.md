@@ -1,10 +1,7 @@
 # Architecture
 
-![mcp-windbg architecture](architecture.svg)
-
-The diagram is rendered from [`architecture.d2`](architecture.d2), which is the source of truth for the
-components, their connections and the trust and process boundaries. To change it, edit the `.d2`, run
-`Scripts/render-diagrams.sh` and commit both files. CI fails when the SVG is stale.
+The architecture flowchart (components, their connections and the trust and process boundaries) lives in
+the main [README](../../README.md#architecture), which is its only source.
 
 Flows over time are drawn below as Mermaid sequence diagrams, which GitHub renders inline.
 

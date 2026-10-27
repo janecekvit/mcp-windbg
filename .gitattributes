@@ -1,4 +1,0 @@
-# Rendered from the .d2 next to each file by Scripts/render-diagrams.sh.
-docs/**/*.svg linguist-generated=true
-*.d2 text eol=lf
-*.sh text eol=lf

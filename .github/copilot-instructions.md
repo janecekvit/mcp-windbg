@@ -39,8 +39,8 @@ for security first. Flag these as blocking:
 - cdb commands go through the per-session semaphore; never two commands on one session at once.
 - Every long operation is a job (`JobManagerService.CreateJob`), never a blocking call in an
   endpoint or tool.
-- A change to a component, boundary or connection updates `docs/architecture/architecture.d2`
-  and the rendered `.svg` (`Scripts/render-diagrams.sh`).
+- A change to a component, boundary or connection updates the Mermaid flowchart in
+  the Architecture section of `README.md` (no D2, ASCII art or generated images).
 
 ## Tests
 

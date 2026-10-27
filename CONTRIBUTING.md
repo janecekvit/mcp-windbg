@@ -49,9 +49,9 @@ forms; blank issues are off.
 - **The security model holds.** A new endpoint or MCP tool gets a `DumpPolicies` policy and, if it
   takes a session or job id, an ownership check. User text for cdb.exe goes through `CdbCommandPolicy`.
   [`CLAUDE.md`](CLAUDE.md) describes the model.
-- **Diagrams stay current.** When components or their connections change, edit
-  `docs/architecture/architecture.d2` and run `Scripts/render-diagrams.sh`; flows over time are
-  Mermaid diagrams in `docs/architecture/README.md`.
+- **Diagrams stay current.** When components or their connections change, update the Mermaid
+  flowchart in the Architecture section of `README.md`; flows over time are the Mermaid sequence
+  diagrams in `docs/architecture/README.md`. GitHub renders them; there is no generated file.
 - **Workflow changes are checked** with `actionlint` and `zizmor --offline .github/workflows`. Actions are
   pinned to a full commit SHA of a release at least 14 days old.
 - **Dependencies** go into `Directory.Packages.props`, at a version published at least 14 days earlier.
