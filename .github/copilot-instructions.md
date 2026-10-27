@@ -41,6 +41,9 @@ for security first. Flag these as blocking:
   endpoint or tool.
 - A change to a component, boundary or connection updates the Mermaid flowchart in
   the Architecture section of `README.md` (no D2, ASCII art or generated images).
+- The flowchart sets no theme (it follows GitHub's light/dark mode): saturated node fills with
+  white text, translucent `#RRGGBBAA` boundaries with the layer colour for stroke and title, edges
+  `#8B949E`, never `fontFamily`. Sequence diagrams keep the default theme.
 
 ## Tests
 

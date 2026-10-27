@@ -50,6 +50,10 @@ Mermaid flowchart, the source of truth for components, connections and trust/pro
   DumpAnalysisService process, one cdb.exe per dump, the Windows host or container. Its `%%` comments carry
   the details the picture leaves out. Read it before changing how components talk to each other, and
   update it in the same PR when a component, boundary or connection changes.
+- **Colours**: the architecture flowchart sets no theme, so it follows GitHub's light or dark mode. Nodes
+  use saturated fills with white text; boundaries use translucent `#RRGGBBAA` fills with the layer colour
+  for stroke and title; edges are neutral grey `#8B949E`. Never set `fontFamily` (GitHub clips the labels).
+  Sequence diagrams keep the default theme.
 - **Flows over time** are sequence diagrams in `docs/architecture/README.md`. Update them when the flow they show changes.
 - No D2, ASCII art or draw.io. Before pushing a diagram change, check that it parses, e.g.
   `npx -y @mermaid-js/mermaid-cli@11.4.2 -i diagram.mmd -o out.svg`, and do not commit the output.

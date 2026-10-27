@@ -30,29 +30,20 @@ MCP (Model Context Protocol) server for interactive debugging of Windows memory 
 ---
 config:
   layout: elk
-  theme: base
-  themeVariables:
-    background: "#FFFFFF"
-    primaryTextColor: "#0F172A"
-    textColor: "#0F172A"
-    titleColor: "#0F172A"
-    lineColor: "#64748B"
-    edgeLabelBackground: "#FFFFFF"
-    clusterBkg: "#F8FAFC"
-    clusterBorder: "#475569"
   flowchart:
     padding: 16
 ---
 flowchart TB
-    %% Fixed base theme, so the diagram looks the same in GitHub's light and dark mode.
+    %% No theme: GitHub picks its light or dark theme to match the page. Saturated nodes with white
+    %% text and translucent boundaries read on both.
     %% One colour per layer: clients (indigo), authenticated entry points (green), services (blue),
     %% the debugger process (amber), files (violet), external services (grey), boundaries (slate).
-    classDef client fill:#E0E7FF,stroke:#4F46E5,color:#312E81
-    classDef entry fill:#D1FAE5,stroke:#059669,color:#064E3B
-    classDef service fill:#DBEAFE,stroke:#2563EB,color:#1E3A8A
-    classDef debugger fill:#FEF3C7,stroke:#D97706,color:#78350F
-    classDef file fill:#F3E8FF,stroke:#9333EA,color:#581C87
-    classDef external fill:#F3F4F6,stroke:#6B7280,color:#374151
+    classDef client fill:#4F46E5,stroke:#3730A3,color:#FFFFFF
+    classDef entry fill:#047857,stroke:#065F46,color:#FFFFFF
+    classDef service fill:#2563EB,stroke:#1E40AF,color:#FFFFFF
+    classDef debugger fill:#B45309,stroke:#92400E,color:#FFFFFF
+    classDef file fill:#7E22CE,stroke:#6B21A8,color:#FFFFFF
+    classDef external fill:#4B5563,stroke:#374151,color:#FFFFFF
 
     %% Outside the service's trust boundary. Every request carries a JWT bearer token,
     %% an API key, or nothing when no credential is configured.
@@ -129,14 +120,15 @@ flowchart TB
     cdb --> symcache
     cdb -- download --> symsrv
 
-    %% Boundaries; the clients boundary is dashed (outside the trust boundary).
-    style clients fill:#EEF2FF,stroke:#6366F1,stroke-dasharray:3 3,color:#0F172A
-    style host fill:#F8FAFC,stroke:#475569,color:#0F172A
-    style service fill:#EFF6FF,stroke:#3B82F6,color:#0F172A
-    style entry fill:#ECFDF5,stroke:#10B981,color:#0F172A
-    style files fill:#FAF5FF,stroke:#A855F7,color:#0F172A
-    %% Edges in neutral slate, so the colours mark the layers.
-    linkStyle default stroke:#64748B
+    %% Boundaries: translucent fill, stroke and title in the layer colour; the clients boundary is
+    %% dashed (outside the trust boundary).
+    style clients fill:#6366F11A,stroke:#6366F1,stroke-dasharray:3 3,color:#6366F1
+    style host fill:#64748B14,stroke:#64748B,color:#64748B
+    style service fill:#3B82F61A,stroke:#3B82F6,color:#3B82F6
+    style entry fill:#10B9811A,stroke:#10B981,color:#0E9F6E
+    style files fill:#A855F71A,stroke:#A855F7,color:#A855F7
+    %% Edges in neutral grey, readable on both backgrounds, so the colours mark the layers.
+    linkStyle default stroke:#8B949E
 ```
 
 One ASP.NET Core process serves MCP (`/mcp`), REST (`/api`) and SignalR progress (`/hubs/progress`), and runs one

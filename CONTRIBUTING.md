@@ -52,6 +52,9 @@ forms; blank issues are off.
 - **Diagrams stay current.** When components or their connections change, update the Mermaid
   flowchart in the Architecture section of `README.md`; flows over time are the Mermaid sequence
   diagrams in `docs/architecture/README.md`. GitHub renders them; there is no generated file.
+  The flowchart sets no theme, so it follows GitHub's light or dark mode: saturated node fills with white
+  text, translucent `#RRGGBBAA` boundaries with the layer colour for stroke and title, grey `#8B949E`
+  edges, and no `fontFamily` (GitHub clips the labels). Sequence diagrams keep the default theme.
 - **Workflow changes are checked** with `actionlint` and `zizmor --offline .github/workflows`. Actions are
   pinned to a full commit SHA of a release at least 14 days old.
 - **Dependencies** go into `Directory.Packages.props`, at a version published at least 14 days earlier.
