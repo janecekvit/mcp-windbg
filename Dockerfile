@@ -1,6 +1,6 @@
 # escape=`
 # Pinned by digest (the ltsc2022 manifest list); Dependabot proposes the monthly Windows updates.
-FROM mcr.microsoft.com/windows/servercore:ltsc2022@sha256:593cf4a5ef08cfff00a03637e45eba073b8fe9dc90b80af4449bc5f427c7cdcd
+FROM mcr.microsoft.com/windows/servercore:ltsc2022@sha256:b52799a67fa596d4bddcd82ae1dab0077a84767fbc33c7342b72b53ecc71ad09
 
 LABEL org.opencontainers.image.source="https://github.com/janecekvit/mcp-windbg" `
       org.opencontainers.image.licenses="Apache-2.0"
