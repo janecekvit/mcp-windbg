@@ -52,6 +52,44 @@ public class HappyPathTests
         Assert.Equal(JobState.Completed, closeResult.State);
     }
 
+    [SkippableFact]
+    public async Task LoadDump_NonAsciiPath_CommandOutputKeepsTheCharacters()
+    {
+        Skip.IfNot(CdbAvailability.IsAvailable, CdbAvailability.SkipReason);
+
+        // cdb.exe writes the ANSI code page on its pipes; "š" exists in 1250 and 1252.
+        var directory = Path.Combine(Path.GetTempPath(), "mcp-windbg-tests", $"dumps-š-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var dumpPath = Path.Combine(directory, "snapshot-š.dmp");
+        File.Copy(_dump.DumpPath, dumpPath);
+        try
+        {
+            var loadResult = await WaitForJobAsync(
+                await StartJobAsync("/api/jobs/load-dump", new LoadDumpRequest(dumpPath)), TimeSpan.FromMinutes(20));
+            Assert.Equal(JobState.Completed, loadResult.State);
+            var sessionId = loadResult.Result!;
+
+            var commandResult = await WaitForJobAsync(
+                await StartJobAsync("/api/jobs/execute-command", new ExecuteCommandRequest(sessionId, "||")), TimeSpan.FromMinutes(2));
+            Assert.Equal(JobState.Completed, commandResult.State);
+            Assert.Contains("snapshot-š.dmp", commandResult.Result, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain('\uFFFD', commandResult.Result!);
+
+            await WaitForJobAsync(await StartJobAsync("/api/jobs/close-session", new CloseSessionRequest(sessionId)), TimeSpan.FromMinutes(1));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // cdb.exe may still hold the dump open for a moment; the temp directory is cleaned up later.
+            }
+        }
+    }
+
     private async Task<string> StartJobAsync<TRequest>(string url, TRequest body)
     {
         var resp = await _service.Client.PostAsJsonAsync(url, body);

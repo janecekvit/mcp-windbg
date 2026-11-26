@@ -106,9 +106,12 @@ public sealed class SessionManagerService : ISessionManagerService
 
     public async Task<string> ExecuteCommandAsync(string jobId, string sessionId, string command, CancellationToken cancellationToken = default)
     {
-        CdbCommandPolicy.Validate(command, _securityOptions.AllowUnsafeCommands);
+        ValidateCommand(command);
         return await ExecuteInternalCommandAsync(jobId, sessionId, command, cancellationToken);
     }
+
+    public void ValidateCommand(string command) =>
+        CdbCommandPolicy.Validate(command, _securityOptions.AllowUnsafeCommands);
 
     public bool TryGetSessionOwner(string sessionId, out string? owner)
     {

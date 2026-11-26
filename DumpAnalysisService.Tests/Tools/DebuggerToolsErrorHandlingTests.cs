@@ -35,12 +35,12 @@ public class DebuggerToolsErrorHandlingTests
     }
 
     [Fact]
-    public async Task LoadDump_FileMissing_ThrowsInvalidOperationException()
+    public async Task LoadDump_FileMissing_ThrowsMcpExceptionWithThePath()
     {
         var sut = CreateSut();
         var nonExistent = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.dmp");
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+        var ex = await Assert.ThrowsAsync<ModelContextProtocol.McpException>(
             () => sut.LoadDump(nonExistent));
 
         Assert.Contains(nonExistent, ex.Message);

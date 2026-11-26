@@ -26,6 +26,12 @@ public class DebuggerConfiguration
     public string? DefaultSymbolServers { get; set; }
 
     /// <summary>
+    /// Upper bound of one command's output in UTF-8 bytes (default 256 KB); longer output is cut
+    /// off with an "[output truncated: N bytes omitted]" note. 0 or less: unbounded.
+    /// </summary>
+    public int MaxCommandOutputBytes { get; set; } = 256 * 1024;
+
+    /// <summary>
     /// Gets the effective symbol cache path, using environment fallback if needed.
     /// </summary>
     public string GetSymbolCachePath()

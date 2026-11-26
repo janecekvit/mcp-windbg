@@ -68,6 +68,7 @@ public static class ConfigurationExtensions
     {
         return new DebuggerConfiguration
         {
+            MaxCommandOutputBytes = configuration.GetValue("Debugger:MaxCommandOutputBytes", 256 * 1024),
             DefaultSymbolCache = configuration.GetValueWithEnvironmentFallback<string?>(
                 "Debugger:DefaultSymbolCache"),
             DefaultSymbolPathExtra = configuration.GetValueWithEnvironmentFallback<string?>(

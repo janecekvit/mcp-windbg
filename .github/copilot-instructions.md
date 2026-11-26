@@ -36,6 +36,8 @@ for security first. Flag these as blocking:
 
 - Services throw specific exceptions (`FileNotFoundException`, `ArgumentException`,
   `InvalidOperationException`); controllers map them to 400/404/500. No boolean error returns.
+- MCP clients see a failure's message only through `McpException` (`ToolErrors`): client errors
+  keep their reason, unexpected ones stay generic. Never put internals in a client-visible message.
 - cdb commands go through the per-session semaphore; never two commands on one session at once.
 - Every long operation is a job (`JobManagerService.CreateJob`), never a blocking call in an
   endpoint or tool.

@@ -5,6 +5,7 @@ using DumpAnalysisService.Infrastructure.IO;
 using DumpAnalysisService.Providers;
 using DumpAnalysisService.Security;
 using DumpAnalysisService.Services;
+using DumpAnalysisService.Tools;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.Extensions.Tasks;
@@ -75,7 +76,15 @@ public partial class Program
                 .WithRequestFilters(filters => filters.AddCallToolFilter(next => async (request, cancellationToken) =>
                 {
                     using var _ = McpCallerContext.Use(request.User);
-                    return await next(request, cancellationToken);
+                    try
+                    {
+                        return await next(request, cancellationToken);
+                    }
+                    catch (Exception ex) when (ToolErrors.ToMcpException(ex) is { } clientError && !ReferenceEquals(clientError, ex))
+                    {
+                        // The SDK shows the message of an McpException only: give the client the reason.
+                        throw clientError;
+                    }
                 }))
                 // MCP Tasks extension (SEP-2663): a task-aware client can run any tool call
                 // as a task and poll tasks/get instead of holding the request open.

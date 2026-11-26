@@ -17,6 +17,7 @@ public sealed class CdbProcessManager : ICdbProcessManager
 
     private readonly ILogger<CdbProcessManager> _logger;
     private readonly string _sessionId;
+    private readonly int _maxOutputBytes;
     private readonly object _lock = new();
     private Process? _cdbProcess;
     private StreamWriter? _stdin;
@@ -45,10 +46,14 @@ public sealed class CdbProcessManager : ICdbProcessManager
         }
     }
 
-    public CdbProcessManager(string sessionId, ILogger<CdbProcessManager> logger)
+    /// <param name="sessionId">Session the process belongs to (for the log).</param>
+    /// <param name="logger">Logger.</param>
+    /// <param name="maxOutputBytes">Debugger:MaxCommandOutputBytes; 0 or less: unbounded.</param>
+    public CdbProcessManager(string sessionId, ILogger<CdbProcessManager> logger, int maxOutputBytes = CdbOutputCollector.DefaultMaxOutputBytes)
     {
         _sessionId = sessionId;
         _logger = logger;
+        _maxOutputBytes = maxOutputBytes;
     }
 
     /// <summary>
@@ -65,8 +70,10 @@ public sealed class CdbProcessManager : ICdbProcessManager
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
+            // cdb.exe reads and writes the ANSI code page on pipes (CdbConsoleEncoding).
+            StandardInputEncoding = CdbConsoleEncoding.Current,
+            StandardOutputEncoding = CdbConsoleEncoding.Current,
+            StandardErrorEncoding = CdbConsoleEncoding.Current
         };
 
         // -noshell: disables .shell for the whole session (defence in depth behind CdbCommandPolicy).
@@ -140,7 +147,7 @@ public sealed class CdbProcessManager : ICdbProcessManager
         _EnsureProcessIsRunning();
 
         var id = Guid.NewGuid().ToString("N");
-        var collector = new CdbOutputCollector($"__START_COMMAND_{id}__", $"__END_COMMAND_{id}__");
+        var collector = new CdbOutputCollector($"__START_COMMAND_{id}__", $"__END_COMMAND_{id}__", _maxOutputBytes);
 
         // Three separate input lines: whatever the command does to the rest of its own line
         // (a '*' comment, an unbalanced quote) cannot affect the markers.

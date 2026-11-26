@@ -2,6 +2,7 @@ using System.Text.Json;
 using DumpAnalysisService.Fingerprinting;
 using DumpAnalysisService.Security;
 using DumpAnalysisService.Services;
+using DumpAnalysisService.Tools;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -156,7 +157,7 @@ public class JobsController : ControllerBase
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         });
 
@@ -176,6 +177,16 @@ public class JobsController : ControllerBase
         if (!_TryEnsureSession(caller, request.SessionId, out var notFound))
             return notFound;
 
+        try
+        {
+            _sessionManager.ValidateCommand(request.Command);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning("Refused command from {Caller} in session {SessionId}: {Reason}", caller.Name, request.SessionId, ex.Message);
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest, title: "Command Refused");
+        }
+
         var jobId = _jobManager.CreateJob(JobOperationType.ExecuteCommand, request.SessionId, caller.Id);
         _audit.Record(caller, "execute-command", request.SessionId, request.Command);
         _logger.LogInformation("Created job {JobId} for executing command in session {SessionId}", jobId, request.SessionId);
@@ -191,7 +202,7 @@ public class JobsController : ControllerBase
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         });
 
@@ -226,7 +237,7 @@ public class JobsController : ControllerBase
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         });
 
@@ -262,7 +273,7 @@ public class JobsController : ControllerBase
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         });
 
@@ -297,7 +308,7 @@ public class JobsController : ControllerBase
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         });
 
@@ -329,7 +340,7 @@ public class JobsController : ControllerBase
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         });
 
@@ -364,7 +375,7 @@ public class JobsController : ControllerBase
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         });
 
