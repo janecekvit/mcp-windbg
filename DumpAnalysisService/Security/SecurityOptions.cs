@@ -16,11 +16,19 @@ public sealed class SecurityOptions
     public string? ApiKey { get; set; }
 
     /// <summary>
-    /// Allows debugger meta-commands that can run processes, load DLLs or write files
-    /// (.shell, .load, .create, .writemem, script files, ...). Keep false unless the
-    /// service is reachable only by fully trusted callers.
+    /// Lifts the command allowlist for execute_command: any single-line command except quitting
+    /// the debugger is passed to cdb, including meta-commands that can run processes, load DLLs or
+    /// write files. Keep false unless the service is reachable only by fully trusted callers.
     /// </summary>
     public bool AllowUnsafeCommands { get; set; }
+
+    /// <summary>
+    /// Command names added to the read-only allowlist of execute_command, written as the statement
+    /// starts: "bl", ".lines", "!mex.foo". Commands the policy refuses anywhere in the line
+    /// (aliases, nested command blocks, script files, meta-commands that act outside the dump)
+    /// stay refused; only <see cref="AllowUnsafeCommands"/> lifts those.
+    /// </summary>
+    public List<string> AllowedCommands { get; set; } = [];
 
     /// <summary>
     /// Allows clients to override the symbol cache, extra paths and symbol servers per

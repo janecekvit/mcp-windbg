@@ -106,7 +106,7 @@ public sealed class SessionManagerService : ISessionManagerService
 
     public async Task<string> ExecuteCommandAsync(string jobId, string sessionId, string command, CancellationToken cancellationToken = default)
     {
-        CdbCommandPolicy.Validate(command, _securityOptions.AllowUnsafeCommands);
+        CdbCommandPolicy.Validate(command, _securityOptions.AllowUnsafeCommands, _securityOptions.AllowedCommands);
         return await ExecuteInternalCommandAsync(jobId, sessionId, command, cancellationToken);
     }
 

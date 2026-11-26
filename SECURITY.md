@@ -33,7 +33,7 @@ Fixes go into the latest release and the `main` branch. Older releases are not p
 In scope, in the service (`DumpAnalysisService`), the client (`CommandLineClient`), the Docker image and this repository's workflows:
 
 - **Untrusted dump files.** A crafted `.dmp` that crashes, hangs or exhausts the service in `triage_dump` (our own minidump parser) or in the code that drives cdb, or that reads or writes outside the dump.
-- **Command injection into cdb/WinDbg.** MCP tool arguments or REST input that run debugger commands the policy blocks (`.shell`, `.load`, `.create`, `.writemem`, `$<` and the rest of `CdbCommandPolicy`), or that add commands to cdb.exe's input outside the start/end markers.
+- **Command injection into cdb/WinDbg.** MCP tool arguments or REST input that run debugger commands outside the allowlist of `CdbCommandPolicy` (or the syntax it refuses anywhere in the line), or that add commands to cdb.exe's input outside the start/end markers.
 - **Path traversal.** Reaching dump files, symbol paths or the crash group registry outside the configured locations (`Security:AllowedDumpDirectories`, symbol validation).
 - **Authentication and authorization bypass.** Calling a tool or endpoint without a valid API key or JWT, with a role below the one it requires, or reading or using another user's session or job.
 - **Denial of service from large or many dumps.** Unbounded memory, disk or time from one request, or getting around `MaxConcurrentSessions`.

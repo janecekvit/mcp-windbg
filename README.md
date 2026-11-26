@@ -341,6 +341,7 @@ The server supports multiple configuration methods with the following priority o
   "Security": {
     "ApiKey": null,
     "AllowUnsafeCommands": false,
+    "AllowedCommands": [],
     "AllowClientSymbolOverrides": true,
     "AllowedDumpDirectories": [],
     "MaxConcurrentSessions": 10
@@ -409,10 +410,29 @@ The debugger runs with the service's permissions and reads whatever dump path it
 |---|---|---|
 | `ApiKey` | none | When set, every REST, MCP and SignalR request needs `X-Api-Key: <key>` or `Authorization: Bearer <key>`; `GET /api/diagnostics/health` stays open for probes. **Set this or `Jwt` whenever the port is reachable from another machine.** The API key holder is an administrator. |
 | `Jwt:*` | off | OAuth 2.1 / OpenID Connect bearer tokens with roles and per-user sessions, see [OAuth bearer tokens](#oauth-bearer-tokens-microsoft-entra-id-keycloak-auth0). Works alongside `ApiKey`. |
-| `AllowUnsafeCommands` | `false` | `execute_command` refuses debugger meta-commands that act outside the dump: `.shell`, `.load`/`.loadby`, `.create`/`.attach`, `.writemem`/`.dump`/`.logopen`, `$<` script files, `.sympath`/`.srcpath` changes, `.server`, … Multi-line commands and `q`/`qq` are always refused (use `close_session`). cdb.exe additionally runs with `-noshell`. |
+| `AllowUnsafeCommands` | `false` | `execute_command` accepts only read-only inspection commands (see [Command policy](#command-policy)). `true` lifts the policy for fully trusted callers. Multi-line commands and `q`/`qq` are always refused (use `close_session`). cdb.exe additionally runs with `-noshell`. |
+| `AllowedCommands` | `[]` | Command names added to the allowlist, written as the statement starts: `"bl"`, `".lines"`, `"!mex.foo"`. It does not lift the syntax the policy refuses anywhere in the line. |
 | `AllowClientSymbolOverrides` | `true` | When `false`, `X-Symbol-*` headers and the REST `symbols` body are ignored and only the server-side `Debugger:*` defaults are used (prevents clients from pointing the debugger at arbitrary UNC shares). Client values are always validated (no quotes, control characters, or extra path elements in the cache). |
 | `AllowedDumpDirectories` | `[]` (any) | When non-empty, dumps can only be loaded from these directories. |
 | `MaxConcurrentSessions` | `10` | Upper bound on open sessions (each one is a `cdb.exe` process). |
+
+### Command policy
+
+`execute_command` passes a command to cdb.exe only when each statement of the line (split on `;` outside quotes) starts with a read-only inspection command. A blocklist cannot anticipate every way debugger syntax composes a command; an allowlist fails closed. The built-in list:
+
+| Area | Commands |
+|---|---|
+| Stacks, threads, frames | `k` and its variants (`kb`, `kn`, `kP`, `kv`, …), `~` (list), `~Ns` (switch), `~* <command>` with an allowed command, `\|`, `.frame`, `.f+`, `.f-`, `.kframes` |
+| Exception and event context | `.exr`, `.ecxr`, `.cxr`, `.exptr`, `.lastevent`, `.time`, `vertarget` |
+| Memory and types | `d`, `da`, `db`, `dc`, `dd`, `dq`, `du`, `dw`, `dps`, `dqs`, `dds` and the other `d*` display forms, `dt`, `dv`, `dl`, `s` (search), `dx` |
+| Code, symbols, modules | `u`, `ub`, `uf`, `x`, `ln`, `ls`, `lm` and its options, `.reload` (not `/o`) |
+| Registers and expressions | `r` without `=`, `?`, `??`, `.formats`, `.echo`, `.printf`, `.effmach`, `.chain`, `.dumpdebug` |
+| Extensions | `!analyze` (`-v`, `-f`, `-hang`, `-show`), `!address`, `!vprot`, `!handle`, `!locks`, `!cs`, `!teb`, `!peb`, `!heap`, `!runaway`, `!error`, `!gle`, `!uniqstack`, `!findstack`, `!exchain`, `!lmi`, `!dh`, `!itoldyouso`, `!dlls`, `!tls` |
+| SOS (.NET) | `!clrstack`, `!pe`, `!dumpheap`, `!dumpobj`/`!do`, `!threads`, `!eestack`, `!dumpstack`, `!syncblk`, `!dso`, `!ip2md`, `!name2ee`, `!dumpmt`, `!dumpclass`, `!dumpmd`, `!gcroot`, `!eeheap`, `!dumpdomain`, `!dumpmodule`, `!finalizequeue`, `!threadpool`, … (also as `!sos.<command>`) |
+
+Refused anywhere in the line, quoted text included, even with `AllowedCommands`: alias definitions and expansions (`as`, `aS`, `ad`, `al`, `${…}`, `$u0`), commands that run nested command text (`.block`, `.if`, `.foreach`, `.for`, `.while`, `.do`, `j`, `z`, `~e`, `!for_each_*`), script files (`$<`, `$$>a<`, …), script providers (`.scriptload`, `.scriptrun`, `.nvload`, …) and meta-commands that act outside the dump (`.shell`, `.load`, `.create`, `.attach`, `.writemem`, `.dump`, `.logopen`, `.sympath`, `.server`, …). A `dx` expression may not name the `Debugger` root namespace or its host objects (`Utility`, `State`, `Settings`, `@$scripts`); start from `@$cursession`, `@$curprocess` or `@$curthread` instead. A refused command fails with a message that names it.
+
+To allow more commands, list them in `Security:AllowedCommands` (environment variables `Security__AllowedCommands__0=bl`, `__1`, …).
 
 `AllowedHosts` in `appsettings.json` accepts only `localhost`, `127.0.0.1` and `[::1]`, which blocks DNS-rebinding attacks from a browser against a locally running service. The Docker image overrides it with `*` and relies on the API key instead.
 
@@ -566,7 +586,7 @@ Executes a WinDbg/CDB command in an existing session.
 **Parameters:**
 
 - `session_id`: Debugging session ID
-- `command`: Command to execute (e.g., "kb", "!analyze -v"); one line, subject to the [command policy](#security)
+- `command`: Command to execute (e.g., "kb", "!analyze -v"); one line of read-only inspection commands, subject to the [command policy](#command-policy)
 
 ### predefined_analysis
 

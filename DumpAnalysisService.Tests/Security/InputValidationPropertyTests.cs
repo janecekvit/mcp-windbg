@@ -12,11 +12,20 @@ namespace DumpAnalysisService.Tests.Security;
 /// </summary>
 public sealed class InputValidationPropertyTests
 {
-    // A sample of what the policy blocks, written as a client would: any case, mid-line.
-    private static readonly string[] UnsafeCommands =
+    // A sample of what the policy refuses anywhere in the line, written as a client would: any case, mid-line.
+    private static readonly string[] RefusedSyntax =
     [
         ".shell", ".load", ".loadby", ".create", ".attach", ".writemem", ".dump", ".logopen",
         ".sympath", ".server", "lsf", "$<", "$$><", "$$>a<",
+        ".scriptload", ".scriptrun", ".nvload", ".block", ".if", ".foreach", ".while", "!for_each_frame",
+        "${", "$u0", "$.u3",
+    ];
+
+    // Heads the policy accepts, used to build commands that get past the first check.
+    private static readonly string[] AllowedHeads =
+    [
+        "kb", "~*", "~0", "dx", "dps", "u", "x", "lm", "r", "?", "??", ".echo", ".frame", ".reload",
+        "!analyze", "!heap", "!sos.clrstack", "|",
     ];
 
     [Property(MaxTest = 500)]
@@ -32,9 +41,9 @@ public sealed class InputValidationPropertyTests
     }
 
     [Property(MaxTest = 500)]
-    public void CommandPolicy_RejectsUnsafeCommandAnywhereInTheLine(NonNull<string> before, NonNull<string> after, byte pick, bool upper)
+    public void CommandPolicy_RejectsRefusedSyntaxAnywhereInTheLine(NonNull<string> before, NonNull<string> after, byte pick, bool upper)
     {
-        var unsafeCommand = UnsafeCommands[pick % UnsafeCommands.Length];
+        var unsafeCommand = RefusedSyntax[pick % RefusedSyntax.Length];
         if (upper && !unsafeCommand.StartsWith('$'))
             unsafeCommand = unsafeCommand.ToUpperInvariant();
 
@@ -56,18 +65,45 @@ public sealed class InputValidationPropertyTests
     [Property(MaxTest = 500)]
     public void CommandPolicy_AcceptedCommandIsOneSafeLine(NonNull<string> command)
     {
+        _AssertAcceptedCommandKeepsInvariants(command.Get);
+    }
+
+    [Property(MaxTest = 2000)]
+    public void CommandPolicy_AcceptedCommandStartsEveryStatementWithAnAllowedCommand(byte pick, NonNull<string> arguments, byte secondPick, NonNull<string> secondArguments)
+    {
+        var command = $"{AllowedHeads[pick % AllowedHeads.Length]} {arguments.Get}; {AllowedHeads[secondPick % AllowedHeads.Length]}{secondArguments.Get}";
+
+        _AssertAcceptedCommandKeepsInvariants(command);
+    }
+
+    private static void _AssertAcceptedCommandKeepsInvariants(string command)
+    {
         try
         {
-            CdbCommandPolicy.Validate(command.Get, allowUnsafeCommands: false);
+            CdbCommandPolicy.Validate(command, allowUnsafeCommands: false);
         }
         catch (ArgumentException)
         {
             return;
         }
 
-        Assert.InRange(command.Get.Length, 1, CdbCommandPolicy.MaxCommandLength);
-        Assert.DoesNotContain(command.Get, c => char.IsControl(c) && c != '\t');
-        Assert.Null(CdbCommandPolicy.FindUnsafeToken(command.Get));
+        Assert.InRange(command.Length, 1, CdbCommandPolicy.MaxCommandLength);
+        Assert.DoesNotContain(command, c => char.IsControl(c) && c != '\t');
+        Assert.Null(CdbCommandPolicy.FindRefusal(command));
+
+        // No alias expansion or script files anywhere in the line, quoted text included.
+        Assert.DoesNotContain("${", command);
+        Assert.DoesNotMatch(@"(?i)\$\.?u\d", command);
+        Assert.DoesNotMatch(@"\${1,2}>?a?<", command);
+
+        Assert.True(CdbCommandPolicy.TrySplitStatements(command, out var statements));
+        Assert.NotEmpty(statements);
+        foreach (var statement in statements)
+        {
+            var name = CdbCommandPolicy.GetCommandName(statement);
+            Assert.True(name is "~" or "|" || CdbCommandPolicy.IsAllowedCommand(name), $"'{name}' is not an allowed command");
+            Assert.False(name.Equals("dx", StringComparison.OrdinalIgnoreCase) && statement.Contains("Debugger", StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     [Property(MaxTest = 500)]

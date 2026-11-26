@@ -222,7 +222,7 @@ public class DebuggerTools
     [Description("Execute a WinDbg/CDB command in an existing debugging session")]
     public async Task<string> ExecuteCommand(
         [Description("ID of the debugging session")] string session_id,
-        [Description("WinDbg/CDB command to execute (e.g., 'kb', '!analyze -v', 'dt')")] string command,
+        [Description("WinDbg/CDB command to execute (e.g., 'kb', '!analyze -v', 'dt'); one line of read-only inspection commands, separated by ';'")] string command,
         IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default)
     {

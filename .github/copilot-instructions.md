@@ -8,7 +8,9 @@ for security first. Flag these as blocking:
 
 - **cdb command injection**: user text must reach cdb.exe only through
   `SessionManagerService.ExecuteCommandAsync`, which applies `CdbCommandPolicy` (single line, no
-  `q`/`qq`, no `.shell`/`.load`/`.create`/`.writemem`/`$<`). Block new paths that send user or
+  `q`/`qq`; each `;` statement must start with an allowlisted read-only command; aliases, nested
+  command blocks, script files and providers refused anywhere). Block widening the allowlist with a
+  command that writes, loads, or runs other command text. Block new paths that send user or
   tool-argument text to cdb without that policy, or that build a command line by string
   concatenation (`CdbProcessManager.CreateStartInfo` must use `ProcessStartInfo.ArgumentList`).
 - **New endpoint or MCP tool** without `[Authorize(Policy = DumpPolicies.Read|Analyze|Admin)]`, or
