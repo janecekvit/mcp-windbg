@@ -74,7 +74,8 @@ public partial class Program
                 // tool, also for task-backed calls (whose HTTP request has already ended).
                 .WithRequestFilters(filters => filters.AddCallToolFilter(next => async (request, cancellationToken) =>
                 {
-                    using var _ = McpCallerContext.Use(request.User);
+                    // The MCP session owns what an unauthenticated stateful client creates (null when stateless).
+                    using var _ = McpCallerContext.Use(request.User, request.Server.SessionId);
                     return await next(request, cancellationToken);
                 }))
                 // MCP Tasks extension (SEP-2663): a task-aware client can run any tool call
@@ -139,6 +140,7 @@ public partial class Program
 
             app.Lifetime.ApplicationStarted.Register(() =>
             {
+                _WarnIfNoCredential(app, logger);
                 _WarnIfExposedWithoutApiKey(app, logger);
 
                 foreach (var boundUrl in app.Urls)
@@ -158,6 +160,22 @@ public partial class Program
             Console.Error.WriteLine($"Fatal error: {ex.Message}");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Logs a warning at startup when no credential is configured: callers are not authenticated,
+    /// so on a machine other users can reach (even on loopback) any of them can use the debugger.
+    /// </summary>
+    private static void _WarnIfNoCredential(WebApplication app, ILogger logger)
+    {
+        var security = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SecurityOptions>>().Value;
+        if (security.AuthenticationRequired)
+            return;
+
+        logger.LogWarning(
+            "No Security:ApiKey or Security:Jwt is configured: requests are not authenticated. Each stateful MCP client " +
+            "only sees its own sessions and jobs, but REST callers and stateless MCP clients see all of them. " +
+            "On a shared machine or a reachable port, set Security__ApiKey.");
     }
 
     /// <summary>

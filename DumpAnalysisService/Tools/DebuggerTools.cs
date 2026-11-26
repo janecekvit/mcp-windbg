@@ -61,7 +61,7 @@ public class DebuggerTools
     /// <exception cref="UnauthorizedAccessException">Authentication is required and the call carries no identity.</exception>
     private Caller _Caller()
     {
-        var caller = Caller.From(McpCallerContext.User, _security);
+        var caller = Caller.From(McpCallerContext.User, _security, McpCallerContext.McpSessionId);
         if (caller.Permission == DumpPermission.None)
             throw new UnauthorizedAccessException("The tool call carries no authenticated caller");
         return caller;

@@ -15,7 +15,7 @@ for security first. Flag these as blocking:
   taking a session or job id without `EnsureSessionAccess` / `CanAccessJob`.
 - **Caller identity** in an MCP tool taken from `IHttpContextAccessor` or a `RequestContext`
   parameter instead of `McpCallerContext`. With authentication on, a missing principal must be
-  `Caller.Unidentified`, never unrestricted.
+  `Caller.Unidentified`, never unrestricted; without it, a stateful MCP session owns what it creates.
 - **Dump and file paths** not checked by `DumpPathPolicy` (`Security:AllowedDumpDirectories`);
   client symbol values not validated by `SymbolInputValidator`.
 - **Minidump parsing** (`Infrastructure/Minidump/`): every offset, size and count read from the file

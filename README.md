@@ -414,6 +414,8 @@ The debugger runs with the service's permissions and reads whatever dump path it
 | `AllowedDumpDirectories` | `[]` (any) | When non-empty, dumps can only be loaded from these directories. |
 | `MaxConcurrentSessions` | `10` | Upper bound on open sessions (each one is a `cdb.exe` process). |
 
+**Without any credential**, callers are not authenticated. Each stateful MCP client (protocol 2025-11-25 and older, which keeps an `Mcp-Session-Id`) owns the sessions and jobs it creates, so two MCP clients cannot use each other's sessions; REST and SignalR callers and stateless MCP clients see everything, as before. The service logs a warning at startup in this mode. **On a shared machine, where other users can reach even a loopback port, set `Security__ApiKey`.**
+
 `AllowedHosts` in `appsettings.json` accepts only `localhost`, `127.0.0.1` and `[::1]`, which blocks DNS-rebinding attacks from a browser against a locally running service. The Docker image overrides it with `*` and relies on the API key instead.
 
 `CommandLineClient` reads the key from the `DUMP_ANALYSIS_API_KEY` environment variable and an OAuth access token from `DUMP_ANALYSIS_ACCESS_TOKEN`. Neither is a command-line argument, because other users on the machine can list those.
