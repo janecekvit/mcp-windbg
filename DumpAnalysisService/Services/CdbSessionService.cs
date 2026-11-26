@@ -200,7 +200,9 @@ public sealed class CdbSessionService : ICdbSessionService
             var reload = await _ExecuteCommandInternalAsync(".reload", cancellationToken);
 
             _symbolPathBuilder = builder;
-            _logger.LogInformation("Session {SessionId} symbol path set to {SymbolPath}", SessionId, symbolPath);
+            // SymbolInputValidator already refuses control characters; keep the log entry on one line regardless.
+            _logger.LogInformation("Session {SessionId} symbol path set to {SymbolPath}",
+                SessionId, symbolPath.Replace("\r", "").Replace("\n", ""));
             return string.Join(Environment.NewLine, new[] { sympath, reload }.Where(s => !string.IsNullOrWhiteSpace(s)));
         }
         finally
