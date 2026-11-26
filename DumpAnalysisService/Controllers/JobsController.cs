@@ -183,7 +183,9 @@ public class JobsController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            _logger.LogWarning("Refused command from {Caller} in session {SessionId}: {Reason}", caller.Name, request.SessionId, ex.Message);
+            // Client-supplied values: no line breaks in the log entry.
+            _logger.LogWarning("Refused command from {Caller} in session {SessionId}: {Reason}",
+                caller.Name, request.SessionId.Replace("\r", "").Replace("\n", ""), ex.Message.Replace("\r", "").Replace("\n", ""));
             return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest, title: "Command Refused");
         }
 
