@@ -154,6 +154,28 @@ public sealed class SessionManagerService : ISessionManagerService
         }
     }
 
+    public async Task<string> SetSymbolsAsync(string jobId, string sessionId, Shared.Configuration.SymbolsConfiguration symbols, CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+            throw new ArgumentException($"Session {sessionId} not found", nameof(sessionId));
+
+        if (!session.IsActive)
+            throw new InvalidOperationException($"Session {sessionId} is not active");
+
+        if (!_securityOptions.AllowClientSymbolOverrides)
+            throw new InvalidOperationException("Changing symbol locations is disabled (Security:AllowClientSymbolOverrides=false)");
+
+        if (!string.IsNullOrEmpty(symbols.SymbolCache))
+            throw new ArgumentException("The symbol cache of a session cannot be changed", nameof(symbols));
+
+        SymbolInputValidator.Validate(symbols);
+
+        await _jobManager.UpdateProgressAsync(jobId, JobPhase.ConfiguringSymbols, 0.1, "Setting symbol path...");
+        var result = await session.SetSymbolsAsync(symbols.SymbolPathExtra, symbols.SymbolServers, _CreateProgressReporter(jobId), cancellationToken);
+        await _jobManager.UpdateProgressAsync(jobId, JobPhase.Completed, 1.0, "Symbols reloaded");
+        return result;
+    }
+
     public async Task<string> ExecuteBasicAnalysisAsync(string jobId, string sessionId, CancellationToken cancellationToken = default)
     {
         return await ExecutePredefinedAnalysisAsync(jobId, sessionId, AnalysisType.Basic, cancellationToken);

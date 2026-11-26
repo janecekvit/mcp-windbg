@@ -9,8 +9,10 @@ using DumpAnalysisService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Shared;
+using Shared.Configuration;
 using Shared.Models;
 
 namespace DumpAnalysisService.Tools;
@@ -30,6 +32,7 @@ public class DebuggerTools
     private readonly IDumpTriageService _triage;
     private readonly ICrashFingerprintService _fingerprints;
     private readonly SecurityOptions _security;
+    private readonly DebuggerConfiguration _debuggerConfig;
     private readonly AuditLog _audit;
 
     public DebuggerTools(
@@ -41,7 +44,8 @@ public class DebuggerTools
         IDumpTriageService triage,
         ICrashFingerprintService fingerprints,
         IOptions<SecurityOptions> security,
-        AuditLog audit)
+        AuditLog audit,
+        DebuggerConfiguration? debuggerConfig = null)
     {
         _logger = logger;
         _jobManager = jobManager;
@@ -51,6 +55,7 @@ public class DebuggerTools
         _triage = triage;
         _fingerprints = fingerprints;
         _security = security.Value;
+        _debuggerConfig = debuggerConfig ?? new DebuggerConfiguration();
         _audit = audit;
     }
 
@@ -158,11 +163,16 @@ public class DebuggerTools
         return await _fingerprints.ListGroupsAsync(cancellationToken);
     }
 
-    [McpServerTool]
+    [McpServerTool(UseStructuredContent = true, OutputSchemaType = typeof(LoadDumpResult))]
     [Authorize(Policy = DumpPolicies.Analyze)]
-    [Description("Load a memory dump file and create a new CDB debugging session")]
-    public async Task<string> LoadDump(
+    [Description("Load a memory dump file and create a new CDB debugging session. The text result is the session id; " +
+        "the structured result adds the dump path, kind (user-full, user-mini, kernel) and architecture. " +
+        "Symbol arguments override the client's X-Symbol-* headers, which override the server defaults.")]
+    public async Task<CallToolResult> LoadDump(
         [Description("Path to the memory dump file (.dmp)")] string dump_file_path,
+        [Description("Optional: local symbol cache directory for this session")] string? symbol_cache = null,
+        [Description("Optional: semicolon-separated extra symbol paths (local directories; other locations only if the server allows them)")] string? symbol_path_extra = null,
+        [Description("Optional: semicolon-separated extra symbol servers (https URLs; the server's defaults stay in the path)")] string? symbol_servers = null,
         IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -177,7 +187,16 @@ public class DebuggerTools
             if (!File.Exists(dump_file_path))
                 throw new FileNotFoundException($"Dump file not found: {dump_file_path}", dump_file_path);
 
-            var symbols = _symbolConfigProvider.GetConfiguration();
+            // Priority: tool arguments > X-Symbol-* headers > appsettings (applied in CdbSessionFactory).
+            var fromArguments = new SymbolsConfiguration(symbol_cache, symbol_path_extra, symbol_servers);
+            SymbolInputValidator.Validate(fromArguments);
+            SymbolLocationPolicy.EnsureAllowed(fromArguments, _debuggerConfig.AllowedSymbolLocations);
+
+            var fromHeaders = _symbolConfigProvider.GetConfiguration();
+            var symbols = new SymbolsConfiguration(
+                _NullIfEmpty(symbol_cache) ?? fromHeaders.SymbolCache,
+                _NullIfEmpty(symbol_path_extra) ?? fromHeaders.SymbolPathExtra,
+                _NullIfEmpty(symbol_servers) ?? fromHeaders.SymbolServers);
 
             // Create job
             var caller = _Caller();
@@ -206,7 +225,16 @@ public class DebuggerTools
             }, cancellationToken);
 
             // Wait for job completion with progress reporting
-            return await _WaitForJobCompletionAsync(jobId, progress, cancellationToken);
+            var sessionId = await _WaitForJobCompletionAsync(jobId, progress, cancellationToken);
+
+            var (kind, architecture) = DumpDescription.Read(dump_file_path);
+            var result = new LoadDumpResult(sessionId, dump_file_path, kind, architecture);
+            return new CallToolResult
+            {
+                // Clients parse the text as the bare session id.
+                Content = [new TextContentBlock { Text = sessionId }],
+                StructuredContent = JsonSerializer.SerializeToElement(result, JsonSerializerOptions.Web),
+            };
         }
         catch (FileNotFoundException ex)
         {
@@ -374,6 +402,50 @@ public class DebuggerTools
 
         return await _WaitForJobCompletionAsync(jobId, progress, cancellationToken);
     }
+
+    [McpServerTool]
+    [Authorize(Policy = DumpPolicies.Analyze)]
+    [Description("Change the extra symbol paths and symbol servers of a loaded session and reload symbols (.sympath, then .reload). " +
+        "Omitted values fall back to the server defaults; the session's symbol cache stays as it is.")]
+    public async Task<string> SetSymbols(
+        [Description("ID of the debugging session")] string session_id,
+        [Description("Optional: semicolon-separated extra symbol paths (local directories; other locations only if the server allows them)")] string? symbol_path_extra = null,
+        [Description("Optional: semicolon-separated extra symbol servers (https URLs)")] string? symbol_servers = null,
+        IProgress<ProgressNotificationValue>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Tool set_symbols called with session_id: {SessionId}", session_id);
+
+        if (string.IsNullOrWhiteSpace(session_id))
+            throw new ArgumentException("Session ID is required", nameof(session_id));
+
+        var symbols = new SymbolsConfiguration(null, _NullIfEmpty(symbol_path_extra), _NullIfEmpty(symbol_servers));
+        SymbolInputValidator.Validate(symbols);
+        SymbolLocationPolicy.EnsureAllowed(symbols, _debuggerConfig.AllowedSymbolLocations);
+
+        var caller = _Caller();
+        _sessionManager.EnsureSessionAccess(caller, session_id);
+        var jobId = _jobManager.CreateJob(JobOperationType.SetSymbols, session_id, caller.Id);
+        _audit.Record(caller, "set-symbols", session_id, $"extra={symbols.SymbolPathExtra ?? "-"} servers={symbols.SymbolServers ?? "-"}");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await _sessionManager.SetSymbolsAsync(jobId, session_id, symbols, cancellationToken);
+                await _jobManager.CompleteJobAsync(jobId, result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Job {JobId} failed", jobId);
+                await _jobManager.FailJobAsync(jobId, ex.Message);
+            }
+        }, cancellationToken);
+
+        return await _WaitForJobCompletionAsync(jobId, progress, cancellationToken);
+    }
+
+    private static string? _NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     [McpServerTool]
     [Authorize(Policy = DumpPolicies.Read)]

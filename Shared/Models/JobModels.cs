@@ -44,7 +44,8 @@ public enum JobOperationType
     BatchCommands,
     CloseSession,
     TriageDump,
-    FingerprintCrash
+    FingerprintCrash,
+    SetSymbols
 }
 
 /// <summary>

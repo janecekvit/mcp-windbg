@@ -38,6 +38,12 @@ public interface ISessionManagerService : IDisposable
     /// </summary>
     Task<string> ExecuteInternalCommandAsync(string jobId, string sessionId, string command, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Replaces a session's extra symbol paths and servers and reloads symbols, with job progress.
+    /// Honours Security:AllowClientSymbolOverrides and validates the values (SymbolInputValidator).
+    /// </summary>
+    Task<string> SetSymbolsAsync(string jobId, string sessionId, Shared.Configuration.SymbolsConfiguration symbols, CancellationToken cancellationToken = default);
+
     /// <summary>The dump file loaded in a session; null when the session does not exist.</summary>
     string? GetDumpFile(string sessionId);
 

@@ -57,9 +57,24 @@ public sealed class McpAuthorizationTests : IClassFixture<AuthenticationEndpoint
     {
         var tools = await _ToolNamesAsync(["Dumps.Analyze"]);
 
-        Assert.Equal(11, tools.Count);
+        Assert.Equal(12, tools.Count);
         Assert.Contains("load_dump", tools);
         Assert.Contains("execute_command", tools);
+    }
+
+    [Fact]
+    public async Task LoadDump_AdvertisesItsStructuredOutputAndSymbolArguments()
+    {
+        var tool = (await _ToolsAsync(["Dumps.Analyze"])).Single(t => t.Name == "load_dump");
+
+        var output = tool.ProtocolTool.OutputSchema?.GetRawText() ?? "";
+        Assert.Contains("sessionId", output);
+        Assert.Contains("dumpKind", output);
+        Assert.Contains("architecture", output);
+        var input = tool.JsonSchema.GetRawText();
+        Assert.Contains("symbol_cache", input);
+        Assert.Contains("symbol_path_extra", input);
+        Assert.Contains("symbol_servers", input);
     }
 
     [Fact]

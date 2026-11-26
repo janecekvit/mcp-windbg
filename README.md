@@ -255,13 +255,14 @@ volumes:
 
 ### Environment variables
 
-ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so the three debugger settings are:
+ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so the debugger settings are:
 
 | Env var | Maps to | Purpose |
 |---|---|---|
 | `Debugger__DefaultSymbolCache` | `Debugger:DefaultSymbolCache` | Local symbol cache directory inside the container (default in the container image: `C:\symbols` — mount a volume there so symbols persist across restarts; outside Docker the .exe defaults to `%LOCALAPPDATA%\DumpAnalysisService\symbols`) |
 | `Debugger__DefaultSymbolPathExtra` | `Debugger:DefaultSymbolPathExtra` | Semicolon-separated extra local symbol paths (e.g. `C:\my-pdbs;\\server\symbols`) |
 | `Debugger__DefaultSymbolServers` | `Debugger:DefaultSymbolServers` | Semicolon-separated base symbol servers (`srv*https://…`). An empty value keeps the built-in Microsoft/NuGet list; a value replaces it, so keep `srv*https://msdl.microsoft.com/download/symbols` in it |
+| `Debugger__AllowedSymbolLocations__0` | `Debugger:AllowedSymbolLocations[0]` | Prefix (UNC share or `http` server) that `load_dump` / `set_symbols` symbol arguments may name; local directories and `https` servers need no entry |
 | `Fingerprint__RegistryPath` | `Fingerprint:RegistryPath` | Crash group registry file; put it on a volume so groups survive restarts |
 | `Security__ApiKey` | `Security:ApiKey` | Shared secret required on REST, MCP and SignalR (see [Security](#security)) |
 | `Security__Jwt__Authority`, `Security__Jwt__Audiences__0`, … | `Security:Jwt:*` | OAuth bearer tokens, e.g. Microsoft Entra ID (see [OAuth bearer tokens](#oauth-bearer-tokens-microsoft-entra-id-keycloak-auth0)) |
@@ -559,6 +560,26 @@ Loads a memory dump and creates a new debugging session.
 - `symbol_path_extra` *(optional)*: Semicolon-separated additional local symbol paths
 - `symbol_servers` *(optional)*: Semicolon-separated extra symbol servers (Microsoft public symbol server is always included)
 
+Symbol arguments override the `X-Symbol-*` headers, which override `appsettings.json`; `Security:AllowClientSymbolOverrides=false` ignores both. Symbol locations from tool arguments are limited to configured ones: local absolute directories and `https` servers are accepted, UNC shares and plain `http` servers only under a prefix listed in `Debugger:AllowedSymbolLocations`.
+
+**Result:** the text content is the bare session id (as before); the structured content adds the dump path, kind and architecture:
+
+```json
+{ "sessionId": "1a2b3c4d", "dumpPath": "C:\\dumps\\app.dmp", "dumpKind": "user-full", "architecture": "x64" }
+```
+
+`dumpKind` is `user-full`, `user-mini` or `kernel` (null when the header cannot be read).
+
+### set_symbols
+
+Changes the extra symbol paths and symbol servers of a loaded session and reloads symbols (`.sympath`, then `.reload`), for example after copying PDBs next to the dump. The session's symbol cache stays as it is; omitted values fall back to the server defaults. Same rules as the `load_dump` symbol arguments.
+
+**Parameters:**
+
+- `session_id`: Debugging session ID
+- `symbol_path_extra` *(optional)*: Semicolon-separated extra symbol paths
+- `symbol_servers` *(optional)*: Semicolon-separated extra symbol servers
+
 ### execute_command
 
 Executes a WinDbg/CDB command in an existing session.
@@ -650,6 +671,7 @@ All job-creating endpoints return `202 Accepted` with `{ jobId, statusEndpoint }
 | `POST` | `/api/jobs/basic-analysis` | Run the comprehensive basic analysis |
 | `POST` | `/api/jobs/predefined-analysis` | Run a named specialised analysis (heap, threads, …) |
 | `POST` | `/api/jobs/close-session` | Close a session and release CDB |
+| `POST` | `/api/jobs/set-symbols` | Change a session's extra symbol paths and servers (`sessionId`, `symbolPathExtra`, `symbolServers`) and reload symbols |
 | `POST` | `/api/jobs/triage-dump` | Read a dump's minidump streams without the debugger; the job result is the triage result as JSON |
 | `POST` | `/api/jobs/fingerprint-crash` | Fingerprint the crash in a session (`{ sessionId }`) and record it; the job result is the fingerprint result as JSON |
 | `GET`  | `/api/crash-groups` | Known crash groups, most recently seen first |

@@ -199,6 +199,49 @@ public class JobsController : ControllerBase
     }
 
     /// <summary>
+    /// Creates a job that replaces a session's extra symbol paths and servers and reloads symbols
+    /// </summary>
+    [HttpPost("set-symbols")]
+    [Authorize(Policy = DumpPolicies.Analyze)]
+    [ProducesResponseType<JobCreatedResponse>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ErrorResponse>(StatusCodes.Status400BadRequest)]
+    public IActionResult SetSymbolsAsync([FromBody] SetSymbolsRequest request)
+    {
+        var caller = _Caller;
+        if (!_TryEnsureSession(caller, request.SessionId, out var notFound))
+            return notFound;
+
+        var symbols = new Shared.Configuration.SymbolsConfiguration(null, request.SymbolPathExtra, request.SymbolServers);
+        try
+        {
+            SymbolInputValidator.Validate(symbols);
+        }
+        catch (ArgumentException ex)
+        {
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest, title: "Invalid Symbol Locations");
+        }
+
+        var jobId = _jobManager.CreateJob(JobOperationType.SetSymbols, request.SessionId, caller.Id);
+        _audit.Record(caller, "set-symbols", request.SessionId, $"extra={request.SymbolPathExtra ?? "-"} servers={request.SymbolServers ?? "-"}");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await _sessionManager.SetSymbolsAsync(jobId, request.SessionId, symbols);
+                await _jobManager.CompleteJobAsync(jobId, result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Job {JobId} failed", jobId);
+                await _jobManager.FailJobAsync(jobId, ex.Message);
+            }
+        });
+
+        return _AcceptedJobResponse(jobId, "setting symbols");
+    }
+
+    /// <summary>
     /// Creates a new job to run basic analysis asynchronously
     /// </summary>
     [HttpPost("basic-analysis")]

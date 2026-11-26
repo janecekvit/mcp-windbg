@@ -31,6 +31,12 @@ public interface ICdbSessionService : IDisposable
     /// Cancels the current session and terminates the CDB process
     /// </summary>
     Task CancelAsync();
+
+    /// <summary>
+    /// Replaces the session's extra symbol paths and servers (same cache) and reloads symbols:
+    /// .sympath with the rebuilt path, then .reload. Returns their output.
+    /// </summary>
+    Task<string> SetSymbolsAsync(string? symbolPathExtra, string? symbolServers, IProgress<ProgressUpdate>? progress = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Executes a single WinDbg/CDB command in this session

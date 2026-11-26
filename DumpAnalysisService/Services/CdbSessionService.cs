@@ -16,7 +16,7 @@ public sealed class CdbSessionService : ICdbSessionService
     private readonly ILogger<CdbSessionService> _logger;
     private readonly IAnalysisService _analysisService;
     private readonly ICdbProcessManager _processManager;
-    private readonly SymbolPathBuilder _symbolPathBuilder;
+    private SymbolPathBuilder _symbolPathBuilder;
     private readonly string _cdbPath;
     private bool _isInitialized;
     private readonly SemaphoreSlim _commandSemaphore = new(1, 1);
@@ -177,6 +177,35 @@ public sealed class CdbSessionService : ICdbSessionService
             {
                 _logger.LogWarning(ex, "Retry command failed for session {SessionId}: {Command}", SessionId, command);
             }
+        }
+    }
+
+    public async Task<string> SetSymbolsAsync(string? symbolPathExtra, string? symbolServers, IProgress<ProgressUpdate>? progress = null, CancellationToken cancellationToken = default)
+    {
+        if (!_processManager.IsActive || !_isInitialized)
+            throw new InvalidOperationException("Session not initialized. Load a dump file first.");
+
+        var builder = _symbolPathBuilder.WithLocations(symbolPathExtra, symbolServers);
+        var symbolPath = builder.BuildSymbolPath();
+
+        await _commandSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            // Internal commands: the values were validated (SymbolInputValidator) and, from tool
+            // arguments, limited to the configured locations (SymbolLocationPolicy).
+            progress?.Report(ProgressUpdate.SettingSymbolPaths());
+            var sympath = await _ExecuteCommandInternalAsync($".sympath {symbolPath}", cancellationToken);
+
+            progress?.Report(ProgressUpdate.ResolvingSymbols("Reloading symbols (this may take several minutes)..."));
+            var reload = await _ExecuteCommandInternalAsync(".reload", cancellationToken);
+
+            _symbolPathBuilder = builder;
+            _logger.LogInformation("Session {SessionId} symbol path set to {SymbolPath}", SessionId, symbolPath);
+            return string.Join(Environment.NewLine, new[] { sympath, reload }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        }
+        finally
+        {
+            _commandSemaphore.Release();
         }
     }
 

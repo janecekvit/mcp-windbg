@@ -70,6 +70,7 @@ public sealed class DebuggerToolsCallerTests : IDisposable
         "basic_analysis" => _Sut().BasicAnalysis(SessionId),
         "predefined_analysis" => _Sut().PredefinedAnalysis(SessionId, "threads"),
         "close_session" => _Sut().CloseSession(SessionId),
+        "set_symbols" => _Sut().SetSymbols(SessionId, @"C:\placeholder"),
         "list_jobs" => _Sut().ListJobs(),
         _ => throw new ArgumentOutOfRangeException(nameof(tool), tool, null),
     };
@@ -85,6 +86,7 @@ public sealed class DebuggerToolsCallerTests : IDisposable
     [InlineData("basic_analysis")]
     [InlineData("predefined_analysis")]
     [InlineData("close_session")]
+    [InlineData("set_symbols")]
     [InlineData("list_jobs")]
     public async Task WithAuthentication_ACallWithoutACaller_IsRefusedBeforeAnyWork(string tool)
     {
@@ -102,6 +104,7 @@ public sealed class DebuggerToolsCallerTests : IDisposable
     [InlineData("basic_analysis")]
     [InlineData("predefined_analysis")]
     [InlineData("close_session")]
+    [InlineData("set_symbols")]
     public async Task AnotherCallersSession_ReadsAsNotFound(string tool)
     {
         _SessionOwnedBy("bob");
@@ -119,6 +122,7 @@ public sealed class DebuggerToolsCallerTests : IDisposable
     [InlineData("basic_analysis", JobOperationType.BasicAnalysis, SessionId)]
     [InlineData("predefined_analysis", JobOperationType.PredefinedAnalysis, SessionId)]
     [InlineData("close_session", JobOperationType.CloseSession, SessionId)]
+    [InlineData("set_symbols", JobOperationType.SetSymbols, SessionId)]
     public async Task TheCallersId_OwnsTheJob(string tool, JobOperationType operation, string? sessionId)
     {
         _SessionOwnedBy("alice");
