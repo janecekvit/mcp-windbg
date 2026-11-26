@@ -65,4 +65,10 @@ public interface ISessionManagerService : IDisposable
     /// </summary>
     /// <param name="sessionId">ID of the session to cancel</param>
     Task CancelSessionAsync(string sessionId);
+
+    /// <summary>
+    /// Closes, through <see cref="CancelSessionAsync"/>, every session with no load, command or
+    /// analysis running and none for at least <paramref name="idleTimeout"/>. Returns the closed ids.
+    /// </summary>
+    Task<IReadOnlyList<string>> CloseIdleSessionsAsync(TimeSpan idleTimeout, CancellationToken cancellationToken = default);
 }

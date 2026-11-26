@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Diagnostics;
 using System.Text;
 using System.Threading.Channels;
@@ -15,12 +16,31 @@ public sealed class CdbProcessManager : ICdbProcessManager
     private const int DefaultReadBufferSize = 4096;
     private const int DefaultGracefulShutdownTimeoutMs = 5000;
 
+    /// <summary>
+    /// Environment variables cdb.exe inherits from the service: what Windows, dbghelp and symsrv
+    /// need (system and profile directories, temp, executable search path, processor details).
+    /// Everything else (the service's own settings, credentials, _NT_* debugger variables) is not
+    /// passed; Debugger:CdbEnvironmentVariables adds names.
+    /// </summary>
+    public static readonly IReadOnlyList<string> InheritedEnvironmentVariables =
+    [
+        "SystemRoot", "windir", "SystemDrive", "TEMP", "TMP", "USERPROFILE", "LOCALAPPDATA", "APPDATA",
+        "HOMEDRIVE", "HOMEPATH", "ALLUSERSPROFILE", "ProgramData", "ProgramFiles", "ProgramFiles(x86)",
+        "ProgramW6432", "CommonProgramFiles", "CommonProgramFiles(x86)", "CommonProgramW6432",
+        "PATH", "PATHEXT", "NUMBER_OF_PROCESSORS", "OS", "COMPUTERNAME", "USERNAME", "USERDOMAIN",
+    ];
+
+    private const string ProcessorVariablePrefix = "PROCESSOR_";
+
     private readonly ILogger<CdbProcessManager> _logger;
     private readonly string _sessionId;
+    private readonly IReadOnlyCollection<string> _extraEnvironmentVariables;
+    private readonly bool _restrictChildProcesses;
     private readonly object _lock = new();
     private Process? _cdbProcess;
     private StreamWriter? _stdin;
     private Channel<string>? _stdoutChannel;
+    private IDisposable? _jobObject;
     private bool _disposed;
 
     public bool IsActive
@@ -45,17 +65,35 @@ public sealed class CdbProcessManager : ICdbProcessManager
         }
     }
 
-    public CdbProcessManager(string sessionId, ILogger<CdbProcessManager> logger)
+    /// <param name="sessionId">Session the process belongs to (for the log).</param>
+    /// <param name="logger">Logger.</param>
+    /// <param name="extraEnvironmentVariables">Debugger:CdbEnvironmentVariables.</param>
+    /// <param name="restrictChildProcesses">Debugger:RestrictCdbChildProcesses (Windows job object limit).</param>
+    public CdbProcessManager(
+        string sessionId,
+        ILogger<CdbProcessManager> logger,
+        IReadOnlyCollection<string>? extraEnvironmentVariables = null,
+        bool restrictChildProcesses = true)
     {
         _sessionId = sessionId;
         _logger = logger;
+        _extraEnvironmentVariables = extraEnvironmentVariables ?? [];
+        _restrictChildProcesses = restrictChildProcesses;
     }
 
     /// <summary>
     /// Builds the cdb.exe start info. Arguments go through <see cref="ProcessStartInfo.ArgumentList"/>,
     /// which quotes each one, so no path or symbol path value can add arguments of its own.
+    /// The environment is rebuilt from <see cref="InheritedEnvironmentVariables"/> plus
+    /// <paramref name="extraEnvironmentVariables"/>; the symbol path comes only from -y.
     /// </summary>
-    public static ProcessStartInfo CreateStartInfo(string cdbPath, string dumpFilePath, string symbolPath)
+    /// <param name="sourceEnvironment">The environment to copy from (tests); defaults to the service's own.</param>
+    public static ProcessStartInfo CreateStartInfo(
+        string cdbPath,
+        string dumpFilePath,
+        string symbolPath,
+        IEnumerable<string>? extraEnvironmentVariables = null,
+        IDictionary? sourceEnvironment = null)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -76,7 +114,29 @@ public sealed class CdbProcessManager : ICdbProcessManager
         startInfo.ArgumentList.Add("-y");
         startInfo.ArgumentList.Add(symbolPath);
 
+        _SetMinimalEnvironment(startInfo, extraEnvironmentVariables, sourceEnvironment ?? Environment.GetEnvironmentVariables());
+
         return startInfo;
+    }
+
+    private static void _SetMinimalEnvironment(ProcessStartInfo startInfo, IEnumerable<string>? extra, IDictionary source)
+    {
+        var allowed = new HashSet<string>(InheritedEnvironmentVariables, StringComparer.OrdinalIgnoreCase);
+        foreach (var name in extra ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+                allowed.Add(name.Trim());
+        }
+
+        startInfo.Environment.Clear();
+        foreach (DictionaryEntry entry in source)
+        {
+            if (entry.Key is not string name || entry.Value is not string value)
+                continue;
+
+            if (allowed.Contains(name) || name.StartsWith(ProcessorVariablePrefix, StringComparison.OrdinalIgnoreCase))
+                startInfo.Environment[name] = value;
+        }
     }
 
     public Task<bool> StartProcessAsync(string cdbPath, string dumpFilePath, string symbolPath)
@@ -90,7 +150,7 @@ public sealed class CdbProcessManager : ICdbProcessManager
                 _cdbProcess.Dispose();
             }
 
-            var startInfo = CreateStartInfo(cdbPath, dumpFilePath, symbolPath);
+            var startInfo = CreateStartInfo(cdbPath, dumpFilePath, symbolPath, _extraEnvironmentVariables);
 
             _logger.LogInformation("Starting CDB process for session {SessionId}: {CdbPath} {Arguments}",
                 _sessionId, cdbPath, string.Join(" ", startInfo.ArgumentList));
@@ -105,6 +165,25 @@ public sealed class CdbProcessManager : ICdbProcessManager
 
             _logger.LogInformation("CDB process started for session {SessionId}, PID: {ProcessId}",
                 _sessionId, _cdbProcess.Id);
+
+            // Before the first command is sent: the job ends cdb.exe with the service and,
+            // unless turned off, allows it no child processes.
+            if (OperatingSystem.IsWindows())
+            {
+                _jobObject?.Dispose();
+                var jobObject = new CdbJobObject(allowChildProcesses: !_restrictChildProcesses);
+                try
+                {
+                    jobObject.Assign(_cdbProcess);
+                }
+                catch
+                {
+                    jobObject.Dispose();
+                    _cdbProcess.Kill();
+                    throw;
+                }
+                _jobObject = jobObject;
+            }
 
             _stdin = _cdbProcess.StandardInput;
 
@@ -269,6 +348,7 @@ public sealed class CdbProcessManager : ICdbProcessManager
             }
 
             _cdbProcess?.Dispose();
+            _jobObject?.Dispose();
 
             _disposed = true;
         }

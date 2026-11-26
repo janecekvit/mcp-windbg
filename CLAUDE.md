@@ -140,6 +140,15 @@ See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" f
   predefined-analysis commands). Single line, no `q`/`qq`, and unless
   `AllowUnsafeCommands` no `.shell`/`.load`/`.create`/`.writemem`/`$<`/… anywhere
   in the line. cdb.exe also starts with `-noshell`.
+- **cdb.exe process** (`CdbProcessManager`): `CreateStartInfo` clears the inherited environment
+  and copies only `InheritedEnvironmentVariables` (system, temp, profile and program directories,
+  `PATH`, `PROCESSOR_*`, …) plus `Debugger:CdbEnvironmentVariables`; the symbol path comes only
+  from `-y`. On Windows each process is assigned, before the first command, to a `CdbJobObject`
+  (`KILL_ON_JOB_CLOSE`, and an active process limit of 1 unless
+  `Debugger:RestrictCdbChildProcesses=false`). `IdleSessionSweeper` closes sessions idle for
+  `Debugger:SessionIdleTimeout` (default 30 min, 0 = off) via `CloseIdleSessionsAsync` →
+  `CancelSessionAsync`; loads, commands and analyses mark the session busy, so a running
+  command is never cut off. Audit action `close_idle_session`.
 - **`SymbolInputValidator`**: client symbol values (headers or REST body) are
   validated in `CdbSessionFactory`; `AllowClientSymbolOverrides=false` drops them.
 - **`AllowedDumpDirectories`**, **`MaxConcurrentSessions`**: enforced in
@@ -267,6 +276,9 @@ ExecuteCommandAsync() (CdbSessionService.cs)
   → Acquire semaphore lock
   → CdbProcessManager.ExecuteCommandAsync (start/end markers, timeout)
   → Release semaphore
+
+CloseIdleSessionsAsync() (IdleSessionSweeper, every min(timeout/4, 1 min))
+  → sessions not busy and idle ≥ Debugger:SessionIdleTimeout → CancelSessionAsync()
 
 CancelSessionAsync() (SessionManagerService.cs)
   → Call session.CancelAsync()

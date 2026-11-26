@@ -66,8 +66,12 @@ public static class ConfigurationExtensions
     /// <returns>DebuggerConfiguration with values from config or environment variables</returns>
     public static DebuggerConfiguration GetDebuggerConfiguration(this IConfiguration configuration)
     {
+        var section = configuration.GetSection("Debugger");
         return new DebuggerConfiguration
         {
+            CdbEnvironmentVariables = section.GetSection(nameof(DebuggerConfiguration.CdbEnvironmentVariables)).Get<List<string>>() ?? [],
+            RestrictCdbChildProcesses = section.GetValue(nameof(DebuggerConfiguration.RestrictCdbChildProcesses), true),
+            SessionIdleTimeout = section.GetValue(nameof(DebuggerConfiguration.SessionIdleTimeout), TimeSpan.FromMinutes(30)),
             DefaultSymbolCache = configuration.GetValueWithEnvironmentFallback<string?>(
                 "Debugger:DefaultSymbolCache"),
             DefaultSymbolPathExtra = configuration.GetValueWithEnvironmentFallback<string?>(

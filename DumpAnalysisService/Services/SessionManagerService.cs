@@ -15,18 +15,22 @@ public sealed class SessionManagerService : ISessionManagerService
     private readonly SecurityOptions _securityOptions;
     private readonly ConcurrentDictionary<string, ICdbSessionService> _sessions = new();
     private readonly ConcurrentDictionary<string, string> _owners = new();
+    private readonly ConcurrentDictionary<string, SessionActivity> _activity = new();
     private readonly object _sessionsLock = new();
+    private readonly TimeProvider _timeProvider;
 
     public SessionManagerService(
         ILogger<SessionManagerService> logger,
         ICdbSessionFactory sessionFactory,
         IJobManagerService jobManager,
-        IOptions<SecurityOptions> securityOptions)
+        IOptions<SecurityOptions> securityOptions,
+        TimeProvider? timeProvider = null)
     {
         _logger = logger;
         _sessionFactory = sessionFactory;
         _jobManager = jobManager;
         _securityOptions = securityOptions.Value;
+        _timeProvider = timeProvider ?? TimeProvider.System;
 
         _logger.LogInformation("SessionManagerService initialized with factory-based session creation");
     }
@@ -71,12 +75,15 @@ public sealed class SessionManagerService : ISessionManagerService
                 _sessions[sessionId] = session;
                 if (owner is not null)
                     _owners[sessionId] = owner;
+                _activity[sessionId] = new SessionActivity(_timeProvider.GetUtcNow());
             }
 
             _logger.LogInformation("Created new CDB session {SessionId}, loading dump: {DumpFile}", sessionId, dumpFilePath);
 
             try
             {
+                // A loading session counts as busy: the idle sweeper leaves it alone.
+                using var activity = _BeginActivity(sessionId);
                 await session.LoadDumpAsync(dumpFilePath, _CreateProgressReporter(jobId), cancellationToken);
 
                 // Verify session is still active after loading
@@ -88,6 +95,7 @@ public sealed class SessionManagerService : ISessionManagerService
                 // A failed load must not leave a cdb.exe process or a dead session behind
                 _sessions.TryRemove(sessionId, out _);
                 _owners.TryRemove(sessionId, out _);
+                _activity.TryRemove(sessionId, out _);
                 session.Dispose();
                 throw;
             }
@@ -135,6 +143,7 @@ public sealed class SessionManagerService : ISessionManagerService
             throw new InvalidOperationException(error);
         }
 
+        using var activity = _BeginActivity(sessionId);
         try
         {
             await _jobManager.UpdateProgressAsync(jobId, JobPhase.ExecutingCommand, 0.1, $"Executing command: {command}");
@@ -175,6 +184,7 @@ public sealed class SessionManagerService : ISessionManagerService
             throw new InvalidOperationException(error);
         }
 
+        using var activity = _BeginActivity(sessionId);
         try
         {
             await _jobManager.UpdateProgressAsync(jobId, JobPhase.Analyzing, 0.1, $"Starting {analysisType.ToString()} analysis...");
@@ -208,6 +218,7 @@ public sealed class SessionManagerService : ISessionManagerService
             await session.CancelAsync();
             _sessions.TryRemove(sessionId, out _);
             _owners.TryRemove(sessionId, out _);
+            _activity.TryRemove(sessionId, out _);
             session.Dispose();
             _logger.LogInformation("Cancelled and closed CDB session {SessionId}", sessionId);
         }
@@ -215,6 +226,98 @@ public sealed class SessionManagerService : ISessionManagerService
         {
             _logger.LogError(ex, "Error cancelling session {SessionId}", sessionId);
             throw new InvalidOperationException($"Error cancelling session: {ex.Message}", ex);
+        }
+    }
+
+    public async Task<IReadOnlyList<string>> CloseIdleSessionsAsync(TimeSpan idleTimeout, CancellationToken cancellationToken = default)
+    {
+        var closed = new List<string>();
+        if (idleTimeout <= TimeSpan.Zero)
+            return closed;
+
+        var now = _timeProvider.GetUtcNow();
+        foreach (var (sessionId, activity) in _activity)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Claimed under the lock: a command starting now sees the session closing and fails,
+            // and a command already running keeps the session busy.
+            if (!activity.TryClaimIdle(now, idleTimeout))
+                continue;
+
+            try
+            {
+                _logger.LogInformation("Closing session {SessionId}: idle for more than {IdleTimeout}", sessionId, idleTimeout);
+                await CancelSessionAsync(sessionId);
+                closed.Add(sessionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to close idle session {SessionId}", sessionId);
+            }
+        }
+
+        return closed;
+    }
+
+    /// <summary>Marks the session busy until disposed and records the activity time.</summary>
+    /// <exception cref="InvalidOperationException">The session is being closed for inactivity.</exception>
+    private IDisposable? _BeginActivity(string sessionId)
+    {
+        if (!_activity.TryGetValue(sessionId, out var activity))
+            return null;
+
+        activity.Begin(_timeProvider.GetUtcNow(), sessionId);
+        return new ActivityScope(activity, _timeProvider);
+    }
+
+    private sealed class SessionActivity(DateTimeOffset created)
+    {
+        private readonly object _lock = new();
+        private DateTimeOffset _lastActivity = created;
+        private int _busy;
+        private bool _closing;
+
+        public void Begin(DateTimeOffset now, string sessionId)
+        {
+            lock (_lock)
+            {
+                if (_closing)
+                    throw new InvalidOperationException($"Session {sessionId} is being closed");
+                _busy++;
+                _lastActivity = now;
+            }
+        }
+
+        public void End(DateTimeOffset now)
+        {
+            lock (_lock)
+            {
+                _busy--;
+                _lastActivity = now;
+            }
+        }
+
+        public bool TryClaimIdle(DateTimeOffset now, TimeSpan idleTimeout)
+        {
+            lock (_lock)
+            {
+                if (_closing || _busy > 0 || now - _lastActivity < idleTimeout)
+                    return false;
+                _closing = true;
+                return true;
+            }
+        }
+    }
+
+    private sealed class ActivityScope(SessionActivity activity, TimeProvider timeProvider) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                activity.End(timeProvider.GetUtcNow());
         }
     }
 

@@ -81,7 +81,8 @@ flowchart TB
             %% Exception code from triage plus the faulting stack from cdb.
             fingerprints["CrashFingerprintService"]:::service
         end
-        %% Started with -noshell; commands framed by .echo start and end markers.
+        %% Started with -noshell and a minimal environment, in a job object (no child processes,
+        %% ends with the service); commands framed by .echo start and end markers.
         cdb[["cdb.exe (one per dump)"]]:::debugger
         subgraph files["Files"]
             %% Restricted by Security:AllowedDumpDirectories.
@@ -255,13 +256,16 @@ volumes:
 
 ### Environment variables
 
-ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so the three debugger settings are:
+ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so the debugger settings are:
 
 | Env var | Maps to | Purpose |
 |---|---|---|
 | `Debugger__DefaultSymbolCache` | `Debugger:DefaultSymbolCache` | Local symbol cache directory inside the container (default in the container image: `C:\symbols` — mount a volume there so symbols persist across restarts; outside Docker the .exe defaults to `%LOCALAPPDATA%\DumpAnalysisService\symbols`) |
 | `Debugger__DefaultSymbolPathExtra` | `Debugger:DefaultSymbolPathExtra` | Semicolon-separated extra local symbol paths (e.g. `C:\my-pdbs;\\server\symbols`) |
 | `Debugger__DefaultSymbolServers` | `Debugger:DefaultSymbolServers` | Semicolon-separated base symbol servers (`srv*https://…`). An empty value keeps the built-in Microsoft/NuGet list; a value replaces it, so keep `srv*https://msdl.microsoft.com/download/symbols` in it |
+| `Debugger__SessionIdleTimeout` | `Debugger:SessionIdleTimeout` | Sessions with no load, command or analysis for this long are closed (default `00:30:00`, `00:00:00` turns it off) |
+| `Debugger__CdbEnvironmentVariables__0` | `Debugger:CdbEnvironmentVariables[0]` | Extra environment variable cdb.exe inherits, e.g. `_NT_SYMBOL_PROXY` (see [The cdb.exe process](#the-cdbexe-process)) |
+| `Debugger__RestrictCdbChildProcesses` | `Debugger:RestrictCdbChildProcesses` | `false` lets cdb.exe start child processes (default `true`) |
 | `Fingerprint__RegistryPath` | `Fingerprint:RegistryPath` | Crash group registry file; put it on a volume so groups survive restarts |
 | `Security__ApiKey` | `Security:ApiKey` | Shared secret required on REST, MCP and SignalR (see [Security](#security)) |
 | `Security__Jwt__Authority`, `Security__Jwt__Audiences__0`, … | `Security:Jwt:*` | OAuth bearer tokens, e.g. Microsoft Entra ID (see [OAuth bearer tokens](#oauth-bearer-tokens-microsoft-entra-id-keycloak-auth0)) |
@@ -336,7 +340,10 @@ The server supports multiple configuration methods with the following priority o
   "Debugger": {
     "DefaultSymbolCache": null,
     "DefaultSymbolPathExtra": null,
-    "DefaultSymbolServers": "srv*https://msdl.microsoft.com/download/symbols;srv*https://symbols.nuget.org/download/symbols;srv*https://download.microsoft.com/download/symbols"
+    "DefaultSymbolServers": "srv*https://msdl.microsoft.com/download/symbols;srv*https://symbols.nuget.org/download/symbols;srv*https://download.microsoft.com/download/symbols",
+    "CdbEnvironmentVariables": [],
+    "RestrictCdbChildProcesses": true,
+    "SessionIdleTimeout": "00:30:00"
   },
   "Security": {
     "ApiKey": null,
@@ -413,6 +420,14 @@ The debugger runs with the service's permissions and reads whatever dump path it
 | `AllowClientSymbolOverrides` | `true` | When `false`, `X-Symbol-*` headers and the REST `symbols` body are ignored and only the server-side `Debugger:*` defaults are used (prevents clients from pointing the debugger at arbitrary UNC shares). Client values are always validated (no quotes, control characters, or extra path elements in the cache). |
 | `AllowedDumpDirectories` | `[]` (any) | When non-empty, dumps can only be loaded from these directories. |
 | `MaxConcurrentSessions` | `10` | Upper bound on open sessions (each one is a `cdb.exe` process). |
+
+### The cdb.exe process
+
+Each session's cdb.exe runs with least privilege on top of `-noshell`:
+
+- **Minimal environment.** cdb.exe does not inherit the service's environment, which can hold its own settings and credentials. It gets only what Windows, dbghelp and symsrv need: `SystemRoot`, `windir`, `SystemDrive`, `TEMP`, `TMP`, the profile and program directories (`USERPROFILE`, `LOCALAPPDATA`, `APPDATA`, `ProgramData`, `ProgramFiles*`, …), `PATH`, `PATHEXT`, `PROCESSOR_*`, `NUMBER_OF_PROCESSORS`, `OS`, `COMPUTERNAME`, `USERNAME` and `USERDOMAIN`. The symbol path always comes from `-y`, never from `_NT_SYMBOL_PATH`. To pass more, for example `_NT_SYMBOL_PROXY` for symbol downloads through a proxy, list the names in `Debugger:CdbEnvironmentVariables`.
+- **Job object.** Every cdb.exe runs in its own Windows job object. It allows no child processes (`Debugger:RestrictCdbChildProcesses=false` lifts that, for an extension that has to start one) and ends cdb.exe when the service exits for any reason.
+- **Idle sessions.** A session with no load, command or analysis for `Debugger:SessionIdleTimeout` (default 30 minutes) is closed through the normal close path, never while a command runs, and recorded in the audit log as `close_idle_session`.
 
 `AllowedHosts` in `appsettings.json` accepts only `localhost`, `127.0.0.1` and `[::1]`, which blocks DNS-rebinding attacks from a browser against a locally running service. The Docker image overrides it with `*` and relies on the API key instead.
 

@@ -189,6 +189,36 @@ public sealed class ConfigurationExtensionsTests : IDisposable
     }
 
     [Fact]
+    public void GetDebuggerConfiguration_ProcessSettings_AreRead()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "Debugger:CdbEnvironmentVariables:0", "EXTRA_ONE" },
+                { "Debugger:CdbEnvironmentVariables:1", "EXTRA_TWO" },
+                { "Debugger:RestrictCdbChildProcesses", "false" },
+                { "Debugger:SessionIdleTimeout", "00:05:00" }
+            })
+            .Build();
+
+        var result = config.GetDebuggerConfiguration();
+
+        Assert.Equal(["EXTRA_ONE", "EXTRA_TWO"], result.CdbEnvironmentVariables);
+        Assert.False(result.RestrictCdbChildProcesses);
+        Assert.Equal(TimeSpan.FromMinutes(5), result.SessionIdleTimeout);
+    }
+
+    [Fact]
+    public void GetDebuggerConfiguration_ProcessSettingsMissing_UseDefaults()
+    {
+        var result = new ConfigurationBuilder().Build().GetDebuggerConfiguration();
+
+        Assert.Empty(result.CdbEnvironmentVariables);
+        Assert.True(result.RestrictCdbChildProcesses);
+        Assert.Equal(TimeSpan.FromMinutes(30), result.SessionIdleTimeout);
+    }
+
+    [Fact]
     public void GetDebuggerConfiguration_AllConfigMissing_ReturnsNulls()
     {
         // Arrange

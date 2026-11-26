@@ -26,6 +26,25 @@ public class DebuggerConfiguration
     public string? DefaultSymbolServers { get; set; }
 
     /// <summary>
+    /// Names of extra environment variables cdb.exe inherits from the service, on top of the
+    /// built-in minimal set (system paths, temp and profile directories, processor information).
+    /// Example: _NT_SYMBOL_PROXY for symbol downloads through a proxy.
+    /// </summary>
+    public List<string> CdbEnvironmentVariables { get; set; } = [];
+
+    /// <summary>
+    /// Runs each cdb.exe in a Windows job object that allows no child processes.
+    /// The job always ends cdb.exe when the service exits; set false only if an extension
+    /// you rely on has to start processes.
+    /// </summary>
+    public bool RestrictCdbChildProcesses { get; set; } = true;
+
+    /// <summary>
+    /// Sessions without a load, command or analysis for this long are closed. Zero turns it off.
+    /// </summary>
+    public TimeSpan SessionIdleTimeout { get; set; } = TimeSpan.FromMinutes(30);
+
+    /// <summary>
     /// Gets the effective symbol cache path, using environment fallback if needed.
     /// </summary>
     public string GetSymbolCachePath()

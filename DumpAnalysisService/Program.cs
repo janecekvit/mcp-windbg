@@ -41,6 +41,8 @@ public partial class Program
             builder.Services.AddSingleton<ISessionManagerService, SessionManagerService>();
             builder.Services.AddSingleton<IJobManagerService, JobManagerService>();
             builder.Services.AddSingleton<IDumpTriageService, DumpTriageService>();
+            builder.Services.AddSingleton(TimeProvider.System);
+            builder.Services.AddHostedService<IdleSessionSweeper>();
 
             // Crash fingerprints and crash groups
             builder.Services.Configure<FingerprintOptions>(builder.Configuration.GetSection(FingerprintOptions.SectionName));
