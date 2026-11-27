@@ -1,6 +1,6 @@
 # Code review instructions for mcp-windbg
 
-C# (.NET 10) MCP server and REST API that analyses Windows memory dumps through cdb.exe.
+C# (.NET 11) MCP server and REST API that analyses Windows memory dumps through cdb.exe.
 The service runs untrusted dump files and takes debugger commands from MCP clients, so review
 for security first. Flag these as blocking:
 
