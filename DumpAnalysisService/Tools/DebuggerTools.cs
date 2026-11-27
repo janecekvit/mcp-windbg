@@ -99,7 +99,7 @@ public class DebuggerTools
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         }, cancellationToken);
 
@@ -139,7 +139,7 @@ public class DebuggerTools
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         }, cancellationToken);
 
@@ -201,7 +201,7 @@ public class DebuggerTools
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Job {JobId} failed", jobId);
-                    await _jobManager.FailJobAsync(jobId, ex.Message);
+                    await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
                 }
             }, cancellationToken);
 
@@ -212,8 +212,7 @@ public class DebuggerTools
         {
             // Domain-meaningful translation: surface a friendlier error message to MCP clients
             _logger.LogError(ex, "Dump file not found: {Message}", ex.Message);
-            throw new InvalidOperationException(
-                $"Dump file not found: {ex.FileName ?? dump_file_path}", ex);
+            throw new McpException($"Dump file not found: {ex.FileName ?? dump_file_path}", ex);
         }
     }
 
@@ -237,6 +236,10 @@ public class DebuggerTools
 
         var caller = _Caller();
         _sessionManager.EnsureSessionAccess(caller, session_id);
+
+        // Refuse before creating a job, so the client gets the policy's reason at once.
+        _sessionManager.ValidateCommand(command);
+
         var jobId = _jobManager.CreateJob(JobOperationType.ExecuteCommand, session_id, caller.Id);
         _audit.Record(caller, "execute-command", session_id, command);
         _logger.LogInformation("Created job {JobId} for executing command", jobId);
@@ -251,7 +254,7 @@ public class DebuggerTools
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         }, cancellationToken);
 
@@ -287,7 +290,7 @@ public class DebuggerTools
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         }, cancellationToken);
 
@@ -332,7 +335,7 @@ public class DebuggerTools
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         }, cancellationToken);
 
@@ -368,7 +371,7 @@ public class DebuggerTools
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
-                await _jobManager.FailJobAsync(jobId, ex.Message);
+                await _jobManager.FailJobAsync(jobId, ToolErrors.ClientMessage(ex));
             }
         }, cancellationToken);
 
@@ -521,7 +524,8 @@ public class DebuggerTools
             {
                 var errorMessage = jobStatus.Error ?? "Unknown error";
                 _logger.LogError("Job {JobId} failed: {Error}", jobId, errorMessage);
-                throw new InvalidOperationException($"Job failed: {errorMessage}");
+                // The job stores the client-facing message (ToolErrors.ClientMessage), never internals.
+                throw new McpException(errorMessage);
             }
 
             if (jobStatus.State == JobState.Cancelled)

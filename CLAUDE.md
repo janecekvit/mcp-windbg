@@ -243,6 +243,13 @@ CDB commands execute asynchronously with **marker-based output parsing**:
 // Timeout: 15 minutes (Constants.Debugging.SymbolLoadingTimeoutMinutes)
 ```
 
+Output is decoded and stdin encoded with `CdbConsoleEncoding.Current`, the system ANSI code page
+(`GetACP()`, legacy pages from `CodePagesEncodingProvider`; UTF-8 when it is 65001): cdb.exe does not
+write UTF-8 on pipes. `CdbOutputCollector` drops progress-only lines (`Mapping … regions...`,
+`Loading User Symbols`, rows of dots) and caps the result at `Debugger:MaxCommandOutputBytes`
+(UTF-8, default 256 KB, 0 = unbounded) with `[output truncated: N bytes omitted]`; while it waits for
+the END marker it buffers no more than the cap plus a marker-length tail.
+
 **Why markers?** CDB output is continuous and unpredictable. Markers provide reliable command completion detection; the START marker discards output left over from an earlier timed-out command, and separate lines keep a `*` comment or unbalanced quote in the command from swallowing the END marker.
 
 **Thread Safety**:
@@ -329,7 +336,14 @@ catch (ArgumentException) → 404 Not Found
 catch (InvalidOperationException) → 400 Bad Request
 catch (Exception) → 500 Internal Server Error
 
-// MCP Tools catch and return McpToolResult.Error()
+// MCP tools: the SDK shows clients the message of an McpException only. ToolErrors decides
+// what a caller may see: client errors (ArgumentException, FileNotFoundException,
+// UnauthorizedAccessException, InvalidDataException, InvalidOperationException,
+// TimeoutException) keep their message; anything else becomes "Unexpected server error; see the
+// service log". The call-tool filter (Program.cs) rethrows client errors as McpException, a failed
+// job's stored error (ToolErrors.ClientMessage) comes back as McpException from
+// _WaitForJobCompletionAsync. execute_command checks the command policy before creating a job
+// (ISessionManagerService.ValidateCommand): MCP gets the reason, REST a 400 problem detail.
 ```
 
 ## Symbol Resolution Architecture

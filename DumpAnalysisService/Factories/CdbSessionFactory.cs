@@ -69,7 +69,7 @@ public sealed class CdbSessionFactory : ICdbSessionFactory
         SymbolInputValidator.Validate(symbols);
 
         // Create infrastructure components for this session
-        var processManager = new CdbProcessManager(sessionId, _processLogger);
+        var processManager = new CdbProcessManager(sessionId, _processLogger, _debuggerConfig.MaxCommandOutputBytes);
 
         // Use symbol configuration from client, or fall back to defaults from configuration
         var symbolCache = symbols?.SymbolCache ?? _debuggerConfig.GetSymbolCachePath();

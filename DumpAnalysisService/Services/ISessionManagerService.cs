@@ -34,6 +34,12 @@ public interface ISessionManagerService : IDisposable
     Task<string> ExecuteCommandAsync(string jobId, string sessionId, string command, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Applies the user command policy (Security:AllowUnsafeCommands / AllowedCommands) without running anything.
+    /// </summary>
+    /// <exception cref="ArgumentException">The command is refused; the message names the reason.</exception>
+    void ValidateCommand(string command);
+
+    /// <summary>
     /// Executes a command the service itself built (never user input), without the user command policy.
     /// </summary>
     Task<string> ExecuteInternalCommandAsync(string jobId, string sessionId, string command, CancellationToken cancellationToken = default);

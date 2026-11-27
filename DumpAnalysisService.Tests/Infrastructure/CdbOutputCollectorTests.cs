@@ -89,4 +89,91 @@ public class CdbOutputCollectorTests
         Assert.StartsWith("frame 0", collector.Result);
         Assert.EndsWith("frame 9999", collector.Result);
     }
+
+    [Fact]
+    public void Append_DropsProgressOnlyLines()
+    {
+        var collector = new CdbOutputCollector(Start, End);
+
+        collector.Append($"{Start}\r\nMapping file section regions...\r\nMapping module regions...\r\n" +
+            $"Mapping heap regions...\r\n  BaseAddress      Usage\r\n..........\r\nLoading User Symbols\r\n  7ff0000 Image\r\n{End}\r\n");
+
+        Assert.Equal("BaseAddress      Usage\r\n  7ff0000 Image", collector.Result);
+    }
+
+    [Fact]
+    public void Append_KeepsLinesThatOnlyMentionProgressWords()
+    {
+        var collector = new CdbOutputCollector(Start, End);
+
+        collector.Append($"{Start}\nmodule!Mapping regions... failed at 0x10\nwait...\n{End}\n");
+
+        Assert.Equal("module!Mapping regions... failed at 0x10\nwait...", collector.Result);
+    }
+
+    [Fact]
+    public void Append_OutputOverTheLimit_IsTruncatedWithANote()
+    {
+        var collector = new CdbOutputCollector(Start, End, maxOutputBytes: 10);
+
+        collector.Append($"{Start}\n0123456789abcdefghij\n{End}\n");
+
+        Assert.StartsWith("0123456789", collector.Result);
+        Assert.EndsWith("[output truncated: 10 bytes omitted]", collector.Result);
+    }
+
+    [Fact]
+    public void Append_OutputWithinTheLimit_HasNoNote()
+    {
+        var collector = new CdbOutputCollector(Start, End, maxOutputBytes: 100);
+
+        collector.Append($"{Start}\nshort\n{End}\n");
+
+        Assert.Equal("short", collector.Result);
+    }
+
+    [Fact]
+    public void Append_TruncationCountsUtf8BytesAndKeepsWholeCharacters()
+    {
+        var collector = new CdbOutputCollector(Start, End, maxOutputBytes: 5);
+
+        // "šš" is 4 bytes, the third "š" would be bytes 5-6.
+        collector.Append($"{Start}\nššš\n{End}\n");
+
+        Assert.StartsWith("šš" + Environment.NewLine, collector.Result);
+        Assert.EndsWith("[output truncated: 2 bytes omitted]", collector.Result);
+    }
+
+    [Fact]
+    public void Append_LongOutputInManyChunks_StaysBoundedAndFindsTheEndMarker()
+    {
+        var collector = new CdbOutputCollector(Start, End, maxOutputBytes: 1000);
+        collector.Append($"{Start}\n");
+
+        var line = new string('x', 99) + "\n";
+        for (var i = 0; i < 10_000; i++)
+            Assert.False(collector.Append(line));
+
+        // The END marker split across two chunks after a megabyte of output.
+        Assert.False(collector.Append(End[..5]));
+        Assert.True(collector.Append(End[5..] + "\n"));
+
+        Assert.StartsWith(new string('x', 99), collector.Result);
+        // About everything beyond the first 1000 bytes; the trailing line break is trimmed, not counted.
+        var omitted = long.Parse(System.Text.RegularExpressions.Regex.Match(collector.Result, @"\[output truncated: (\d+) bytes omitted\]$").Groups[1].Value);
+        Assert.InRange(omitted, 10_000 * 100 - 1000 - 1, 10_000 * 100 - 1000);
+        Assert.True(collector.Result.Length < 1100);
+    }
+
+    [Fact]
+    public void Append_ZeroLimit_IsUnbounded()
+    {
+        var collector = new CdbOutputCollector(Start, End, maxOutputBytes: 0);
+        var output = new string('y', 300_000);
+
+        collector.Append($"{Start}\n{output}\n{End}\n");
+
+        Assert.Equal(output, collector.Result);
+    }
 }
+

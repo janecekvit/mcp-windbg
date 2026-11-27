@@ -255,13 +255,14 @@ volumes:
 
 ### Environment variables
 
-ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so the three debugger settings are:
+ASP.NET Core maps `Section__Key` env vars onto the `appsettings.json` tree, so the debugger settings are:
 
 | Env var | Maps to | Purpose |
 |---|---|---|
 | `Debugger__DefaultSymbolCache` | `Debugger:DefaultSymbolCache` | Local symbol cache directory inside the container (default in the container image: `C:\symbols` — mount a volume there so symbols persist across restarts; outside Docker the .exe defaults to `%LOCALAPPDATA%\DumpAnalysisService\symbols`) |
 | `Debugger__DefaultSymbolPathExtra` | `Debugger:DefaultSymbolPathExtra` | Semicolon-separated extra local symbol paths (e.g. `C:\my-pdbs;\\server\symbols`) |
 | `Debugger__DefaultSymbolServers` | `Debugger:DefaultSymbolServers` | Semicolon-separated base symbol servers (`srv*https://…`). An empty value keeps the built-in Microsoft/NuGet list; a value replaces it, so keep `srv*https://msdl.microsoft.com/download/symbols` in it |
+| `Debugger__MaxCommandOutputBytes` | `Debugger:MaxCommandOutputBytes` | Upper bound of one command's output in bytes (default `262144`, `0` = unbounded); longer output ends with `[output truncated: N bytes omitted]` |
 | `Fingerprint__RegistryPath` | `Fingerprint:RegistryPath` | Crash group registry file; put it on a volume so groups survive restarts |
 | `Security__ApiKey` | `Security:ApiKey` | Shared secret required on REST, MCP and SignalR (see [Security](#security)) |
 | `Security__Jwt__Authority`, `Security__Jwt__Audiences__0`, … | `Security:Jwt:*` | OAuth bearer tokens, e.g. Microsoft Entra ID (see [OAuth bearer tokens](#oauth-bearer-tokens-microsoft-entra-id-keycloak-auth0)) |
@@ -336,7 +337,8 @@ The server supports multiple configuration methods with the following priority o
   "Debugger": {
     "DefaultSymbolCache": null,
     "DefaultSymbolPathExtra": null,
-    "DefaultSymbolServers": "srv*https://msdl.microsoft.com/download/symbols;srv*https://symbols.nuget.org/download/symbols;srv*https://download.microsoft.com/download/symbols"
+    "DefaultSymbolServers": "srv*https://msdl.microsoft.com/download/symbols;srv*https://symbols.nuget.org/download/symbols;srv*https://download.microsoft.com/download/symbols",
+    "MaxCommandOutputBytes": 262144
   },
   "Security": {
     "ApiKey": null,
@@ -568,6 +570,8 @@ Executes a WinDbg/CDB command in an existing session.
 - `session_id`: Debugging session ID
 - `command`: Command to execute (e.g., "kb", "!analyze -v"); one line, subject to the [command policy](#security)
 
+A refused command, an unknown session or a missing dump comes back as a tool error that states the reason; unexpected server errors read "Unexpected server error; see the service log". Output is decoded in the system's ANSI code page (the one cdb.exe writes), progress-only lines such as `Mapping heap regions...` are left out, and output longer than `Debugger:MaxCommandOutputBytes` (256 KB) ends with `[output truncated: N bytes omitted]`.
+
 ### predefined_analysis
 
 Runs a predefined analysis.
@@ -646,7 +650,7 @@ All job-creating endpoints return `202 Accepted` with `{ jobId, statusEndpoint }
 | Method | Route | Purpose |
 |---|---|---|
 | `POST` | `/api/jobs/load-dump` | Create session by loading a dump file |
-| `POST` | `/api/jobs/execute-command` | Run a WinDbg/CDB command in an existing session |
+| `POST` | `/api/jobs/execute-command` | Run a WinDbg/CDB command in an existing session (`400` with the reason when the command policy refuses it) |
 | `POST` | `/api/jobs/basic-analysis` | Run the comprehensive basic analysis |
 | `POST` | `/api/jobs/predefined-analysis` | Run a named specialised analysis (heap, threads, …) |
 | `POST` | `/api/jobs/close-session` | Close a session and release CDB |
