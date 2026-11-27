@@ -137,9 +137,21 @@ See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" f
   share the non-parallel `InProcessServiceCollection`, for the same SDK binding race.
 - **`CdbCommandPolicy`**: applied to user commands in
   `SessionManagerService.ExecuteCommandAsync` only (never to internal init or
-  predefined-analysis commands). Single line, no `q`/`qq`, and unless
-  `AllowUnsafeCommands` no `.shell`/`.load`/`.create`/`.writemem`/`$<`/… anywhere
-  in the line. cdb.exe also starts with `-noshell`.
+  predefined-analysis commands). Always: single line, no `q`/`qq`. Unless
+  `AllowUnsafeCommands`, an **allowlist**: the line is split on `;` outside quotes and
+  every statement must start with a read-only inspection command (stacks, `~` listing and
+  switching, memory display, disassembly, symbols and modules, `r` without `=`, context
+  meta-commands, `?`/`??`, allowlisted `!` extensions incl. SOS read commands, `dx`);
+  `Security:AllowedCommands` adds statement heads. Refused anywhere in the line, quoted text
+  included, whatever `AllowedCommands` says: alias definition and expansion (`as`/`aS`/`ad`/`al`,
+  `${`, `$u0`, `$.u0`), commands that run nested command text (`.block`, `.if`, `.foreach`,
+  `.for`, `.while`, `.do`, `j`, `z`, `~e`, `!for_each_*`, `.pcmd`), script files (`$<`, `$$>a<`, …),
+  script providers (`.scriptload`, `.scriptrun`, `.nvload`, …) and meta-commands that act outside
+  the dump (`.shell`, `.load`, `.create`, `.writemem`, `.sympath`, …). `dx` may not reference the
+  `Debugger` root namespace or its host objects (`Utility`, `State`, `Settings`, `@$scripts`); use
+  `@$cursession`/`@$curprocess`. A blocklist cannot anticipate every way debugger syntax composes
+  a command; the allowlist fails closed. Refusals are `ArgumentException`s naming the command.
+  cdb.exe also starts with `-noshell`.
 - **`SymbolInputValidator`**: client symbol values (headers or REST body) are
   validated in `CdbSessionFactory`; `AllowClientSymbolOverrides=false` drops them.
 - **`AllowedDumpDirectories`**, **`MaxConcurrentSessions`**: enforced in

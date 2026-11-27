@@ -47,7 +47,9 @@ forms; blank issues are off.
   link. A pull request with a red check does not merge. Before pushing a Markdown change, run
   `npx --yes markdownlint-cli2@0.23.2`; the rules are in `.markdownlint-cli2.jsonc` and `lychee.toml`.
 - **The security model holds.** A new endpoint or MCP tool gets a `DumpPolicies` policy and, if it
-  takes a session or job id, an ownership check. User text for cdb.exe goes through `CdbCommandPolicy`.
+  takes a session or job id, an ownership check. User text for cdb.exe goes through `CdbCommandPolicy`,
+  an allowlist of read-only commands; widen it only with commands that neither write, load code nor
+  run other command text.
   [`CLAUDE.md`](CLAUDE.md) describes the model.
 - **Diagrams stay current.** When components or their connections change, update the Mermaid
   flowchart in the Architecture section of `README.md`; flows over time are the Mermaid sequence
