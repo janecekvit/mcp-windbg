@@ -38,6 +38,9 @@ public sealed record Caller(string? Id, string Name, DumpPermission Permission)
 
     public static readonly Caller Anonymous = new(null, "anonymous", DumpPermission.Admin);
 
+    /// <summary>Owner id prefix for an unauthenticated MCP session.</summary>
+    public const string McpSessionOwnerPrefix = "mcp-session:";
+
     /// <summary>No identity although authentication is required: owns nothing and may do nothing.</summary>
     public static readonly Caller Unidentified = new("unidentified", "unidentified", DumpPermission.None);
 
@@ -48,13 +51,19 @@ public sealed record Caller(string? Id, string Name, DumpPermission Permission)
 
     /// <summary>
     /// Resolves the caller from the authenticated principal. Without any authentication configured,
-    /// everyone is unrestricted, as before bearer tokens existed; with it, a missing or anonymous
-    /// principal is <see cref="Unidentified"/> (fail closed).
+    /// a stateful MCP client is identified by its MCP session (<paramref name="mcpSessionId"/>): it
+    /// owns, and sees, only the sessions and jobs it created. Other callers (REST, SignalR, stateless
+    /// MCP clients) are unrestricted, as before bearer tokens existed. With authentication, a missing
+    /// or anonymous principal is <see cref="Unidentified"/> (fail closed) and the MCP session is ignored.
     /// </summary>
-    public static Caller From(ClaimsPrincipal? user, SecurityOptions security)
+    public static Caller From(ClaimsPrincipal? user, SecurityOptions security, string? mcpSessionId = null)
     {
         if (!security.AuthenticationRequired)
-            return Anonymous;
+        {
+            return string.IsNullOrEmpty(mcpSessionId)
+                ? Anonymous
+                : new Caller(McpSessionOwnerPrefix + mcpSessionId, "mcp-session", DumpPermission.Analyze);
+        }
         if (user?.Identity?.IsAuthenticated != true)
             return Unidentified;
 

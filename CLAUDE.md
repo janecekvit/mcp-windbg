@@ -121,11 +121,14 @@ See `Dockerfile`, `.dockerignore`, and the README section "Running via Docker" f
   for tokens, `Caller.PermissionOf` reads `Jwt:RoleClaimTypes` (default `roles` only).
 - **Ownership** (`Security/Ownership.cs`): jobs (`CreateJob(..., owner)`) and sessions
   (`CreateSessionWithDumpAsync(..., owner)`) record `Caller.Id` (`oid`, else `sub`; null for
-  unrestricted callers: no auth configured, the API key, admins). Entry points (JobsController,
+  unrestricted callers: the API key, admins, and without auth REST/SignalR callers and stateless
+  MCP clients). Without any credential configured, a stateful MCP client (protocol 2025-11-25 and
+  older) is `mcp-session:<Mcp-Session-Id>` (permission Analyze, restricted): it sees only its own
+  sessions and jobs; the call-tool filter passes `request.Server.SessionId` to `McpCallerContext`. Entry points (JobsController,
   DebuggerTools, ProgressHub.SubscribeToJob) call `EnsureSessionAccess` / `CanAccessJob` before
   starting work, so another user's session or job reads as not found. MCP tools get the caller
   from `McpCallerContext`, which a call-tool request filter (Program.cs) sets from
-  `request.User`. The filter also runs for task-backed calls, after the HTTP request has ended.
+  `request.User` and the MCP session id. The filter also runs for task-backed calls, after the HTTP request has ended.
   Never take the user from IHttpContextAccessor or from a `RequestContext` tool parameter: when
   several servers build their tools at once in one process, the SDK can lose a special
   parameter binding, and the parameter then arrives empty from the tool arguments. With

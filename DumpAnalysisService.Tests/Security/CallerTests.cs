@@ -25,6 +25,49 @@ public class CallerTests
     }
 
     [Fact]
+    public void WithoutAuthentication_AnMcpSessionOwnsOnlyWhatItCreates()
+    {
+        var first = Caller.From(null, new SecurityOptions(), "session-a");
+        var second = Caller.From(null, new SecurityOptions(), "session-b");
+
+        Assert.True(first.IsRestricted);
+        Assert.Equal("mcp-session:session-a", first.Id);
+        Assert.Equal(DumpPermission.Analyze, first.Permission);
+        Assert.True(first.Owns(first.Id));
+        Assert.False(first.Owns(second.Id));
+        Assert.False(first.Owns(null));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void WithoutAuthentication_NoMcpSession_StaysUnrestricted(string? mcpSessionId)
+    {
+        Assert.Same(Caller.Anonymous, Caller.From(null, new SecurityOptions(), mcpSessionId));
+    }
+
+    [Fact]
+    public void WithAuthentication_TheMcpSessionIsIgnored()
+    {
+        var caller = Caller.From(_Token(("oid", "alice"), ("roles", "Dumps.Analyze")), Jwt, "session-a");
+
+        Assert.Equal("alice", caller.Id);
+        Assert.Same(Caller.Unidentified, Caller.From(null, Jwt, "session-a"));
+    }
+
+    [Fact]
+    public void EnsureSessionAccess_HidesAnotherMcpSessionsSession()
+    {
+        var sessions = new Mock<ISessionManagerService>();
+        string? owner = "mcp-session:session-b";
+        sessions.Setup(s => s.TryGetSessionOwner("s1", out owner)).Returns(true);
+
+        Assert.Throws<ArgumentException>(() => sessions.Object.EnsureSessionAccess(Caller.From(null, new SecurityOptions(), "session-a"), "s1"));
+        sessions.Object.EnsureSessionAccess(Caller.From(null, new SecurityOptions(), "session-b"), "s1");
+        sessions.Object.EnsureSessionAccess(Caller.From(null, new SecurityOptions()), "s1");
+    }
+
+    [Fact]
     public void WithAuthentication_AMissingPrincipalIsUnidentified_NotUnrestricted()
     {
         var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
