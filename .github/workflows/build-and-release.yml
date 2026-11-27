@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  DOTNET_VERSION: '10.0.x'
+  DOTNET_VERSION: '11.0.x'
   BUILD_CONFIGURATION: 'Release'
 
 jobs:
@@ -546,7 +546,7 @@ jobs:
 
         ### Requirements
         - Windows 10/11
-        - .NET 10.0 runtime (included in single-file executable)
+        - .NET 11.0 runtime (included in single-file executable)
         - Windows SDK Debuggers (cdb.exe) or WinDbg from Microsoft Store
 
         For detailed documentation, see [README.md](https://github.com/$env:GITHUB_REPOSITORY/blob/$env:GITHUB_REF_NAME/README.md).
