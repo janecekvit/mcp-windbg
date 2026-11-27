@@ -24,6 +24,7 @@ for security first. Flag these as blocking:
 - Secrets, tokens or API keys in code, logs or tests; constant-time comparison for the API key.
 - Links to Claude sessions (`claude.ai/code/session_…`) or other private URLs anywhere in the
   change, its commit messages or the pull request description.
+- A "Generated with/by Claude Code" line or `claude.ai/code` link in the pull request description.
 
 ## Workflows (`.github/workflows/`)
 
