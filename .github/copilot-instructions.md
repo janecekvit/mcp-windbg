@@ -11,6 +11,8 @@ for security first. Flag these as blocking:
   `q`/`qq`, no `.shell`/`.load`/`.create`/`.writemem`/`$<`). Block new paths that send user or
   tool-argument text to cdb without that policy, or that build a command line by string
   concatenation (`CdbProcessManager.CreateStartInfo` must use `ProcessStartInfo.ArgumentList`).
+- **cdb.exe process**: no inherited environment beyond `InheritedEnvironmentVariables` plus
+  `Debugger:CdbEnvironmentVariables`, and the job object assigned before the first command.
 - **New endpoint or MCP tool** without `[Authorize(Policy = DumpPolicies.Read|Analyze|Admin)]`, or
   taking a session or job id without `EnsureSessionAccess` / `CanAccessJob`.
 - **Caller identity** in an MCP tool taken from `IHttpContextAccessor` or a `RequestContext`
