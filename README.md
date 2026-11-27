@@ -139,7 +139,7 @@ dump and for securing a request are in [`docs/architecture/README.md`](docs/arch
 
 ## Requirements
 
-- .NET 10
+- .NET 11
 - Windows SDK Debuggers (cdb.exe)
 - Access to Microsoft symbol server (for downloading symbols)
 
