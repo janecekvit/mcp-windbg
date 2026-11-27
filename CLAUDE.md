@@ -190,6 +190,9 @@ Repository conventions:
 - **The repository is public: never put links to Claude sessions (`claude.ai/code/session_…`) or
   other private URLs in commits, pull request descriptions, comments or files.** No
   `Claude-Session:` commit trailers; `Co-Authored-By: Claude …` stays.
+- **No tool attribution in pull requests**: no "Generated with/by Claude Code" line and no
+  `claude.ai/code` link in the title, description, comments or review replies. When a tool appends
+  one, edit it out and read the description back.
 - **Pull requests are squash-merged with the title and description as the commit message, so
   write the description as that message (what and why, plus how it was tested); reviewer or
   settings instructions go in a PR comment.**
