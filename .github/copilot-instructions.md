@@ -17,7 +17,8 @@ for security first. Flag these as blocking:
   parameter instead of `McpCallerContext`. With authentication on, a missing principal must be
   `Caller.Unidentified`, never unrestricted.
 - **Dump and file paths** not checked by `DumpPathPolicy` (`Security:AllowedDumpDirectories`);
-  client symbol values not validated by `SymbolInputValidator`.
+  client symbol values not validated by `SymbolInputValidator`; symbol locations from tool arguments
+  not limited by `SymbolLocationPolicy` (`Debugger:AllowedSymbolLocations`).
 - **Minidump parsing** (`Infrastructure/Minidump/`): every offset, size and count read from the file
   must be bounds-checked; malformed input raises `InvalidDataException`, never an out-of-range read,
   an unbounded allocation or an endless loop.

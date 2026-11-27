@@ -107,4 +107,40 @@ public sealed class SessionManagerServiceTests : IDisposable
         await Assert.ThrowsAsync<ArgumentException>(
             () => _sessionManager.ExecutePredefinedAnalysisAsync(jobId, invalidSessionId, analysisType));
     }
+
+    [Fact]
+    public async Task SetSymbolsAsync_UnknownSession_ThrowsArgumentException()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _sessionManager.SetSymbolsAsync("job", "missing", new Shared.Configuration.SymbolsConfiguration(null, @"C:\pdbs", null)));
+    }
+
+    [Fact]
+    public async Task SetSymbolsAsync_ClientOverridesDisabled_IsRefused()
+    {
+        var (manager, sessionId) = await _ManagerWithSessionAsync(new SecurityOptions { AllowClientSymbolOverrides = false });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            manager.SetSymbolsAsync("job", sessionId, new Shared.Configuration.SymbolsConfiguration(null, @"C:\pdbs", null)));
+    }
+
+    [Fact]
+    public async Task SetSymbolsAsync_CacheOrInvalidValue_IsRefused()
+    {
+        var (manager, sessionId) = await _ManagerWithSessionAsync(new SecurityOptions());
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            manager.SetSymbolsAsync("job", sessionId, new Shared.Configuration.SymbolsConfiguration(@"C:\cache", null, null)));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            manager.SetSymbolsAsync("job", sessionId, new Shared.Configuration.SymbolsConfiguration(null, "C:\\a\"b", null)));
+    }
+
+    private async Task<(SessionManagerService Manager, string SessionId)> _ManagerWithSessionAsync(SecurityOptions options)
+    {
+        var dump = Path.GetTempFileName();
+        var manager = new SessionManagerService(_mockLogger.Object, _mockSessionFactory.Object, _mockJobManager.Object, Options.Create(options));
+        var sessionId = await manager.CreateSessionWithDumpAsync("job", dump);
+        File.Delete(dump);
+        return (manager, sessionId);
+    }
 }

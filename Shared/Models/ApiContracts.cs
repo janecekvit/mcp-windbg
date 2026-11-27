@@ -19,6 +19,7 @@ public static class ApiEndpoints
     public const string BasicAnalysisAsync = "/api/jobs/basic-analysis";
     public const string PredefinedAnalysisAsync = "/api/jobs/predefined-analysis";
     public const string CloseSessionAsync = "/api/jobs/close-session";
+    public const string SetSymbolsAsync = "/api/jobs/set-symbols";
 }
 
 // Shared Request Models
@@ -51,6 +52,16 @@ public record PredefinedAnalysisRequest(
     [Required(ErrorMessage = "Analysis type is required")]
     [property: JsonPropertyName("analysisType")]
     AnalysisType AnalysisType);
+
+public record SetSymbolsRequest(
+    [Required(ErrorMessage = "Session ID is required")]
+    [property: JsonPropertyName("sessionId")]
+    string SessionId,
+    // Omitted values fall back to the server defaults (Debugger:DefaultSymbolPathExtra, DefaultSymbolServers).
+    [property: JsonPropertyName("symbolPathExtra")]
+    string? SymbolPathExtra = null,
+    [property: JsonPropertyName("symbolServers")]
+    string? SymbolServers = null);
 
 public record CloseSessionRequest(
     [Required(ErrorMessage = "Session ID is required")]
@@ -99,3 +110,11 @@ public static class ApiEndpointExtensions
     /// <returns>API endpoint path for the job</returns>
     public static string ToJobEndpoint(this string jobId) => $"/api/jobs/{jobId}";
 }
+/// <summary>Structured result of the load_dump MCP tool (its text content stays the bare session id).</summary>
+public record LoadDumpResult(
+    [property: JsonPropertyName("sessionId")] string SessionId,
+    [property: JsonPropertyName("dumpPath")] string DumpPath,
+    // "user-full", "user-mini" or "kernel"; null when the header could not be read
+    [property: JsonPropertyName("dumpKind")] string? DumpKind,
+    // "x64", "x86", "arm64", ...; null when unknown
+    [property: JsonPropertyName("architecture")] string? Architecture);

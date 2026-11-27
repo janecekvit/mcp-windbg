@@ -12,6 +12,7 @@ public sealed class SymbolPathBuilder
     private readonly string? _symbolPathExtra;
     private readonly string? _symbolServers;
     private readonly string[] _defaultSymbolServers;
+    private readonly DebuggerConfiguration _debuggerConfig;
     private readonly ILogger<SymbolPathBuilder> _logger;
 
     public SymbolPathBuilder(
@@ -25,8 +26,16 @@ public sealed class SymbolPathBuilder
         _symbolPathExtra = symbolPathExtra;
         _symbolServers = symbolServers;
         _defaultSymbolServers = debuggerConfig.GetDefaultSymbolServers();
+        _debuggerConfig = debuggerConfig;
         _logger = logger;
     }
+
+    /// <summary>
+    /// The same cache and defaults with other extra paths and servers; a null value falls back to
+    /// Debugger:DefaultSymbolPathExtra (extra paths) or to no client servers.
+    /// </summary>
+    public SymbolPathBuilder WithLocations(string? symbolPathExtra, string? symbolServers) =>
+        new(_symbolCache, symbolPathExtra ?? _debuggerConfig.DefaultSymbolPathExtra, symbolServers, _debuggerConfig, _logger);
 
     /// <summary>
     /// Builds a comprehensive symbol path string for CDB

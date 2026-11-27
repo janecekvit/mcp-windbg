@@ -26,6 +26,12 @@ public class DebuggerConfiguration
     public string? DefaultSymbolServers { get; set; }
 
     /// <summary>
+    /// Symbol locations tool arguments (load_dump, set_symbols) may name besides local directories
+    /// and https servers: prefixes such as "\\\\symbols\\share" or "http://symbols.internal/".
+    /// </summary>
+    public List<string> AllowedSymbolLocations { get; set; } = [];
+
+    /// <summary>
     /// Gets the effective symbol cache path, using environment fallback if needed.
     /// </summary>
     public string GetSymbolCachePath()

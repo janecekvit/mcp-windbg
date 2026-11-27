@@ -68,6 +68,7 @@ public static class ConfigurationExtensions
     {
         return new DebuggerConfiguration
         {
+            AllowedSymbolLocations = configuration.GetSection("Debugger:AllowedSymbolLocations").Get<List<string>>() ?? [],
             DefaultSymbolCache = configuration.GetValueWithEnvironmentFallback<string?>(
                 "Debugger:DefaultSymbolCache"),
             DefaultSymbolPathExtra = configuration.GetValueWithEnvironmentFallback<string?>(

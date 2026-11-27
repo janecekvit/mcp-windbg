@@ -88,7 +88,7 @@ public sealed class DumpTriageService : IDumpTriageService
         if (data.Kernel is { } kernel)
             return _BuildKernel(path, sizeBytes, sha256, kernel);
 
-        var architecture = data.SystemInfo is { } sys ? _ArchitectureName(sys.ProcessorArchitecture) : null;
+        var architecture = data.SystemInfo is { } sys ? ArchitectureName(sys.ProcessorArchitecture) : null;
         var wow64 = architecture is "x64" or "arm64" && data.Modules.Any(m => _Wow64Modules.Contains(_FileName(m.Path)));
         var bitness = wow64 ? 32 : architecture switch { "x86" or "arm" => 32, "x64" or "arm64" or "ia64" => 64, _ => (int?)null };
         var debugRuntime = data.Modules.Any(m => _DebugRuntimeModules.Contains(_FileName(m.Path)));
@@ -717,7 +717,7 @@ public sealed class DumpTriageService : IDumpTriageService
     /// <summary>File name of a Windows path; works the same when the service runs on another OS.</summary>
     private static string _FileName(string path) => path[(path.LastIndexOfAny(['\\', '/']) + 1)..];
 
-    private static string _ArchitectureName(ushort architecture) => architecture switch
+    public static string ArchitectureName(ushort architecture) => architecture switch
     {
         Architectures.X86 => "x86",
         Architectures.Arm => "arm",

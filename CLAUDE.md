@@ -68,7 +68,7 @@ package metadata) live in `Directory.Build.props`. Licence: Apache-2.0 (`LICENSE
    - Entry Point: `Program.cs` - ASP.NET Core Web API (port 7997)
    - **MCP Integration**: ModelContextProtocol.AspNetCore SDK
      - Streamable HTTP transport at `/mcp` (`app.MapMcp("/mcp")`)
-     - Tools: `DebuggerTools.cs` with 11 [McpServerTool] methods
+     - Tools: `DebuggerTools.cs` with 12 [McpServerTool] methods
    - **Services**: Session management, job tracking, CDB process orchestration
    - **Controllers**: REST API for PowerShell/Azure Functions integration
    - **SignalR Hub**: Real-time progress notifications at `/hubs/progress`
@@ -215,13 +215,31 @@ Repository conventions:
 **Implementation**:
 
 ```csharp
-// DebuggerTools.cs - LoadDump tool
-var providerConfig = _symbolConfigProvider.GetConfiguration(); // Reads HTTP headers
+// DebuggerTools.cs - LoadDump tool (empty arguments count as absent)
+var fromArguments = new SymbolsConfiguration(symbol_cache, symbol_path_extra, symbol_servers);
+SymbolInputValidator.Validate(fromArguments);
+SymbolLocationPolicy.EnsureAllowed(fromArguments, _debuggerConfig.AllowedSymbolLocations);
+var fromHeaders = _symbolConfigProvider.GetConfiguration(); // Reads HTTP headers
 var symbols = new SymbolsConfiguration(
-    SymbolCache: symbol_cache ?? providerConfig.SymbolCache,           // Tool param overrides
-    SymbolPathExtra: symbol_path_extra ?? providerConfig.SymbolPathExtra,
-    SymbolServers: symbol_servers ?? providerConfig.SymbolServers);
+    symbol_cache ?? fromHeaders.SymbolCache,                      // Tool param overrides
+    symbol_path_extra ?? fromHeaders.SymbolPathExtra,
+    symbol_servers ?? fromHeaders.SymbolServers);
+// CdbSessionFactory: AllowClientSymbolOverrides=false drops all of it, nulls fall back to Debugger:*.
 ```
+
+**Symbol locations from tool arguments are limited to configured ones** (`Security/SymbolLocationPolicy.cs`,
+`load_dump` and `set_symbols` arguments only; headers and REST bodies come from client configuration):
+local absolute directories and `https` URLs are accepted, UNC shares, device paths, plain `http`, other
+schemes and relative paths only under a `Debugger:AllowedSymbolLocations` prefix; `..` segments are refused.
+
+**`set_symbols`** (MCP) / `POST /api/jobs/set-symbols` (REST): `SessionManagerService.SetSymbolsAsync` →
+`CdbSessionService.SetSymbolsAsync`, which rebuilds the path with `SymbolPathBuilder.WithLocations` (same
+cache) and runs the internal commands `.sympath <path>` and `.reload` under the session semaphore (internal
+commands skip the user `CdbCommandPolicy`). Refused when `AllowClientSymbolOverrides=false` or a cache is given.
+
+**`load_dump` result**: text content = bare session id (clients parse it); `structuredContent` =
+`LoadDumpResult { sessionId, dumpPath, dumpKind, architecture }` (`DumpDescription.Read`, header only),
+advertised through `OutputSchemaType`.
 
 **HttpHeaderSymbolConfigurationProvider** (DumpAnalysisService/Providers/):
 
@@ -390,6 +408,7 @@ POST /api/jobs/execute-command     → 202 Accepted, returns { jobId, statusEndp
 POST /api/jobs/basic-analysis      → 202 Accepted, returns { jobId, statusEndpoint }
 POST /api/jobs/predefined-analysis → 202 Accepted, returns { jobId, statusEndpoint }
 POST /api/jobs/close-session       → 202 Accepted, returns { jobId, statusEndpoint }
+POST /api/jobs/set-symbols         → 202 Accepted; .sympath + .reload in the session
 POST /api/jobs/triage-dump         → 202 Accepted; job result = DumpTriageResult as JSON
 POST /api/jobs/fingerprint-crash   → 202 Accepted; job result = CrashFingerprintResult as JSON
 GET  /api/crash-groups             → CrashGroupList (CrashGroupsController)
@@ -409,7 +428,8 @@ All tools follow the same pattern (list_crash_groups, list_jobs and list_analyse
 
 **Tools**:
 
-- `load_dump` - Load dump file and create session
+- `load_dump` - Load dump file and create session (symbol arguments; structured result)
+- `set_symbols` - Change a session's extra symbol paths and servers and reload symbols
 - `execute_command` - Execute WinDbg/CDB command
 - `basic_analysis` - Run comprehensive basic analysis
 - `predefined_analysis` - Run specialized analysis (heap, threads, modules, etc.)
